@@ -1,0 +1,27 @@
+{
+  "registry_version": "2.0",
+  "note": "Transparent execution log distinguishing actually installed agent skills from unavailable named skills substituted with Playwright + DOM telemetry.",
+  "skills": [
+    {
+      "skill_id": "SKILL-04",
+      "name": "frontend-design",
+      "location": "C:\\Users\\arthur\\.codex\\skills\\frontend-design\\SKILL.md",
+      "status": "INSTALLED_AND_EXECUTED",
+      "application": "Applied cohesive Slate/White/Cobalt visual system tokens, 4px spacing grid, >= 14px typography hierarchy, and >= 44px touch targets across Variant A, Variant B, and 7 Sector Experience Signatures."
+    },
+    {
+      "skill_id": "BUILTIN-GEN-UI",
+      "name": "generative_ui",
+      "location": "C:\\Users\\arthur\\.gemini\\antigravity\\builtin\\skills\\generative_ui\\SKILL.md",
+      "status": "INSTALLED_REFERENCED",
+      "application": "Referenced for interactive prototype composition and badge/contrast restraint."
+    },
+    {
+      "skill_id": "SKILL-01..03,05..10",
+      "name": "External UX audit suite skills (layout-forensics, visual-hierarchy, interaction-choreography, cognitive-load, state-machine-audit, browser-qa, runtime-profiling, manager-governance)",
+      "location": null,
+      "status": "UNAVAILABLE_LOCALLY",
+      "executed_alternative": "Replaced with Playwright v1.65.0 headless Chromium execution against isolated COMPANYGEN_DIAG_HARNESS (http://localhost:5199), custom DOM bounding-box / fontSize / padding / overflow / contrast / polling extractors (run-diag-capture.mjs & capture-proposals.mjs), and direct visual screenshot inspection via read_file."
+    }
+  ]
+}

@@ -1,0 +1,215 @@
+{
+  "schema_version": "1.0.0",
+  "brand": {
+    "id": "fashion-template",
+    "name": "Loja Modelo de Moda",
+    "segment": "moda",
+    "colors": {
+      "primary": "#0867E8",
+      "background": "#FFFFFF",
+      "text": "#0B1D52"
+    },
+    "tone": "direto"
+  },
+  "campaign": {
+    "id": "campanha_novembro",
+    "name": "Nova Coleção",
+    "duration_days": 30,
+    "start_date": "2026-11-09",
+    "timezone": "America/Sao_Paulo",
+    "platform": "instagram"
+  },
+  "image_search": {
+    "enabled": true,
+    "provider": "pexels",
+    "target_count": 20,
+    "queries": [
+      "navy blue polo shirt",
+      "minimal mens fashion outfit",
+      "folded casual clothes",
+      "mens clothing studio photography"
+    ]
+  },
+  "products": [
+    {
+      "id": "P001",
+      "name": "Camisa Polo Azul",
+      "sku": "POLO-AZ-M",
+      "price_cents": 7990,
+      "image_asset_id": null
+    },
+    {
+      "id": "P002",
+      "name": "Calça Chino Bege",
+      "sku": "CHINO-BG-42",
+      "price_cents": 14990,
+      "image_asset_id": null
+    }
+  ],
+  "posts": [
+    {
+      "id": "post_001",
+      "date": "2026-11-09",
+      "time": "07:00",
+      "type": "carousel",
+      "status": "published",
+      "title": "Nova coleção de polos",
+      "product_ids": ["P001"],
+      "slides": [
+        { "id": "s1", "template": "cover", "headline": "Conheça a nova coleção de polos", "body": "Peças versáteis para o seu dia a dia", "image_query": "navy blue polo shirt" },
+        { "id": "s2", "template": "product_focus", "headline": "Camisa Polo Azul", "body": "Algodão nobre com toque macio e caimento impecável", "image_query": "polo shirt studio photo", "show_price": true },
+        { "id": "s3", "template": "editorial_split", "headline": "Como combinar no trabalho", "body": "Perfeita com chino bege ou jeans escuro", "image_query": "minimal mens casual outfit" },
+        { "id": "s4", "template": "detail", "headline": "Detalhes que fazem diferença", "body": "Gola estruturada e costuras reforçadas", "image_query": "blue polo shirt detail" },
+        { "id": "s5", "template": "cta", "headline": "Disponível na loja", "body": "Visite nosso showroom ou chame no WhatsApp", "cta_label": "Ver produtos", "image_query": "mens clothing collection" }
+      ],
+      "caption": "A nova coleção de polos chegou! Conforto e elegância para todas as ocasiões. Peça já a sua pelo WhatsApp ou visite nossa loja."
+    },
+    {
+      "id": "post_002",
+      "date": "2026-11-09",
+      "time": "11:00",
+      "type": "carousel",
+      "status": "published",
+      "title": "Guia de cores",
+      "product_ids": ["P001"],
+      "slides": [
+        { "id": "s1", "template": "cover", "headline": "Guia de cores da estação", "body": "Tons neutros e elegantes para o seu guarda-roupa", "image_query": "folded casual clothes" },
+        { "id": "s2", "template": "editorial_split", "headline": "Azul Marinho & Bege", "body": "Uma combinação clássica que nunca erra", "image_query": "minimal mens casual outfit" },
+        { "id": "s3", "template": "cta", "headline": "Qual sua cor favorita?", "body": "Confira as opções no nosso catálogo", "cta_label": "Ver catálogo", "image_query": "mens clothing collection" }
+      ],
+      "caption": "Guia de cores para a nova estação. Tons que combinam entre si com facilidade. Salve este post para consultar depois!"
+    },
+    {
+      "id": "post_003",
+      "date": "2026-11-10",
+      "time": "08:00",
+      "type": "carousel",
+      "status": "published",
+      "title": "Produto do dia",
+      "product_ids": ["P001"],
+      "slides": [
+        { "id": "s1", "template": "product_focus", "headline": "Camisa Polo Azul Marinho", "body": "A peça essencial para qualquer combinação da semana", "image_query": "polo shirt studio photo", "show_price": true },
+        { "id": "s2", "template": "detail", "headline": "Tecido Piquet 100% Algodão", "body": "Alta durabilidade e respirabilidade", "image_query": "blue polo shirt detail" },
+        { "id": "s3", "template": "cta", "headline": "Peça pelo WhatsApp", "body": "Envio rápido para todo o Brasil", "cta_label": "Comprar agora", "image_query": "mens clothing collection" }
+      ],
+      "caption": "Produto do dia: Camisa Polo Azul Marinho. Qualidade premium que você sente no toque."
+    },
+    {
+      "id": "post_004",
+      "date": "2026-11-10",
+      "time": "18:00",
+      "type": "carousel",
+      "status": "published",
+      "title": "Reposição de estoque",
+      "product_ids": ["P001"],
+      "slides": [
+        { "id": "s1", "template": "cover", "headline": "Reposição dos tamanhos mais pedidos", "body": "Garanta a sua antes que esgote novamente", "image_query": "mens outfit flat lay" },
+        { "id": "s2", "template": "cta", "headline": "Tamanhos P ao GG", "body": "Disponíveis na loja física e online", "cta_label": "Ver estoque", "image_query": "mens clothing collection" }
+      ],
+      "caption": "Reposição confirmada! Todos os tamanhos da nossa polo azul marinho estão de volta."
+    },
+    {
+      "id": "post_005",
+      "date": "2026-11-11",
+      "time": "09:00",
+      "type": "carousel",
+      "status": "draft",
+      "title": "3 formas de usar a polo",
+      "product_ids": ["P001"],
+      "slides": [
+        { "id": "s1", "template": "cover", "headline": "3 formas de usar a Camisa Polo", "body": "Uma peça, diferentes possibilidades para seu dia", "image_query": "polo shirt fashion outfit" },
+        { "id": "s2", "template": "editorial_split", "headline": "1. Casual para o dia a dia", "body": "Combine com calça jeans e tênis branco", "image_query": "casual polo outfit jeans" },
+        { "id": "s3", "template": "editorial_split", "headline": "2. Alinhado para o trabalho", "body": "Com calça chino bege e mocassim ou sapato social", "image_query": "smart casual mens outfit" },
+        { "id": "s4", "template": "detail", "headline": "3. Sofisticado para a noite", "body": "Sob um blazer leve de sarja em tom neutro", "image_query": "mens clothing studio photography" },
+        { "id": "s5", "template": "cta", "headline": "Qual combina mais com você?", "body": "Deixe sua opinião nos comentários ou chame no WhatsApp", "cta_label": "Fale conosco", "image_query": "navy blue polo fashion" }
+      ],
+      "caption": "3 formas de usar a camisa polo e criar looks versáteis para o dia a dia. 👕\n\nQual combina mais com o seu estilo?"
+    },
+    {
+      "id": "post_006",
+      "date": "2026-11-12",
+      "time": "10:00",
+      "type": "carousel",
+      "status": "draft",
+      "title": "Dicas de combinações",
+      "product_ids": ["P001", "P002"],
+      "slides": [
+        { "id": "s1", "template": "cover", "headline": "Dicas de combinações fáceis", "body": "Como montar looks sem complicação", "image_query": "minimal mens casual outfit" },
+        { "id": "s2", "template": "editorial_split", "headline": "Polo Azul + Chino Bege", "body": "O contraste ideal para dias quentes ou de meia-estação", "image_query": "casual polo outfit jeans" },
+        { "id": "s3", "template": "cta", "headline": "Monte o seu look", "body": "Consulte tamanhos disponíveis", "cta_label": "Ver peças", "image_query": "mens clothing collection" }
+      ],
+      "caption": "Dicas de combinações que valorizam o seu visual sem esforço. Qual dessas você usaria hoje?"
+    },
+    {
+      "id": "post_007",
+      "date": "2026-11-12",
+      "time": "14:00",
+      "type": "carousel",
+      "status": "published",
+      "title": "Cuidados com suas peças",
+      "product_ids": ["P001"],
+      "slides": [
+        { "id": "s1", "template": "cover", "headline": "Como cuidar da sua polo", "body": "Dicas para sua camisa durar anos como nova", "image_query": "folded casual clothes" },
+        { "id": "s2", "template": "detail", "headline": "Lavar em água fria", "body": "Evita o encolhimento e preserva a vivacidade da cor", "image_query": "blue polo shirt detail" },
+        { "id": "s3", "template": "cta", "headline": "Peças de qualidade", "body": "Feitas para durar na sua rotina", "cta_label": "Conheça mais", "image_query": "mens clothing collection" }
+      ],
+      "caption": "Cuidados simples que fazem sua roupa durar muito mais tempo. Salve para não esquecer!"
+    },
+    {
+      "id": "post_008",
+      "date": "2026-11-13",
+      "time": "11:00",
+      "type": "carousel",
+      "status": "planned",
+      "title": "Calças em alta",
+      "product_ids": ["P002"],
+      "slides": [
+        { "id": "s1", "template": "product_focus", "headline": "Calça Chino Bege", "body": "Corte slim com elastano para máximo conforto", "image_query": "minimal mens casual outfit", "show_price": true },
+        { "id": "s2", "template": "cta", "headline": "Adicione ao seu armário", "body": "Combina com todas as cores de polo", "cta_label": "Comprar calça", "image_query": "mens clothing collection" }
+      ],
+      "caption": "Calças em alta: a chino bege é a peça mais coringa do guarda-roupa masculino."
+    },
+    {
+      "id": "post_009",
+      "date": "2026-11-13",
+      "time": "16:00",
+      "type": "carousel",
+      "status": "planned",
+      "title": "Oferta especial",
+      "product_ids": ["P001"],
+      "slides": [
+        { "id": "s1", "template": "cta", "headline": "Oferta especial de lançamento", "body": "Compre 2 polos e ganhe frete grátis para todo o Brasil", "cta_label": "Aproveitar oferta", "image_query": "mens clothing collection" }
+      ],
+      "caption": "Oferta especial por tempo limitado! Frete grátis na compra de 2 ou mais peças."
+    },
+    {
+      "id": "post_010",
+      "date": "2026-11-14",
+      "time": "08:00",
+      "type": "carousel",
+      "status": "planned",
+      "title": "Bastidores da loja",
+      "product_ids": [],
+      "slides": [
+        { "id": "s1", "template": "cover", "headline": "Bastidores da nossa loja", "body": "Conheça o carinho com que cada pedido é preparado", "image_query": "folded casual clothes" },
+        { "id": "s2", "template": "cta", "headline": "Venha nos visitar", "body": "Ou peça com entrega expressa no mesmo dia", "cta_label": "Fale conosco", "image_query": "mens clothing collection" }
+      ],
+      "caption": "Um pouco dos nossos bastidores e da dedicação em cada peça enviada para você."
+    },
+    {
+      "id": "post_011",
+      "date": "2026-11-15",
+      "time": "20:00",
+      "type": "carousel",
+      "status": "planned",
+      "title": "Look de fim de semana",
+      "product_ids": ["P001", "P002"],
+      "slides": [
+        { "id": "s1", "template": "cover", "headline": "Look de fim de semana", "body": "Descontração com muito estilo para seu descanso", "image_query": "polo shirt fashion outfit" },
+        { "id": "s2", "template": "editorial_split", "headline": "Conforto em primeiro lugar", "body": "Tecidos leves para aproveitar o domingo", "image_query": "casual polo outfit jeans" },
+        { "id": "s3", "template": "cta", "headline": "Prepare sua semana", "body": "Confira os lançamentos no catálogo", "cta_label": "Ver novidades", "image_query": "mens clothing collection" }
+      ],
+      "caption": "Inspiração de look para o fim de semana. Conforto e presença sem esforço!"
+    }
+  ]
+}

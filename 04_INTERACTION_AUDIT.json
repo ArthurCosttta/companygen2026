@@ -1,0 +1,236 @@
+{
+  "audit_date": "2026-11-12",
+  "mode": "read_only",
+  "coverage_model": "control_families_and_repeated_instances",
+  "static_inventory": {
+    "scope": "all TSX including unreachable legacy components",
+    "button_declarations": 236,
+    "input_declarations": 89,
+    "select_declarations": 15,
+    "textarea_declarations": 19,
+    "anchor_declarations": 3,
+    "native_control_declarations_total": 362,
+    "warning": "Static declarations are not equivalent to reachable live instances. Repeated product/message components multiply at runtime."
+  },
+  "execution_summary": {
+    "control_families_in_matrix": 20,
+    "classified_from_execution_or_live_state_observation": 15,
+    "works_correctly": 6,
+    "works_partially": 5,
+    "different_action": 1,
+    "conditional": 2,
+    "inconsistent_state": 1,
+    "not_executed": 5,
+    "not_claimed_as_approved": true
+  },
+  "controls": [
+    {
+      "id": "CTL-NAV-01",
+      "screen": "shell",
+      "control": "Sidebar Loja/WhatsApp/Mensagens/Dashboard/Configurações",
+      "instances": 5,
+      "expected": "Trocar a tela mantendo o shell",
+      "observed": "Troca imediata e consistente",
+      "status": "Funciona corretamente",
+      "evidence": "CUA navigation sequence"
+    },
+    {
+      "id": "CTL-NAV-02",
+      "screen": "shell/mobile",
+      "control": "Loja e WhatsApp",
+      "instances": 1,
+      "expected": "Abrir modo dual também no mobile",
+      "observed": "Atalho oculto; sidebar mobile não oferece destino equivalente",
+      "status": "Funciona apenas em condições específicas",
+      "evidence": "390x844 DOM snapshot"
+    },
+    {
+      "id": "CTL-NAV-03",
+      "screen": "shell",
+      "control": "Alternar tema",
+      "instances": 1,
+      "expected": "Alternar tema e manter legibilidade",
+      "observed": "Tema alterna/persiste, mas componentes claros mantêm texto de baixo contraste",
+      "status": "Funciona parcialmente",
+      "evidence": "CUA-V01/V02"
+    },
+    {
+      "id": "CTL-STORE-01",
+      "screen": "store",
+      "control": "+ Carrinho",
+      "instances": 30,
+      "sampled_instances": 1,
+      "expected": "Adicionar item e atualizar total",
+      "observed": "Contador 1 e total R$ 79,90",
+      "status": "Funciona corretamente",
+      "evidence": "CUA cart sequence"
+    },
+    {
+      "id": "CTL-STORE-02",
+      "screen": "store",
+      "control": "Ver carrinho",
+      "instances": 2,
+      "sampled_instances": 1,
+      "expected": "Abrir sacola com linhas e totais",
+      "observed": "Item, subtotal e total consistentes",
+      "status": "Funciona corretamente",
+      "evidence": "CUA cart dialog"
+    },
+    {
+      "id": "CTL-STORE-03",
+      "screen": "store/cart",
+      "control": "Fechar modal por X/Esc",
+      "instances": 2,
+      "expected": "Fechar sem perder contexto",
+      "observed": "Esc fechou e retornou à loja",
+      "status": "Funciona corretamente",
+      "evidence": "escape_result=dialog_closed"
+    },
+    {
+      "id": "CTL-STORE-04",
+      "screen": "store",
+      "control": "Pedir este produto pelo WhatsApp",
+      "instances": 30,
+      "sampled_instances": 1,
+      "expected": "Revisar produto e total selecionado",
+      "observed": "Mensagem contém produto de R$ 79,90, mas total exibido é R$ 0,00",
+      "status": "Produz estado inconsistente",
+      "evidence": "CUA-V05; Store.tsx:154-158; CartDialog.tsx:51,200-201"
+    },
+    {
+      "id": "CTL-STORE-05",
+      "screen": "store/review/mobile",
+      "control": "Voltar/Testar Fluxo/Abrir WhatsApp",
+      "instances": 3,
+      "expected": "Todas as ações visíveis e acionáveis",
+      "observed": "Linha excede 390 px, terceira ação fica cortada",
+      "status": "Funciona parcialmente",
+      "evidence": "CUA-V05"
+    },
+    {
+      "id": "CTL-STORE-06",
+      "screen": "store",
+      "control": "Quantidade +/- e remover",
+      "instances": "repetido por produto/linha",
+      "sampled_instances": 1,
+      "expected": "Respeitar mínimo/máximo",
+      "observed": "Botão menos desabilitado em 1; remoção restaurou carrinho vazio",
+      "status": "Funciona corretamente",
+      "evidence": "CUA cart sequence"
+    },
+    {
+      "id": "CTL-STORE-07",
+      "screen": "store",
+      "control": "Filtros e busca",
+      "instances": 5,
+      "expected": "Filtrar produtos sem perder contexto",
+      "observed": "Inventariado no DOM; não executado",
+      "status": "Não foi possível testar",
+      "blocked_by": "Cobertura temporal; prioridade em fluxos críticos"
+    },
+    {
+      "id": "CTL-STORE-08",
+      "screen": "store",
+      "control": "Publicar loja",
+      "instances": 1,
+      "expected": "Validar e publicar versão atual",
+      "observed": "Não acionado",
+      "status": "Não foi possível testar",
+      "blocked_by": "Efeito externo e regra de somente leitura"
+    },
+    {
+      "id": "CTL-WA-01",
+      "screen": "whatsapp",
+      "control": "Abas Atendimentos/Conexão/Catálogo/Conhecimento/Mensagens",
+      "instances": 5,
+      "sampled_instances": 3,
+      "expected": "Trocar conteúdo e preservar status",
+      "observed": "Atendimentos, Conexão e Mensagens abriram",
+      "status": "Funciona corretamente",
+      "evidence": "CUA WhatsApp sequence"
+    },
+    {
+      "id": "CTL-WA-02",
+      "screen": "whatsapp/connection",
+      "control": "Conectar/Pausar",
+      "instances": 1,
+      "expected": "Ação corresponder ao estado real",
+      "observed": "Com Aguardando QR, controle ofereceu Pausar conexão",
+      "status": "Executa ação diferente",
+      "evidence": "CUA-V11"
+    },
+    {
+      "id": "CTL-WA-03",
+      "screen": "whatsapp/messages",
+      "control": "Testar Fluxo no WhatsApp",
+      "instances": "repetido por molde",
+      "expected": "Disponível apenas com pré-condições claras",
+      "observed": "Disponível enquanto worker aguardava QR; não acionado",
+      "status": "Funciona apenas em condições específicas",
+      "blocked_by": "Gera dados/simulação"
+    },
+    {
+      "id": "CTL-DASH-01",
+      "screen": "dashboard",
+      "control": "Atualizar",
+      "instances": 1,
+      "expected": "Carregar métricas e informar erro",
+      "observed": "Concluiu em ~2,5 s; erro seria silencioso pelo código",
+      "status": "Funciona parcialmente",
+      "evidence": "dashboard_refresh=completed; App.tsx catch vazio"
+    },
+    {
+      "id": "CTL-FICHA-01",
+      "screen": "ficha",
+      "control": "Etapas 1-7/Anterior/Próximo",
+      "instances": 9,
+      "sampled_instances": 2,
+      "expected": "Navegar sem perder dados e indicar progresso",
+      "observed": "Navegação local; não há guard de alterações não salvas",
+      "status": "Funciona parcialmente",
+      "evidence": "FichaWizardView.tsx"
+    },
+    {
+      "id": "CTL-FICHA-02",
+      "screen": "ficha",
+      "control": "Salvar ficha e gerar minha loja",
+      "instances": 1,
+      "expected": "Validar ficha completa, salvar e gerar",
+      "observed": "Código exige apenas nome da empresa",
+      "status": "Funciona parcialmente",
+      "blocked_by": "Não acionado por gravar dados"
+    },
+    {
+      "id": "CTL-SET-01",
+      "screen": "settings",
+      "control": "Atualizar senha",
+      "instances": 1,
+      "expected": "Validar e orientar reautenticação/erro",
+      "observed": "Inventariado; não acionado",
+      "status": "Não foi possível testar",
+      "blocked_by": "Alteração de credencial"
+    },
+    {
+      "id": "CTL-AUTH-01",
+      "screen": "auth",
+      "control": "Entrar/criar/recuperar",
+      "instances": "variável",
+      "expected": "Autenticar e recuperar com feedback seguro",
+      "observed": "Não exercido; sessão já restaurada",
+      "status": "Não foi possível testar",
+      "blocked_by": "Sem credenciais fictícias separadas e sem mutar sessão"
+    },
+    {
+      "id": "CTL-MUT-01",
+      "screen": "whatsapp/catalog/knowledge/settings",
+      "control": "Salvar, excluir, resetar, conectar, importar e enviar",
+      "instances": "múltiplas famílias",
+      "expected": "Persistir uma vez, tratar duplo clique e erro",
+      "observed": "Inspecionado estaticamente, não executado",
+      "status": "Não foi possível testar",
+      "blocked_by": "Regra explícita de somente leitura"
+    }
+  ],
+  "omission_justification": "Controles repetidos de 30 produtos e 51 moldes foram agrupados por implementação. Ações mutantes ou externas não foram clicadas. Código legado inacessível foi contado estaticamente, não tratado como UI atual.",
+  "conclusion": "A matriz não é exaustiva em execução real. Nenhum item não testado foi considerado aprovado."
+}

@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CompanyGen — Propostas de Recomposição Visual (NÃO IMPLEMENTADO)</title>
+  <style>
+    :root {
+      --bg-canvas: #F8FAFC;
+      --surface: #FFFFFF;
+      --surface-subtle: #F1F5F9;
+      --ink: #0F172A;
+      --muted: #64748B;
+      --accent: #2563EB;
+      --accent-hover: #1D4ED8;
+      --accent-soft: #EFF6FF;
+      --border: #E2E8F0;
+      --wa-green: #15803D;
+      --wa-soft: #DCFCE7;
+      --warn: #B45309;
+      --warn-soft: #FEF3C7;
+      --s4: 4px; --s8: 8px; --s12: 12px; --s16: 16px; --s24: 24px; --s32: 32px; --s48: 48px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --font: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg-canvas);
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+    button, a, input, select {
+      font-family: inherit;
+      font-size: 14px;
+      min-height: 44px;
+    }
+    .proposal-banner {
+      background: #0F172A;
+      color: #F8FAFC;
+      padding: var(--s8) var(--s16);
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s12);
+    }
+    .proposal-badge {
+      display: inline-flex;
+      align-items: center;
+      background: #2563EB;
+      color: #FFFFFF;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .mode-switcher {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--s8);
+    }
+    .mode-btn {
+      min-height: 44px;
+      padding: 0 var(--s16);
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #1E293B;
+      color: #F8FAFC;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .mode-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #FFFFFF;
+    }
+    .app-shell {
+      display: grid;
+      grid-template-columns: 248px 1fr;
+      min-height: calc(100vh - 60px);
+    }
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: var(--s24) var(--s16);
+      display: flex;
+      flex-direction: column;
+      gap: var(--s24);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: var(--s12);
+    }
+    .brand-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #FFFFFF;
+      font-weight: 800;
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .brand-title { font-size: 16px; font-weight: 700; color: var(--ink); }
+    .brand-sub { font-size: 14px; color: var(--muted); }
+    .nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s8);
+    }
+    .nav-item {
+      width: 100%;
+      min-height: 44px;
+      padding: 0 var(--s16);
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--ink);
+      font-weight: 600;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+    .nav-item.active {
+      background: var(--accent-soft);
+      color: var(--accent-hover);
+      border-color: #BFDBFE;
+    }
+    .nav-pill {
+      font-size: 14px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--surface-subtle);
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .nav-item.active .nav-pill {
+      background: var(--accent);
+      color: #FFFFFF;
+    }
+    .main-area {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: var(--s12) var(--s24);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s12);
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--s8);
+      min-height: 44px;
+      padding: 0 var(--s16);
+      border-radius: 999px;
+      background: var(--wa-soft);
+      color: var(--wa-green);
+      font-weight: 700;
+      font-size: 14px;
+      border: 1px solid #BBF7D0;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--wa-green);
+    }
+    .topbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--s8);
+    }
+    .btn {
+      min-height: 44px;
+      min-width: 44px;
+      padding: 0 var(--s16);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--s8);
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #FFFFFF;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-wa {
+      background: var(--wa-green);
+      border-color: var(--wa-green);
+      color: #FFFFFF;
+    }
+    .content {
+      padding: var(--s24);
+      display: flex;
+      flex-direction: column;
+      gap: var(--s24);
+      max-width: 1280px;
+      width: 100%;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--s24);
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--s16);
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--s16);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--s16);
+    }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--ink);
+      margin-top: var(--s4);
+    }
+    .kpi-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    h1 { font-size: 28px; line-height: 1.25; margin: 0 0 var(--s8); font-weight: 800; }
+    h2 { font-size: 20px; line-height: 1.3; margin: 0 0 var(--s12); font-weight: 700; }
+    h3 { font-size: 16px; line-height: 1.4; margin: 0 0 var(--s8); font-weight: 700; }
+    p { margin: 0 0 var(--s12); color: var(--muted); font-size: 15px; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: var(--s8); }
+    .subtab-btn {
+      min-height: 44px;
+      padding: 0 var(--s16);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .subtab-btn.active {
+      background: var(--ink);
+      color: #FFFFFF;
+      border-color: var(--ink);
+    }
+    .store-hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--s32);
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: var(--s24);
+      align-items: center;
+    }
+    .hero-panel {
+      background: var(--accent-soft);
+      border: 1px solid #BFDBFE;
+      border-radius: var(--radius-md);
+      padding: var(--s24);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: var(--s12) var(--s16);
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--muted);
+      font-weight: 700;
+      background: var(--bg-canvas);
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      background: var(--surface-subtle);
+      color: var(--ink);
+    }
+    .tag-blue { background: var(--accent-soft); color: var(--accent-hover); }
+    .tag-warn { background: var(--warn-soft); color: var(--warn); }
+    .tag-green { background: var(--wa-soft); color: var(--wa-green); }
+    .hidden { display: none !important; }
+    .mobile-nav { display: none; }
+
+    @media (max-width: 900px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .grid-4, .grid-3, .grid-2, .store-hero { grid-template-columns: 1fr; }
+      .content { padding: var(--s16); }
+      .topbar { padding: var(--s12) var(--s16); }
+      table, thead, tbody, th, tr, td { display: block; width: 100%; }
+      thead { display: none; }
+      tr {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: var(--s12);
+        margin-bottom: var(--s12);
+        background: var(--bg-canvas);
+      }
+      td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--s8);
+        padding: var(--s8) 0;
+        border-bottom: 1px solid var(--border);
+      }
+      td:last-child { border-bottom: none; padding-top: var(--s12); }
+      td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      td .btn { width: 100%; }
+      .mobile-nav {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: var(--s8);
+        padding: var(--s8) var(--s12);
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        position: sticky;
+        bottom: 0;
+        z-index: 20;
+      }
+      .mobile-nav button {
+        min-height: 44px;
+        font-size: 14px;
+        padding: 4px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .mobile-nav button.active {
+        background: var(--accent);
+        color: #FFFFFF;
+        border-color: var(--accent);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="proposal-banner">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span class="proposal-badge">PROPOSAL — NOT IMPLEMENTED PRODUCTION CODE</span>
+      <span>Experience Intelligence V2 · Visual Recomposition &amp; 7 Sector Signatures</span>
+    </div>
+    <div class="mode-switcher" role="tablist" aria-label="Selecionar proposta">
+      <button type="button" class="mode-btn" data-mode="variant-a" onclick="setMode('variant-a')">Variante A · Intervenção Estrutural</button>
+      <button type="button" class="mode-btn active" data-mode="variant-b" onclick="setMode('variant-b')">Variante B · 4 Pilares + IA Hub</button>
+      <button type="button" class="mode-btn" data-mode="signatures" onclick="setMode('signatures')">7 Assinaturas de Setor</button>
+    </div>
+  </div>
+
+  <!-- VARIANT A -->
+  <div id="view-variant-a" class="app-shell hidden">
+    <aside class="sidebar" aria-label="Navegação Variante A">
+      <div class="brand">
+        <div class="brand-mark">CG</div>
+        <div>
+          <div class="brand-title">Bella Pasta Artesanal</div>
+          <div class="brand-sub">Variante A · Preservação</div>
+        </div>
+      </div>
+      <nav class="nav-list">
+        <button type="button" class="nav-item active">Minha Loja <span class="nav-pill">Pública</span></button>
+        <button type="button" class="nav-item">WhatsApp &amp; Bot <span class="nav-pill">1 fluxo</span></button>
+        <button type="button" class="nav-item">Mensagens IA <span class="nav-pill">50</span></button>
+        <button type="button" class="nav-item">Ficha &amp; Catálogo <span class="nav-pill">Visível</span></button>
+        <button type="button" class="nav-item">Dashboard <span class="nav-pill">KPIs</span></button>
+        <button type="button" class="nav-item">Configurações</button>
+      </nav>
+    </aside>
+    <div class="main-area">
+      <header class="topbar">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <strong>Variante A — Preservação Estrutural</strong>
+          <span class="status-chip"><span class="status-dot"></span> Bot WhatsApp pronto · +55 11 99999-8888</span>
+        </div>
+        <div class="topbar-actions">
+          <button type="button" class="btn">Ver Loja Pública</button>
+          <button type="button" class="btn btn-primary">Publicar Alterações</button>
+        </div>
+      </header>
+      <main class="content">
+        <section class="card">
+          <h1>Estrutura Atual Unificada (Mesmo Fluxo, Tokens Únicos)</h1>
+          <p>Remove colisão verde/azul, mantém "Ficha &amp; Catálogo" sempre acessível na barra lateral (nunca desaparece após concluir), unifica 4 estados contraditórios do WhatsApp em um único indicador determinístico e padroniza controles em altura ≥ 44px.</p>
+          <div class="grid-3">
+            <div class="card" style="padding:16px;">
+              <h3>1. Barra lateral permanente</h3>
+              <p>Ficha de negócio e catálogo não somem mais da navegação após o onboarding inicial.</p>
+              <button type="button" class="btn btn-primary" style="width:100%;">Abrir Ficha &amp; Catálogo</button>
+            </div>
+            <div class="card" style="padding:16px;">
+              <h3>2. Catálogo único</h3>
+              <p>Aba Catálogo no WhatsApp lê e grava o mesmo profile.json da vitrine (zero dessincronização).</p>
+              <button type="button" class="btn" style="width:100%;">Sincronização Única</button>
+            </div>
+            <div class="card" style="padding:16px;">
+              <h3>3. Contraste &amp; Tipografia</h3>
+              <p>Base #F8FAFC + Superfície #FFFFFF + Texto #0F172A + Cobalt #2563EB (texto ≥ 14px).</p>
+              <button type="button" class="btn" style="width:100%;">Padrão WCAG AA</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- VARIANT B -->
+  <div id="view-variant-b" class="app-shell">
+    <aside class="sidebar" aria-label="Navegação 4 Pilares">
+      <div class="brand">
+        <div class="brand-mark">CG</div>
+        <div>
+          <div class="brand-title">Bella Pasta Artesanal</div>
+          <div class="brand-sub">Variante B · 4 Pilares</div>
+        </div>
+      </div>
+      <nav class="nav-list">
+        <button type="button" class="nav-item active" onclick="setBTab('store')">1. Loja &amp; Catálogo IA <span class="nav-pill">18</span></button>
+        <button type="button" class="nav-item" onclick="setBTab('service')">2. Atendimento &amp; Bot <span class="nav-pill">Online</span></button>
+        <button type="button" class="nav-item" onclick="setBTab('orders')">3. Pedidos &amp; Painel <span class="nav-pill">3 novos</span></button>
+        <button type="button" class="nav-item" onclick="setBTab('settings')">4. Configurações &amp; Conta</button>
+      </nav>
+      <div class="card" style="padding:16px;background:var(--accent-soft);border-color:#BFDBFE;">
+        <div style="font-size:14px;font-weight:700;color:var(--accent-hover);margin-bottom:4px;">Estúdio IA Integrado</div>
+        <p style="font-size:14px;margin-bottom:12px;">Todas as ferramentas de IA preservadas: Compositor de Loja, Busca IA de Fotos, Gerador de Posts 30d e Sofia IA.</p>
+        <button type="button" class="btn btn-primary" style="width:100%;">Abrir Central de IA</button>
+      </div>
+    </aside>
+
+    <div class="main-area">
+      <header class="topbar">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <span class="status-chip"><span class="status-dot"></span> WhatsApp Conectado (+55 11 99999-8888)</span>
+          <span class="tag tag-blue">Catálogo Unificado · Revisão #12</span>
+        </div>
+        <div class="topbar-actions">
+          <button type="button" class="btn" onclick="setMode('signatures')">Ver Assinatura por Setor</button>
+          <button type="button" class="btn btn-primary">Publicar Loja</button>
+        </div>
+      </header>
+
+      <main class="content">
+        <div class="pill-row" role="tablist" aria-label="Subáreas do pilar">
+          <button type="button" class="subtab-btn active" onclick="setBTab('store')">Vitrine &amp; Compositor IA</button>
+          <button type="button" class="subtab-btn" onclick="setBTab('orders')">Pedidos &amp; KPIs Reais</button>
+          <button type="button" class="subtab-btn" onclick="setBTab('service')">Atendimento, Templates &amp; RAG</button>
+          <button type="button" class="subtab-btn" onclick="setBTab('ai')">Estúdio IA (Posts &amp; Fotos)</button>
+        </div>
+
+        <section id="b-panel-store" class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:16px;">
+            <div>
+              <h1>Pilar 1 — Loja Pública, Catálogo Único &amp; Compositor IA</h1>
+              <p style="margin:0;">Elimina a duplicação entre Ficha, Catálogo do WhatsApp e Dual-Browser em uma vitrine adaptada ao nicho.</p>
+            </div>
+            <div class="pill-row">
+              <button type="button" class="btn">Editar Ficha Única</button>
+              <button type="button" class="btn btn-wa">Testar Pedido no WhatsApp</button>
+            </div>
+          </div>
+          <div class="grid-3">
+            <div class="card" style="padding:16px;">
+              <span class="tag tag-blue">Compositor IA Local</span>
+              <h3 style="margin-top:8px;">Layout Dinâmico por Segmento</h3>
+              <p>Seleciona automaticamente seções de Kits, Agendamento ou Tabela Atacado conforme o ramo do negócio.</p>
+              <button type="button" class="btn" style="width:100%;">Recompilar Vitrine IA</button>
+            </div>
+            <div class="card" style="padding:16px;">
+              <span class="tag tag-green">Garimpo IA de Mídia</span>
+              <h3 style="margin-top:8px;">Aquisição Inteligente de Fotos</h3>
+              <p>Asset Hunter integrado direto na linha de produto (sem tela escondida nem botão de 36px).</p>
+              <button type="button" class="btn" style="width:100%;">Buscar Fotos no Catálogo</button>
+            </div>
+            <div class="card" style="padding:16px;">
+              <span class="tag">Gerador 30 Dias</span>
+              <h3 style="margin-top:8px;">Posts &amp; Calendário IA</h3>
+              <p>Re-hospedado sem exclusão de lógica: gera artes e legendas direto do catálogo sincronizado.</p>
+              <button type="button" class="btn" style="width:100%;">Gerar Calendário Mensal</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="b-panel-orders" class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:16px;">
+            <div>
+              <h2>Pilar 3 — Gestão de Pedidos (<code>PATCH /api/orders</code> agora exposto na UI)</h2>
+              <p style="margin:0;">Filtro de período conectado aos dados reais + transição de status do pedido.</p>
+            </div>
+            <div class="pill-row">
+              <select aria-label="Período de métricas" class="btn">
+                <option>Últimos 7 dias (filtrado na API)</option>
+                <option selected>Últimos 30 dias (filtrado na API)</option>
+                <option>Últimos 90 dias (filtrado na API)</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid-4" style="margin-bottom:24px;">
+            <div class="card" style="padding:16px;"><div class="kpi-label">Visitas na Loja</div><div class="kpi-value">1.284</div></div>
+            <div class="card" style="padding:16px;"><div class="kpi-label">Pedidos Recebidos</div><div class="kpi-value">42</div></div>
+            <div class="card" style="padding:16px;"><div class="kpi-label">Receita Estimada</div><div class="kpi-value">R$ 6.490</div></div>
+            <div class="card" style="padding:16px;"><div class="kpi-label">Taxa de Conversão</div><div class="kpi-value">3,27%</div></div>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Protocolo</th>
+                  <th>Cliente</th>
+                  <th>Itens</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td data-label="Protocolo"><strong>#CG-SIM1</strong></td>
+                  <td data-label="Cliente">Maria Oliveira</td>
+                  <td data-label="Itens">2x Ravioli + 1x Molho</td>
+                  <td data-label="Total">R$ 114,90</td>
+                  <td data-label="Status"><span class="tag tag-warn">Aguardando Confirmação</span></td>
+                  <td data-label="Ação"><button type="button" class="btn btn-primary">Confirmar Pedido</button></td>
+                </tr>
+                <tr>
+                  <td data-label="Protocolo"><strong>#CG-1042</strong></td>
+                  <td data-label="Cliente">João Santos</td>
+                  <td data-label="Itens">Kit Almoço Domingo</td>
+                  <td data-label="Total">R$ 159,00</td>
+                  <td data-label="Status"><span class="tag tag-green">Em Separação</span></td>
+                  <td data-label="Ação"><button type="button" class="btn">Enviar Rastreio</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- 7 EXPERIENCE SIGNATURES -->
+  <div id="view-signatures" class="app-shell hidden">
+    <aside class="sidebar" aria-label="Selecionar Setor">
+      <div class="brand">
+        <div class="brand-mark">7S</div>
+        <div>
+          <div class="brand-title">7 Assinaturas</div>
+          <div class="brand-sub">Contra o Layout Genérico</div>
+        </div>
+      </div>
+      <nav class="nav-list" id="sector-list">
+        <button type="button" class="nav-item active" data-sector="pet" onclick="setSector('pet')">1. Pet Shop <span class="nav-pill">Recorrência</span></button>
+        <button type="button" class="nav-item" data-sector="bakery" onclick="setSector('bakery')">2. Padaria <span class="nav-pill">Fornada</span></button>
+        <button type="button" class="nav-item" data-sector="distributor" onclick="setSector('distributor')">3. Distribuidora <span class="nav-pill">Atacado</span></button>
+        <button type="button" class="nav-item" data-sector="pharmacy" onclick="setSector('pharmacy')">4. Farmácia <span class="nav-pill">Plantão</span></button>
+        <button type="button" class="nav-item" data-sector="clinic" onclick="setSector('clinic')">5. Clínica <span class="nav-pill">Agenda</span></button>
+        <button type="button" class="nav-item" data-sector="hardware" onclick="setSector('hardware')">6. Material &amp; Obra <span class="nav-pill">Calculador</span></button>
+        <button type="button" class="nav-item" data-sector="school" onclick="setSector('school')">7. Escola &amp; Curso <span class="nav-pill">Matrícula</span></button>
+      </nav>
+    </aside>
+    <div class="main-area">
+      <header class="topbar">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <strong id="sig-topbar-title">Assinatura 1/7 — Pet Shop</strong>
+          <span class="tag tag-blue" id="sig-topbar-rule">Módulos Exclusivos Ativos</span>
+        </div>
+        <div class="topbar-actions">
+          <div class="pill-row">
+            <button type="button" class="btn" onclick="cycleSector(-1)">← Anterior</button>
+            <button type="button" class="btn btn-primary" onclick="cycleSector(1)">Próximo Setor →</button>
+          </div>
+        </div>
+      </header>
+      <main class="content" id="sig-stage"></main>
+    </div>
+  </div>
+
+  <nav class="mobile-nav" aria-label="Navegação Mobile">
+    <button type="button" class="active" onclick="setMode('variant-b')">4 Pilares</button>
+    <button type="button" onclick="setMode('variant-a')">Var. A</button>
+    <button type="button" onclick="setMode('signatures')">7 Setores</button>
+    <button type="button" onclick="cycleSector(1)">Trocar Setor</button>
+  </nav>
+
+  <script>
+    const SECTORS = {
+      pet: {
+        label: 'Assinatura 1/7 — Pet Shop',
+        title: 'Pet Care Vila Mariana',
+        subtitle: 'Estrutura específica de Pet Shop: filtro por espécie/porte, compra recorrente de ração e agenda de banho & tosa.',
+        badge: 'Seções: Hero + Filtro Porte + Kit Banho + Agendamento',
+        cta: 'Agendar Banho pelo WhatsApp',
+        modules: [
+          { tag: 'Filtro Específico', title: 'Cães, Gatos, Aves · Pequeno/Médio/Grande Porte', body: 'Substitui categorias genéricas por seleção de porte e faixa etária logo na dobra inicial.' },
+          { tag: 'Assinatura Recorrente', title: 'Recompra Programada de Ração (15 / 30 dias)', body: 'Lembrete automático via WhatsApp Bot quando o saco de 15kg estiver no fim.' },
+          { tag: 'BookingPanel Ativado', title: 'Agenda Semanal de Banho & Tosa', body: 'Exibe janelas disponíveis de terça a sábado com confirmação em 1 clique no WhatsApp.' },
+        ],
+      },
+      bakery: {
+        label: 'Assinatura 2/7 — Padaria & Confeitaria',
+        title: 'Fornada & Café Artesanal',
+        subtitle: 'Estrutura de Padaria: relógio de fornada quente, montador de cesta de café e encomenda sob medida.',
+        badge: 'Seções: Relógio de Fornada + KitBuilder Café + Encomenda',
+        cta: 'Reservar Fornada no WhatsApp',
+        modules: [
+          { tag: 'Fornada em Tempo Real', title: 'Pão Francês 07h · Sourdough 11h · Brioche 16h', body: 'Comunica frescor e janela exata de retirada em vez de grade estática de e-commerce.' },
+          { tag: 'KitBuilder Ativado', title: 'Monte seu Kit Café da Manhã', body: 'Escolha bebidas, pães e acompanhamentos com cálculo instantâneo antes de enviar no WhatsApp.' },
+          { tag: 'Encomenda Sob Medida', title: 'Orçamento de Bolos por Kg e Sabor', body: 'Coleta data do evento, peso estimado e massa no Fluxo Estruturado antes do atendimento.' },
+        ],
+      },
+      distributor: {
+        label: 'Assinatura 3/7 — Distribuidora Atacado/B2B',
+        title: 'Centro Sul Bebidas & Alimentos',
+        subtitle: 'Estrutura Atacado: tabela progressiva por caixa/fardo, pedido mínimo e recompra rápida por SKU.',
+        badge: 'Seções: Tabela Escalonada + Barra Pedido Mínimo + Matriz SKU',
+        cta: 'Enviar Cotação B2B no WhatsApp',
+        modules: [
+          { tag: 'Preço Escalonado', title: '1–5 cx: R$ 48,00 · 6–20 cx: R$ 43,50 · +21 cx: R$ 39,90', body: 'Mostra economia por volume direto no card do item (elimina dúvidas repetitivas no bot).' },
+          { tag: 'Pedido Mínimo', title: 'Barra de Progresso para Frete Atacado (R$ 500,00)', body: 'Atualiza em tempo real no carrinho quanto falta para liberar rota sem frete.' },
+          { tag: 'Matriz Rápida', title: 'Adição em Massa por Código/Caixa', body: 'Comerciantes selecionam quantidades em múltiplos fechados sem abrir modal por item.' },
+        ],
+      },
+      pharmacy: {
+        label: 'Assinatura 4/7 — Farmácia & Manipulação',
+        title: 'Drogaria Saúde 24h',
+        subtitle: 'Estrutura Farmácia: envio rápido de receita, filtro genérico/referência e entrega expressa por bairro.',
+        badge: 'Seções: Envio de Receita + Raio Express 35min + Plantão',
+        cta: 'Enviar Receita no WhatsApp',
+        modules: [
+          { tag: 'Triagem Segura', title: 'Envio Direto de Foto da Receita', body: 'Botão primário abre fluxo assistido para validação farmacêutica com resposta rápida.' },
+          { tag: 'Entrega Expressa', title: 'Consulta de CEP em 35 min + Plantão 24h', body: 'Destaca cobertura imediata e regras de retenção de receita antes do pagamento.' },
+          { tag: 'Aviso Regulatório', title: 'Comparativo Princípio Ativo & Dosagem', body: 'Organiza apresentações (caixa 30cp vs 60cp) com orientação clara e acessível.' },
+        ],
+      },
+      clinic: {
+        label: 'Assinatura 5/7 — Clínica & Consultório',
+        title: 'Clínica Integrada Horizonte',
+        subtitle: 'Estrutura Serviços de Saúde: especialidades, equipe médica, preparo de exame e pré-agendamento.',
+        badge: 'Seções: BookingPanel Especialistas + Preparo + FAQ Convênios',
+        cta: 'Pré-agendar Horário no WhatsApp',
+        modules: [
+          { tag: 'BookingPanel', title: 'Escolha de Especialidade & Turno', body: 'Troca o botão "Comprar" por seleção de profissional, convênio/particular e turno.' },
+          { tag: 'Corpo Clínico & Registro', title: 'Cards de Profissionais com CRM/CRO', body: 'Constrói confiança imediata antes da troca de mensagens.' },
+          { tag: 'FAQ & Preparo', title: 'Checklist de Documentos e Jejum', body: 'Reduz retrabalho da recepção respondendo convênios aceitos e preparo na página.' },
+        ],
+      },
+      hardware: {
+        label: 'Assinatura 6/7 — Material de Construção',
+        title: 'Constrular Materiais & Acabamentos',
+        subtitle: 'Estrutura Obra: calculador de m²/rendimento, lista de orçamento de obra e frete basculante.',
+        badge: 'Seções: Calculador m² + Orçamento Multi-item + Frete Obra',
+        cta: 'Solicitar Orçamento de Obra',
+        modules: [
+          { tag: 'Calculador de Rendimento', title: 'Informe a Área (m²) -> Caixas de Piso / Argamassa', body: 'Converte área informada pelo cliente em quantidade correta com 10% de margem.' },
+          { tag: 'Orçamento de Obra', title: 'Lista Rápida de Materiais Pesados', body: 'Permite montar romaneio de cimento, areia e ferragem sem pagamento automático errado.' },
+          { tag: 'Logística Pesada', title: 'Descarga & Prazo por Zona da Cidade', body: 'Explica horário de caminhão e restrições de acesso direto no checkout.' },
+        ],
+      },
+      school: {
+        label: 'Assinatura 7/7 — Escola & Cursos',
+        title: 'Instituto Educacional Futuro',
+        subtitle: 'Estrutura Educacional: trilhas por faixa etária, agenda de visita guiada e simulador de matrícula.',
+        badge: 'Seções: Trilhas Etárias + Visita Guiada + Kit Didático + FAQ',
+        cta: 'Agendar Visita Escolar',
+        modules: [
+          { tag: 'Trilhas por Série', title: 'Infantil · Fundamental I/II · Médio / Cursos Livres', body: 'Segmenta grade curricular, turno e turno integral sem misturar com produtos físicos.' },
+          { tag: 'Visita Guiada', title: 'Agendamento de Tour Presencial ou Online', body: 'Coleta idade do aluno e turno desejado antes de encaminhar à secretaria no WhatsApp.' },
+          { tag: 'Kit Didático & FAQ', title: 'Lista de Material por Série & Calendário', body: 'Agrupa dúvidas de bolsa, uniforme e horário em acordeão pesquisável.' },
+        ],
+      },
+    };
+
+    const ORDER = Object.keys(SECTORS);
+    let currentSector = 'pet';
+
+    function renderSector() {
+      const s = SECTORS[currentSector] || SECTORS.pet;
+      document.getElementById('sig-topbar-title').textContent = s.label;
+      document.getElementById('sig-topbar-rule').textContent = s.badge;
+      document.querySelectorAll('#sector-list .nav-item').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.sector === currentSector);
+      });
+      document.getElementById('sig-stage').innerHTML = `
+        <section class="store-hero">
+          <div>
+            <span class="tag tag-blue">${s.badge}</span>
+            <h1 style="margin-top:12px;">${s.title}</h1>
+            <p>${s.subtitle}</p>
+            <div class="pill-row">
+              <button type="button" class="btn btn-wa">${s.cta}</button>
+              <button type="button" class="btn">Ver Preview Mobile (390px)</button>
+            </div>
+          </div>
+          <div class="hero-panel">
+            <h3 style="color:var(--accent-hover);">Diagnóstico Resolvido</h3>
+            <p style="margin-bottom:8px;color:var(--ink);">O código atual em <code>profile-adapter.ts</code> ignora o segmento e gera sempre as mesmas 6 seções genéricas.</p>
+            <span class="tag tag-green">Módulos dedicados por segmento</span>
+          </div>
+        </section>
+        <section class="grid-3">
+          ${s.modules.map(m => `
+            <article class="card">
+              <span class="tag tag-blue">${m.tag}</span>
+              <h2 style="margin-top:12px;">${m.title}</h2>
+              <p style="margin-bottom:16px;">${m.body}</p>
+              <button type="button" class="btn" style="width:100%;">Inspecionar Bloco</button>
+            </article>
+          `).join('')}
+        </section>
+      `;
+    }
+
+    function setSector(sec) {
+      currentSector = SECTORS[sec] ? sec : 'pet';
+      renderSector();
+    }
+
+    function cycleSector(delta) {
+      setMode('signatures');
+      const idx = ORDER.indexOf(currentSector);
+      const next = (idx + delta + ORDER.length) % ORDER.length;
+      setSector(ORDER[next]);
+    }
+
+    function setBTab(tab) {
+      // Visual prototype feedback on subtabs
+      const labels = ['store', 'orders', 'service', 'ai'];
+      document.querySelectorAll('#view-variant-b .subtab-btn').forEach((b, i) => {
+        b.classList.toggle('active', labels[i] === tab);
+      });
+    }
+
+    function setMode(mode) {
+      document.getElementById('view-variant-a').classList.toggle('hidden', mode !== 'variant-a');
+      document.getElementById('view-variant-b').classList.toggle('hidden', mode !== 'variant-b');
+      document.getElementById('view-signatures').classList.toggle('hidden', mode !== 'signatures');
+      document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+      });
+      if (mode === 'signatures') renderSector();
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const initialMode = params.get('mode') || 'variant-b';
+    const initialSector = params.get('sector') || 'pet';
+    currentSector = SECTORS[initialSector] ? initialSector : 'pet';
+    setMode(initialMode);
+    renderSector();
+  </script>
+</body>
+</html>

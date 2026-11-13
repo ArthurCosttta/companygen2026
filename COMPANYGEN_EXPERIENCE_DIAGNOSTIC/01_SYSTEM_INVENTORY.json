@@ -1,0 +1,174 @@
+{
+  "inventory_version": "2.0",
+  "audit_date": "2026-11-13",
+  "source_root": "C:\\Users\\arthur\\.gemini\\antigravity\\scratch\\companygen-post-studio",
+  "module_summary": {
+    "total_src_files": 121,
+    "reachable_from_main_tsx": 76,
+    "unreachable_from_main_tsx": 45,
+    "ai_preservation_policy": "USER MANDATE: Zero AI features may be deleted. All unreachable AI modules must be preserved and re-homed."
+  },
+  "active_views": [
+    {
+      "view_id": "AUTH",
+      "component": "src/components/auth/AuthFlowView.tsx",
+      "purpose": "Email/password login, signup, and OTP magic link entry",
+      "design_system": "legacy_green (#143d36 hero on #f1f3ef)",
+      "status": "ACTIVE"
+    },
+    {
+      "view_id": "FICHA_WIZARD",
+      "component": "src/components/views/FichaWizardView.tsx",
+      "purpose": "7-step onboarding wizard (Business, Contact, Payment, Delivery, Agent, Brand/IG, Products + Excel/CSV + Web Asset Hunter)",
+      "ai_capabilities": ["Instagram handle scraper/analyzer", "Product web image search (hunt)", "Structured storefront & bot seed generation"],
+      "design_system": "new_blue (#0867E8 on #F7FAFF)",
+      "status": "ACTIVE_BUT_HIDDEN_FROM_SIDEBAR_AFTER_COMPLETION"
+    },
+    {
+      "view_id": "GENERATION_LOADER",
+      "component": "src/components/ui/GenerationLoader.tsx",
+      "purpose": "5-stage progress feedback overlay during store compilation",
+      "ai_capabilities": ["Niche forensic synthesis progress display"],
+      "status": "ACTIVE"
+    },
+    {
+      "view_id": "STORE_V5",
+      "component": "src/components/views/StoreV5Pane.tsx",
+      "purpose": "Generated public storefront preview (Desktop/Mobile toggle, search, product detail, cart checkout to WhatsApp)",
+      "ai_capabilities": ["Dynamic store adapter output rendering"],
+      "known_defects": ["White-on-white header text in dark mode", "Exposes 'no JSON' internal copy on ProductDetail", "Uses fixed 6-section adapter regardless of segment"],
+      "status": "ACTIVE"
+    },
+    {
+      "view_id": "WHATSAPP_ONBOARDING",
+      "component": "src/components/views/WhatsAppView.tsx (WhatsAppOnboarding)",
+      "purpose": "3-step QR connect -> confirm phone -> store/agent setup shown when configLoja.onboardingConcluido !== true",
+      "design_system": "legacy_green (#143d36 on #f1f3ef)",
+      "status": "ACTIVE_CONDITIONAL"
+    },
+    {
+      "view_id": "WHATSAPP_PANEL",
+      "component": "src/components/views/WhatsAppView.tsx",
+      "purpose": "6-tab panel: Atendimentos, Mensagens personalizadas (51 molds), Conexão, Catálogo, Respostas e documentos, Planejamento",
+      "ai_capabilities": ["Sofia bot simulation (/api/fluxo/simular)", "51 variable-hydrated AI reply molds", "RAG knowledge documents & triggers"],
+      "status": "ACTIVE"
+    },
+    {
+      "view_id": "DUAL_BROWSER",
+      "component": "src/app/App.tsx (activeMenu === 'dual')",
+      "purpose": "Side-by-side Store V5 + WhatsApp view missing from Sidebar and containing close buttons leading to 'Os dois navegadores foram recolhidos' dead-end",
+      "status": "ACTIVE_TOPBAR_ONLY"
+    },
+    {
+      "view_id": "DASHBOARD",
+      "component": "src/components/views/DashboardView.tsx",
+      "purpose": "6 KPI cards (Visitas, Pedidos, Vendas, Mensagens, Catálogo, Estoque)",
+      "known_defects": ["Period select 7/30/90 does not filter backend dataset", "Exposes 'skus.json' backtick copy", "No UI for existing PATCH /api/orders endpoint"],
+      "status": "ACTIVE"
+    },
+    {
+      "view_id": "SETTINGS",
+      "component": "src/components/views/SettingsView.tsx",
+      "purpose": "Rename store, shortcuts to Ficha/WhatsApp, password change, logout (lacks dark mode toggle present in topbar)",
+      "status": "ACTIVE"
+    },
+    {
+      "view_id": "CONNECT_ORPHAN",
+      "component": "src/app/App.tsx (activeMenu === 'connect')",
+      "purpose": "State type exists in StudioApp union but renders zero JSX",
+      "status": "DEAD_ROUTE_STATE"
+    }
+  ],
+  "preserved_ai_modules_requiring_rehoming": [
+    {
+      "file": "src/components/views/StoreCompilerView.tsx",
+      "capability": "AI storefront compiler workspace & genome controls",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REHOME -> AI Studio Hub -> Storefront Compiler tab"
+    },
+    {
+      "file": "src/components/views/AssetHunterView.tsx",
+      "capability": "AI-assisted web product & brand media acquisition",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REHOME -> Integrated Product Catalog Drawer & AI Studio Media tab"
+    },
+    {
+      "file": "src/components/views/GeneratePostsView.tsx",
+      "capability": "Social post artwork & copy generation",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REHOME -> AI Studio Hub -> Social Content & 30-Day Calendar"
+    },
+    {
+      "file": "src/components/views/CalendarGrid.tsx",
+      "capability": "30-day editorial content calendar UI",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REHOME -> AI Studio Hub"
+    },
+    {
+      "file": "src/components/modals/Generate30DaysDialog.tsx",
+      "capability": "Batch 30-day AI marketing campaign generator dialog",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REHOME -> AI Studio Hub"
+    },
+    {
+      "file": "src/components/modals/ExportDialog.tsx",
+      "capability": "ZIP/HTML post & storefront asset export modal",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REHOME -> Storefront & AI Studio Export action"
+    },
+    {
+      "file": "src/store-v5/dynamic-synthesizer.ts",
+      "capability": "Dynamic segment-aware storefront genome synthesis engine",
+      "current_state": "UNREACHABLE_BYPASSED_BY_STATIC_ADAPTER",
+      "disposition": "PRESERVE_AND_REACTIVATE -> Wire into StoreV5Pane & 7 Experience Signatures"
+    },
+    {
+      "file": "src/store-v5/store-prompt-generator.ts",
+      "capability": "AI store prompt construction from business metadata",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REHOME -> AI Studio Store Compiler"
+    },
+    {
+      "file": "src/store-v5/sofia-flow-store.ts",
+      "capability": "Sofia conversational bot flow state store",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REHOME -> Attendance & Sofia Flow Pillar"
+    },
+    {
+      "file": "src/engine/AssetHunterEngine.ts",
+      "capability": "Multi-provider image search & scoring engine",
+      "current_state": "PARTIAL_DIRECT_CALL",
+      "disposition": "PRESERVE_AND_CONSOLIDATE"
+    },
+    {
+      "file": "src/engine/protein-registry.ts",
+      "capability": "Modular visual section registry for dynamic composition",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REACTIVATE -> Power 7 Experience Signatures"
+    },
+    {
+      "file": "src/engine/gene-resolver.ts",
+      "capability": "Visual gene resolution (typography, rhythm, sector layout rules)",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REACTIVATE"
+    },
+    {
+      "file": "src/engine/render-post.ts",
+      "capability": "Post artwork canvas/DOM renderer",
+      "current_state": "UNREACHABLE_FROM_MAIN",
+      "disposition": "PRESERVE_AND_REHOME -> AI Studio Posts"
+    }
+  ],
+  "server_endpoints": [
+    { "method": "GET/POST", "path": "/api/workspace", "notes": "Workspace JSON state" },
+    { "method": "GET/POST", "path": "/api/profile", "notes": "Optimistic locking via expectedRevision -> HTTP 409 on stale revision" },
+    { "method": "GET", "path": "/api/store/public", "notes": "Builds public store projection IR" },
+    { "method": "POST", "path": "/api/store/visit", "notes": "Increments local + RPC visit metrics" },
+    { "method": "GET/POST/PATCH", "path": "/api/orders", "notes": "PATCH exists on backend for order status progression but has ZERO frontend UI" },
+    { "method": "GET", "path": "/api/dashboard", "notes": "Returns full metrics payload without server-side 7/30/90 day filtering" },
+    { "method": "POST", "path": "/api/hunt", "notes": "Python DuckDuckGo/asset image hunter" },
+    { "method": "POST", "path": "/api/instagram/analyze", "notes": "Instagram public metadata + brand logo extraction" },
+    { "method": "GET", "path": "/api/images/status", "notes": "Asset search capability probe" },
+    { "method": "GET/POST", "path": "/api/whatsapp/*", "notes": "25 routes proxied to forked Baileys worker (bot.js) + private media stream" }
+  ]
+}

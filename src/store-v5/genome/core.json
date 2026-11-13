@@ -1,0 +1,774 @@
+{
+  "schemaVersion": "2.0.0",
+  "count": 96,
+  "properties": [
+    {
+      "id": "identity.id",
+      "type": "string",
+      "initial": null,
+      "scope": "identity",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "identity.componentType",
+      "type": "string",
+      "initial": null,
+      "scope": "identity",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "identity.htmlTag",
+      "type": "string",
+      "initial": null,
+      "scope": "identity",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "identity.semanticRole",
+      "type": "string",
+      "initial": null,
+      "scope": "identity",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "identity.accessibleName",
+      "type": "string",
+      "initial": null,
+      "scope": "identity",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "identity.tabIndex",
+      "type": "integer",
+      "initial": null,
+      "scope": "identity",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "identity.direction",
+      "type": "string",
+      "initial": null,
+      "scope": "identity",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "identity.testId",
+      "type": "string",
+      "initial": null,
+      "scope": "identity",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "content.text",
+      "type": "string",
+      "initial": null,
+      "scope": "content",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "content.richText",
+      "type": "string",
+      "initial": null,
+      "scope": "content",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "content.description",
+      "type": "string",
+      "initial": null,
+      "scope": "content",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "content.icon",
+      "type": "string",
+      "initial": null,
+      "scope": "content",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "content.imageSource",
+      "type": "string",
+      "initial": null,
+      "scope": "content",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "content.imageAlt",
+      "type": "string",
+      "initial": null,
+      "scope": "content",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "content.contentSource",
+      "type": "string",
+      "initial": null,
+      "scope": "content",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "content.visibilityCondition",
+      "type": "boolean",
+      "initial": null,
+      "scope": "content",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "layout.display",
+      "type": "string",
+      "initial": null,
+      "scope": "layout",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "layout.flexDirection",
+      "type": "string",
+      "initial": null,
+      "scope": "layout",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "layout.flexWrap",
+      "type": "string",
+      "initial": null,
+      "scope": "layout",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "layout.alignItems",
+      "type": "string",
+      "initial": null,
+      "scope": "layout",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "layout.justifyContent",
+      "type": "string",
+      "initial": null,
+      "scope": "layout",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "layout.gridColumns",
+      "type": "integer",
+      "initial": null,
+      "scope": "layout",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "layout.gap",
+      "type": "string",
+      "initial": null,
+      "scope": "layout",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "layout.position",
+      "type": "string",
+      "initial": null,
+      "scope": "layout",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "dimensions.width",
+      "type": "string",
+      "initial": null,
+      "scope": "dimensions",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "dimensions.height",
+      "type": "string",
+      "initial": null,
+      "scope": "dimensions",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "dimensions.minWidth",
+      "type": "string",
+      "initial": null,
+      "scope": "dimensions",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "dimensions.maxWidth",
+      "type": "string",
+      "initial": null,
+      "scope": "dimensions",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "dimensions.minHeight",
+      "type": "string",
+      "initial": null,
+      "scope": "dimensions",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "dimensions.maxHeight",
+      "type": "string",
+      "initial": null,
+      "scope": "dimensions",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "dimensions.aspectRatio",
+      "type": "string",
+      "initial": null,
+      "scope": "dimensions",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "dimensions.overflow",
+      "type": "string",
+      "initial": null,
+      "scope": "dimensions",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "surface.padding",
+      "type": "string",
+      "initial": null,
+      "scope": "surface",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "surface.margin",
+      "type": "string",
+      "initial": null,
+      "scope": "surface",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "surface.borderWidth",
+      "type": "string",
+      "initial": null,
+      "scope": "surface",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "surface.borderStyle",
+      "type": "string",
+      "initial": null,
+      "scope": "surface",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "surface.borderColor",
+      "type": "string",
+      "initial": null,
+      "scope": "surface",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "surface.borderRadius",
+      "type": "string",
+      "initial": null,
+      "scope": "surface",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "surface.backgroundColor",
+      "type": "string",
+      "initial": null,
+      "scope": "surface",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "surface.backgroundImage",
+      "type": "string",
+      "initial": null,
+      "scope": "surface",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "typography.fontFamily",
+      "type": "string",
+      "initial": null,
+      "scope": "typography",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "typography.fontSize",
+      "type": "string",
+      "initial": null,
+      "scope": "typography",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "typography.fontWeight",
+      "type": "string",
+      "initial": null,
+      "scope": "typography",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "typography.lineHeight",
+      "type": "string",
+      "initial": null,
+      "scope": "typography",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "typography.letterSpacing",
+      "type": "string",
+      "initial": null,
+      "scope": "typography",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "typography.textAlign",
+      "type": "string",
+      "initial": null,
+      "scope": "typography",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "typography.textColor",
+      "type": "string",
+      "initial": null,
+      "scope": "typography",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "typography.textTransform",
+      "type": "string",
+      "initial": null,
+      "scope": "typography",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "effects.opacity",
+      "type": "string",
+      "initial": null,
+      "scope": "effects",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "effects.boxShadow",
+      "type": "string",
+      "initial": null,
+      "scope": "effects",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "effects.backdropFilter",
+      "type": "string",
+      "initial": null,
+      "scope": "effects",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "effects.outlineStyle",
+      "type": "string",
+      "initial": null,
+      "scope": "effects",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "effects.cursor",
+      "type": "string",
+      "initial": null,
+      "scope": "effects",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "effects.zIndex",
+      "type": "integer",
+      "initial": null,
+      "scope": "effects",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "effects.hoverStyle",
+      "type": "object",
+      "initial": null,
+      "scope": "effects",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "effects.focusStyle",
+      "type": "object",
+      "initial": null,
+      "scope": "effects",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "responsive.breakpoints",
+      "type": "object",
+      "initial": null,
+      "scope": "responsive",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "responsive.containerMode",
+      "type": "string",
+      "initial": null,
+      "scope": "responsive",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "responsive.mobileLayout",
+      "type": "string",
+      "initial": null,
+      "scope": "responsive",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "responsive.tabletLayout",
+      "type": "string",
+      "initial": null,
+      "scope": "responsive",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "responsive.desktopLayout",
+      "type": "string",
+      "initial": null,
+      "scope": "responsive",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "responsive.visibilityByWidth",
+      "type": "string",
+      "initial": null,
+      "scope": "responsive",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "responsive.orderByWidth",
+      "type": "string",
+      "initial": null,
+      "scope": "responsive",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "responsive.motionPreference",
+      "type": "boolean",
+      "initial": null,
+      "scope": "responsive",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "interaction.eventTrigger",
+      "type": "string",
+      "initial": null,
+      "scope": "interaction",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "interaction.actionType",
+      "type": "string",
+      "initial": null,
+      "scope": "interaction",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "interaction.actionTarget",
+      "type": "string",
+      "initial": null,
+      "scope": "interaction",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "interaction.actionPayload",
+      "type": "object",
+      "initial": null,
+      "scope": "interaction",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "interaction.debounceMs",
+      "type": "integer",
+      "initial": null,
+      "scope": "interaction",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "interaction.throttleMs",
+      "type": "integer",
+      "initial": null,
+      "scope": "interaction",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "interaction.keyboardShortcut",
+      "type": "string",
+      "initial": null,
+      "scope": "interaction",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "interaction.idempotencyKey",
+      "type": "string",
+      "initial": null,
+      "scope": "interaction",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "animation.enterAnimation",
+      "type": "string",
+      "initial": null,
+      "scope": "animation",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "animation.exitAnimation",
+      "type": "string",
+      "initial": null,
+      "scope": "animation",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "animation.hoverAnimation",
+      "type": "string",
+      "initial": null,
+      "scope": "animation",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "animation.activeAnimation",
+      "type": "string",
+      "initial": null,
+      "scope": "animation",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "animation.durationMs",
+      "type": "integer",
+      "initial": null,
+      "scope": "animation",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "animation.easing",
+      "type": "string",
+      "initial": null,
+      "scope": "animation",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "animation.delayMs",
+      "type": "integer",
+      "initial": null,
+      "scope": "animation",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "animation.staggerMs",
+      "type": "integer",
+      "initial": null,
+      "scope": "animation",
+      "editable": true,
+      "requiresAdapter": false
+    },
+    {
+      "id": "state.statePath",
+      "type": "string",
+      "initial": null,
+      "scope": "state",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "state.initialState",
+      "type": "string",
+      "initial": null,
+      "scope": "state",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "state.transitions",
+      "type": "object",
+      "initial": null,
+      "scope": "state",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "state.guards",
+      "type": "object",
+      "initial": null,
+      "scope": "state",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "state.dataBinding",
+      "type": "string",
+      "initial": null,
+      "scope": "state",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "state.loadingView",
+      "type": "string",
+      "initial": null,
+      "scope": "state",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "state.emptyView",
+      "type": "string",
+      "initial": null,
+      "scope": "state",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "state.errorView",
+      "type": "string",
+      "initial": null,
+      "scope": "state",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "business.selectionMode",
+      "type": "string",
+      "initial": null,
+      "scope": "business",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "business.selectionMin",
+      "type": "integer",
+      "initial": null,
+      "scope": "business",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "business.selectionMax",
+      "type": "integer",
+      "initial": null,
+      "scope": "business",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "business.quantityStep",
+      "type": "integer",
+      "initial": null,
+      "scope": "business",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "business.pricingRule",
+      "type": "object",
+      "initial": null,
+      "scope": "business",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "business.inventoryRule",
+      "type": "object",
+      "initial": null,
+      "scope": "business",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "business.availabilityRule",
+      "type": "object",
+      "initial": null,
+      "scope": "business",
+      "editable": true,
+      "requiresAdapter": true
+    },
+    {
+      "id": "business.submissionRule",
+      "type": "object",
+      "initial": null,
+      "scope": "business",
+      "editable": true,
+      "requiresAdapter": true
+    }
+  ]
+}

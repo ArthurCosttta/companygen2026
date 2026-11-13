@@ -1,0 +1,48 @@
+/* CompanyGen design tokens */
+:root {
+  --cg-background: #f7faff;
+  --cg-surface: #ffffff;
+  --cg-primary: #0867e8;
+  --cg-primary-dark: #064bb8;
+  --cg-text: #0b1d52;
+  --cg-text-secondary: #64748b;
+  --cg-border: #e6effb;
+  --cg-hover: #edf4ff;
+  --cg-success: #24a677;
+  --cg-warning: #e8a23f;
+  --cg-error: #d94c4c;
+
+  --cg-sidebar-w: 248px;
+  --cg-inspector-w: 440px;
+  --cg-header-h: 64px;
+  --cg-radius: 16px;
+  --cg-radius-lg: 24px;
+  --cg-space: 8px;
+  --cg-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --cg-dur: 200ms;
+}
+
+.dark {
+  --cg-background: #0b132b;
+  --cg-surface: #131e3a;
+  --cg-primary: #3b82f6;
+  --cg-primary-dark: #2563eb;
+  --cg-text: #f8fafc;
+  --cg-text-secondary: #94a3b8;
+  --cg-border: #1e2d4a;
+  --cg-hover: #1e2e50;
+  --cg-success: #10b981;
+  --cg-warning: #f59e0b;
+  --cg-error: #ef4444;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

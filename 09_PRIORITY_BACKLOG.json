@@ -1,0 +1,67 @@
+{
+  "audit_date": "2026-11-12",
+  "status": "diagnostic_only",
+  "severity_totals": { "P0": 0, "P1": 10, "P2": 9, "P3": 1 },
+  "items": [
+    {
+      "id": "CG-001", "screen": "Loja/pedido direto", "component": "Store + CartDialog", "severity": "P1", "frequency": "1/1 amostra", "steps": ["Abrir loja", "Clicar pedir produto pelo WhatsApp"], "expected": "Total igual ao produto e quantidade", "actual": "Produto R$ 79,90; total R$ 0,00", "evidence": "CUA-V05; Store.tsx:154-158; CartDialog.tsx:51,200-201", "cause_hypothesis": "Fluxo direto não materializa item", "confirmed_cause": "Total deriva do carrinho vazio", "files": ["src/store-v5/components/Store.tsx", "src/store-v5/components/commerce/CartDialog.tsx"], "dependencies": ["cart capability", "productMessage"], "proposal": "Passar total/linha explícita para review ou usar um modelo único de checkout", "acceptance": "Pedido direto de N unidades mostra preço e total corretos em desktop/mobile", "regression_risk": "alto: carrinho e simulação"
+    },
+    {
+      "id": "CG-002", "screen": "WhatsApp webview", "component": "RealWhatsAppWeb", "severity": "P1", "frequency": "determinística por código", "steps": ["Conectar webview", "Desconectar depois"], "expected": "Estado muda para desconectado", "actual": "Polling cessa no primeiro sucesso", "evidence": "WhatsAppView.tsx:145-158", "cause_hypothesis": "timer não reagendado", "confirmed_cause": "return após reportIdentity", "files": ["src/components/views/WhatsAppView.tsx"], "dependencies": ["Electron bridge"], "proposal": "Polling contínuo/evento de identidade com estados connected/disconnected", "acceptance": "logout/reconexão refletidos em até 3 s", "regression_risk": "médio"
+    },
+    {
+      "id": "CG-003", "screen": "WhatsApp/Conexão", "component": "WhatsAppView", "severity": "P1", "frequency": "1/1", "steps": ["Abrir conexão com QR pendente"], "expected": "Ação Conectar/Cancelar QR coerente", "actual": "Aguardando QR com Pausar conexão", "evidence": "CUA-V11", "cause_hypothesis": "estado binário insuficiente", "confirmed_cause": "rótulo não distingue QR de conectado", "files": ["src/components/views/WhatsAppView.tsx"], "dependencies": ["worker state"], "proposal": "máquina de estados desconectado/qr/conectando/conectado/pausado/erro", "acceptance": "cada estado tem uma única ação válida", "regression_risk": "médio"
+    },
+    {
+      "id": "CG-004", "screen": "Loja", "component": "StoreV5Pane/assets", "severity": "P1", "frequency": "1/1", "steps": ["Abrir loja com assets faltantes"], "expected": "Contagem inclui todo slot pendente", "actual": "0 pendentes com logo/produtos pendentes", "evidence": "CUA-V01", "cause_hypothesis": "fontes de estado distintas", "confirmed_cause": null, "files": ["src/components/views/StoreV5Pane.tsx", "src/store-v5/profile-adapter.ts"], "dependencies": ["asset resolver"], "proposal": "calcular contador do IR renderizado", "acceptance": "contador igual ao número de slots needs_asset", "regression_risk": "médio"
+    },
+    {
+      "id": "CG-005", "screen": "Dashboard", "component": "DashboardView", "severity": "P1", "frequency": "quando visitsByDay vazio", "steps": ["Abrir dashboard sem série diária"], "expected": "Estado vazio ou dados reais", "actual": "Linha crescente sintetizada do total", "evidence": "DashboardView.tsx:80-88", "cause_hypothesis": "fallback decorativo", "confirmed_cause": "fórmula fabrica pontos", "files": ["src/components/views/DashboardView.tsx"], "dependencies": ["dashboard API"], "proposal": "zero/null e rótulo sem dados", "acceptance": "nenhum ponto sem evento correspondente", "regression_risk": "baixo"
+    },
+    {
+      "id": "CG-006", "screen": "Servidor/métricas", "component": "workspace persistence", "severity": "P1", "frequency": "2 ocorrências no teste", "steps": ["Executar test:security no Windows"], "expected": "rename atômico persistido ou teste falha", "actual": "EPERM e suite verde", "evidence": "console de npm run test:security", "cause_hypothesis": "arquivo bloqueado/rename sem retry", "confirmed_cause": "falha de rename confirmada; agente de lock não confirmado", "files": ["server/workspace.mjs", "tests/security-api.test.mjs"], "dependencies": ["filesystem Windows"], "proposal": "retry com backoff e assert de persistência", "acceptance": "100 ciclos sem EPERM silencioso", "regression_risk": "alto: concorrência"
+    },
+    {
+      "id": "CG-007", "screen": "Qualidade", "component": "Playwright suite", "severity": "P1", "frequency": "17/35", "steps": ["Executar Chromium suite"], "expected": "Gate representa UI atual", "actual": "17 falhas, 17 passes, 1 skip", "evidence": "Playwright run 2026-11-12", "cause_hypothesis": "drift legado/setup auth", "confirmed_cause": "expectativas de telas inacessíveis e locators ambíguos", "files": ["tests/*.spec.ts"], "dependencies": ["fixtures auth"], "proposal": "separar current/legacy e estabilizar fixtures", "acceptance": "suite current verde e sem skip crítico", "regression_risk": "baixo no produto, alto no CI"
+    },
+    {
+      "id": "CG-008", "screen": "Ficha", "component": "FichaWizardView", "severity": "P1", "frequency": "sempre", "steps": ["Editar campo", "Sair/recarregar"], "expected": "Aviso ou autosave", "actual": "Sem dirty guard", "evidence": "ausência de beforeunload/confirm", "cause_hypothesis": "estado apenas local", "confirmed_cause": "nenhum guard no componente", "files": ["src/components/views/FichaWizardView.tsx"], "dependencies": ["profile service"], "proposal": "dirty state + autosave/revisão", "acceptance": "nenhuma edição abandonada silenciosamente", "regression_risk": "médio"
+    },
+    {
+      "id": "CG-009", "screen": "Loja/review mobile", "component": "CartDialog CSS", "severity": "P1", "frequency": "1/1 em 390 px", "steps": ["Abrir pedido direto em 390x844"], "expected": "Ações dentro do modal", "actual": "overflow e ação cortada", "evidence": "CUA-V05", "cause_hypothesis": "flex sem wrap", "confirmed_cause": "layout observado", "files": ["src/store-v5/styles/main.css"], "dependencies": ["CartDialog"], "proposal": "ações em coluna no breakpoint", "acceptance": "320–430 px sem scroll horizontal", "regression_risk": "baixo"
+    },
+    {
+      "id": "CG-010", "screen": "Dashboard", "component": "DashboardView mensagens", "severity": "P1", "frequency": "sempre com 0", "steps": ["Abrir dashboard com 0 mensagens"], "expected": "Estado vazio", "actual": "Conversa simulada não rotulada", "evidence": "CUA-V08; DashboardView.tsx:283-294", "cause_hypothesis": "mock permanente", "confirmed_cause": "JSX sempre renderiza exemplo", "files": ["src/components/views/DashboardView.tsx"], "dependencies": [], "proposal": "empty state ou selo Exemplo", "acceptance": "0 mensagens não parece atividade real", "regression_risk": "baixo"
+    },
+    {
+      "id": "CG-011", "screen": "Loja/Ficha dark", "component": "theme CSS", "severity": "P2", "frequency": "múltiplas telas", "steps": ["Ativar tema escuro"], "expected": "Contraste AA", "actual": "texto claro sobre superfície clara", "evidence": "CUA-V01/V02", "cause_hypothesis": "hardcodes + herança", "confirmed_cause": "estilos misturados", "files": ["src/styles/index.css", "src/components/views/FichaWizardView.tsx"], "dependencies": ["design tokens"], "proposal": "tokens semânticos e teste axe/contraste", "acceptance": "AA para texto/controles", "regression_risk": "médio"
+    },
+    {
+      "id": "CG-012", "screen": "Shell/mobile", "component": "App + Sidebar", "severity": "P2", "frequency": "sempre no mobile", "steps": ["Abrir 390 px"], "expected": "Todos destinos principais acessíveis", "actual": "Dual oculto e navegação duplicada no desktop", "evidence": "CUA DOM", "cause_hypothesis": "atalhos contextuais viraram navegação", "confirmed_cause": "dual só na topbar desktop", "files": ["src/app/App.tsx", "src/components/Sidebar.tsx"], "dependencies": [], "proposal": "uma navegação adaptativa única", "acceptance": "paridade de destinos desktop/mobile", "regression_risk": "médio"
+    },
+    {
+      "id": "CG-013", "screen": "Loja/hero", "component": "profile-adapter", "severity": "P2", "frequency": "quando hero ausente", "steps": ["Gerar sem banner"], "expected": "Fallback editorial coerente", "actual": "primeiro cutout de produto vira hero", "evidence": "CUA-V06; profile-adapter.ts:131-149", "cause_hypothesis": "fallback agressivo", "confirmed_cause": "regra explícita", "files": ["src/store-v5/profile-adapter.ts"], "dependencies": ["asset pipeline"], "proposal": "hero neutro/gradiente até asset próprio", "acceptance": "nenhum product.cutout promovido automaticamente", "regression_risk": "médio"
+    },
+    {
+      "id": "CG-014", "screen": "Ficha", "component": "FichaWizardView", "severity": "P2", "frequency": "sempre", "steps": ["Preencher apenas nome", "Salvar"], "expected": "Campos essenciais validados", "actual": "somente nome é requisito", "evidence": "FichaWizardView.tsx:259-271", "cause_hypothesis": "validação incompleta", "confirmed_cause": "condição única", "files": ["src/components/views/FichaWizardView.tsx"], "dependencies": ["profile schema"], "proposal": "schema por etapa + resumo de pendências", "acceptance": "não concluir ficha sem dados mínimos definidos", "regression_risk": "alto: onboarding existente"
+    },
+    {
+      "id": "CG-015", "screen": "WhatsApp", "component": "App + WhatsAppView", "severity": "P2", "frequency": "enquanto tela montada", "steps": ["Abrir WhatsApp"], "expected": "uma fonte de polling", "actual": "polls de 5 s e 2 s", "evidence": "inspeção de effects", "cause_hypothesis": "proprietários duplicados", "confirmed_cause": "dois loops confirmados", "files": ["src/app/App.tsx", "src/components/views/WhatsAppView.tsx"], "dependencies": ["worker API"], "proposal": "serviço compartilhado/SWR", "acceptance": "uma request ativa por intervalo", "regression_risk": "médio"
+    },
+    {
+      "id": "CG-016", "screen": "Dashboard/Loja", "component": "services/App", "severity": "P2", "frequency": "em erro", "steps": ["Falhar rede"], "expected": "erro e retry", "actual": "catch vazio/erro suprimido", "evidence": "App.tsx:130-137; profile-service.ts", "cause_hypothesis": "falha tratada como opcional", "confirmed_cause": "catches confirmados", "files": ["src/app/App.tsx", "src/services/profile-service.ts"], "dependencies": [], "proposal": "estado de erro observável e retry", "acceptance": "toda falha relevante gera feedback", "regression_risk": "baixo"
+    },
+    {
+      "id": "CG-017", "screen": "Mensagens", "component": "WhatsAppView", "severity": "P2", "frequency": "51 cards observados", "steps": ["Abrir Mensagens"], "expected": "Encontrar molde aplicável", "actual": "muitos Aguardando dados sem hierarquia", "evidence": "CUA-V09", "cause_hypothesis": "lista sem progressão", "confirmed_cause": null, "files": ["src/components/views/WhatsAppView.tsx"], "dependencies": ["templates"], "proposal": "agrupar, filtrar incompletos, ação próxima", "acceptance": "usuário encontra molde em até 3 decisões", "regression_risk": "baixo"
+    },
+    {
+      "id": "CG-018", "screen": "Sessões", "component": "Auth/shell", "severity": "P2", "frequency": "observada entre contextos", "steps": ["Abrir app em contextos distintos"], "expected": "Identidade/empresa inequívoca", "actual": "contextos mostraram empresas diferentes", "evidence": "CUA e screenshots fornecidos", "cause_hypothesis": "sessão isolada por browser", "confirmed_cause": "não há vazamento confirmado", "files": ["src/app/App.tsx", "src/components/Sidebar.tsx"], "dependencies": ["Supabase Auth"], "proposal": "exibir e-mail/tenant e confirmação ao trocar", "acceptance": "identidade visível em toda operação crítica", "regression_risk": "baixo"
+    },
+    {
+      "id": "CG-019", "screen": "Logo público", "component": "brand-logo route", "severity": "P2", "frequency": "por URL", "steps": ["Conhecer UID e arquivo"], "expected": "política de privacidade explícita", "actual": "rota sem bearer", "evidence": "server/workspace.mjs:949", "cause_hypothesis": "necessário à loja pública", "confirmed_cause": "acesso público por design; exposição indevida não confirmada", "files": ["server/workspace.mjs"], "dependencies": ["public store"], "proposal": "documentar, usar IDs não enumeráveis e allowlist de assets públicos", "acceptance": "somente assets marcados públicos são servidos", "regression_risk": "médio"
+    },
+    {
+      "id": "CG-020", "screen": "Configurações", "component": "SettingsView", "severity": "P3", "frequency": "1/1", "steps": ["Abrir Configurações"], "expected": "Organização proporcional", "actual": "grande área vazia", "evidence": "CUA-V07", "cause_hypothesis": "conteúdo mínimo em grid amplo", "confirmed_cause": null, "files": ["src/components/views/SettingsView.tsx"], "dependencies": [], "proposal": "seções compactas e ajuda contextual", "acceptance": "sem vazio dominante em desktop", "regression_risk": "baixo"
+    }
+  ]
+}

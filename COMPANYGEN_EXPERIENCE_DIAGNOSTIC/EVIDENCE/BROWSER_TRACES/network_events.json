@@ -1,0 +1,482 @@
+[
+  {
+    "ts": 1794570362266,
+    "method": "GET",
+    "path": "/api/workspace",
+    "status": 200
+  },
+  {
+    "ts": 1794570362270,
+    "method": "GET",
+    "path": "/api/profile",
+    "status": 200
+  },
+  {
+    "ts": 1794570362280,
+    "method": "GET",
+    "path": "/api/workspace",
+    "status": 200
+  },
+  {
+    "ts": 1794570362280,
+    "method": "GET",
+    "path": "/api/profile",
+    "status": 200
+  },
+  {
+    "ts": 1794570362298,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570362298,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570362312,
+    "method": "GET",
+    "path": "/api/dashboard",
+    "status": 200
+  },
+  {
+    "ts": 1794570365642,
+    "method": "PUT",
+    "path": "/api/profile",
+    "status": 200
+  },
+  {
+    "ts": 1794570365680,
+    "method": "POST",
+    "path": "/api/store/visit",
+    "status": 200
+  },
+  {
+    "ts": 1794570365680,
+    "method": "GET",
+    "path": "/api/dashboard",
+    "status": 200
+  },
+  {
+    "ts": 1794570367422,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570369388,
+    "method": "POST",
+    "path": "/api/whatsapp/api/onboarding/reset",
+    "status": 200
+  },
+  {
+    "ts": 1794570369445,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570369446,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570369475,
+    "method": "POST",
+    "path": "/api/whatsapp/api/sessao/connect",
+    "status": 200
+  },
+  {
+    "ts": 1794570369483,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570371306,
+    "method": "POST",
+    "path": "/api/whatsapp/api/sessao/connect",
+    "status": 200
+  },
+  {
+    "ts": 1794570371465,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570371482,
+    "method": "GET",
+    "path": "/api/whatsapp/api/whatsapp/perfil",
+    "status": 200
+  },
+  {
+    "ts": 1794570371484,
+    "method": "GET",
+    "path": "/api/whatsapp/api/whatsapp/perfil",
+    "status": 200
+  },
+  {
+    "ts": 1794570371486,
+    "method": "GET",
+    "path": "/api/profile",
+    "status": 200
+  },
+  {
+    "ts": 1794570371525,
+    "method": "PUT",
+    "path": "/api/profile",
+    "status": 200
+  },
+  {
+    "ts": 1794570371536,
+    "method": "GET",
+    "path": "/api/dashboard",
+    "status": 200
+  },
+  {
+    "ts": 1794570372439,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570373480,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570374000,
+    "method": "POST",
+    "path": "/api/whatsapp/api/onboarding/salvar",
+    "status": 200
+  },
+  {
+    "ts": 1794570374320,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570374321,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570376328,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570377456,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570377858,
+    "method": "GET",
+    "path": "/api/workspace",
+    "status": 200
+  },
+  {
+    "ts": 1794570377858,
+    "method": "GET",
+    "path": "/api/workspace",
+    "status": 200
+  },
+  {
+    "ts": 1794570378353,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570380364,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570382377,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570382471,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570384386,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570386397,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570387490,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570388404,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570390411,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570392421,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570392497,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570394429,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570396447,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570397508,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570398472,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570400508,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570402526,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570402539,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570404546,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570406561,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570407557,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570408569,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570408785,
+    "method": "POST",
+    "path": "/api/whatsapp/api/skus/adicionar",
+    "status": 200
+  },
+  {
+    "ts": 1794570408793,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570409458,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570409459,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570410157,
+    "method": "GET",
+    "path": "/api/dashboard",
+    "status": 200
+  },
+  {
+    "ts": 1794570411825,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570411826,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570412576,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570413836,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570415856,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570417587,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570417869,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570419879,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570421133,
+    "method": "GET",
+    "path": "/api/dashboard",
+    "status": 200
+  },
+  {
+    "ts": 1794570421962,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570421963,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570422612,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570424172,
+    "method": "GET",
+    "path": "/api/dashboard",
+    "status": 200
+  },
+  {
+    "ts": 1794570425234,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570425235,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570427102,
+    "method": "GET",
+    "path": "/api/dashboard",
+    "status": 200
+  },
+  {
+    "ts": 1794570427624,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570428182,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570428183,
+    "method": "GET",
+    "path": "/api/whatsapp/api/dados",
+    "status": 200
+  },
+  {
+    "ts": 1794570428652,
+    "method": "GET",
+    "path": "/api/profile",
+    "status": 200
+  },
+  {
+    "ts": 1794570428654,
+    "method": "POST",
+    "path": "/api/profile",
+    "status": 405
+  }
+]

@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sof.local/schemas/project-v2.json",
+  "title": "SOF Genome Studio Project Spec V2",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "business",
+    "theme",
+    "catalog",
+    "assets",
+    "screens",
+    "overlays",
+    "messages",
+    "whatsapp"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0.0"
+    },
+    "project": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "mode": { "enum": ["editor", "preview", "public"] }
+      }
+    },
+    "business": {
+      "type": "object",
+      "required": ["name", "description", "address"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "tagline": { "type": "string" },
+        "segment": { "type": "string" },
+        "address": {
+          "type": "object",
+          "required": ["city", "state"],
+          "properties": {
+            "city": { "type": "string" },
+            "state": { "type": "string" }
+          }
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "description"],
+            "properties": {
+              "title": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "theme": {
+      "type": "object",
+      "properties": {
+        "tokens": { "type": "object" },
+        "primary": { "type": "string" },
+        "accent": { "type": "string" },
+        "background": { "type": "string" },
+        "text": { "type": "string" },
+        "radius": { "type": "number" },
+        "fontFamily": { "type": "string" }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "required": ["categories", "products"],
+      "properties": {
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "assetId": { "type": "string" }
+            }
+          }
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["sku", "name", "categoryId", "priceCents", "stock"],
+            "properties": {
+              "sku": { "type": "string" },
+              "slug": { "type": "string" },
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "categoryId": { "type": "string" },
+              "priceCents": { "type": "integer", "minimum": 0 },
+              "stock": { "type": "integer", "minimum": 0 },
+              "media": { "type": "array" },
+              "variants": { "type": "array" },
+              "attributes": { "type": "object" },
+              "genes": { "type": "object" }
+            }
+          }
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["assetId", "role"],
+        "properties": {
+          "assetId": { "type": "string" },
+          "role": {
+            "enum": [
+              "product_cutout",
+              "portrait",
+              "icon",
+              "full_scene",
+              "decorative",
+              "category_tile",
+              "brand_logo",
+              "service_photo"
+            ]
+          },
+          "status": {
+            "enum": ["ready", "needs_asset", "in_review", "error"]
+          },
+          "width": { "type": "integer" },
+          "height": { "type": "integer" },
+          "alt": { "type": "string" },
+          "url": { "type": "string" },
+          "path": { "type": "string" },
+          "ownerRef": { "type": "string" },
+          "ratio": { "type": "string" },
+          "approved": { "type": "boolean" },
+          "cropApproval": { "type": "boolean" },
+          "focalPoint": {
+            "type": "object",
+            "properties": {
+              "x": { "type": "number", "minimum": 0, "maximum": 1 },
+              "y": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          },
+          "safeArea": { "type": "number", "minimum": 0, "maximum": 0.5 },
+          "mobileAssetRef": { "type": "string" },
+          "sourceUrl": { "type": "string" },
+          "license": { "type": "string" },
+          "creator": { "type": "string" }
+        }
+      }
+    },
+    "prompts": {
+      "type": "object",
+      "properties": {
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["assetId", "text"],
+            "properties": {
+              "assetId": { "type": "string" },
+              "text": { "type": "string" },
+              "negative": { "type": "string" },
+              "generationScope": { "type": "string" },
+              "width": { "type": "integer" },
+              "height": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "componentPresets": { "type": "object" },
+    "componentInstances": { "type": "array" },
+    "screens": {
+      "type": "object",
+      "required": ["home", "product"],
+      "properties": {
+        "home": {
+          "type": "object",
+          "required": ["route", "sections"],
+          "properties": {
+            "route": { "const": "/" },
+            "sections": { "type": "array" }
+          }
+        },
+        "product": {
+          "type": "object",
+          "required": ["route", "proteinId"],
+          "properties": {
+            "route": { "const": "/produto/:slug" },
+            "proteinId": { "const": "ProductDetail" },
+            "dataSource": { "type": "string" }
+          }
+        }
+      }
+    },
+    "overlays": {
+      "type": "object",
+      "required": ["cart", "search"],
+      "properties": {
+        "cart": {
+          "type": "object",
+          "required": ["proteinId", "mode", "steps"],
+          "properties": {
+            "proteinId": { "const": "CartDialog" },
+            "mode": { "const": "modal" },
+            "maxWidthPx": { "type": "number", "maximum": 640 },
+            "maxHeightDvh": { "type": "number", "maximum": 90 },
+            "steps": {
+              "type": "array",
+              "items": { "enum": ["cart", "review"] }
+            }
+          }
+        },
+        "search": {
+          "type": "object",
+          "required": ["proteinId", "debounceMs", "maxResults"],
+          "properties": {
+            "proteinId": { "const": "SearchResults" },
+            "debounceMs": { "type": "number", "minimum": 100, "maximum": 250 },
+            "maxResults": { "type": "integer", "minimum": 1, "maximum": 20 },
+            "fields": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "flows": { "type": "array" },
+    "messages": {
+      "type": "object",
+      "required": ["templates"],
+      "properties": {
+        "templates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "text"],
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "whatsapp": {
+      "type": "object",
+      "required": ["phoneE164"],
+      "properties": {
+        "phoneE164": { "type": "string", "pattern": "^[0-9]{10,15}$" },
+        "checkoutTemplateId": { "type": "string" },
+        "defaultTemplateId": { "type": "string" },
+        "quoteTemplateId": { "type": "string" },
+        "supportTemplateId": { "type": "string" },
+        "recipientLabel": { "type": "string" },
+        "demoMode": { "type": "boolean" }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "currency": { "type": "string" },
+        "quantityStep": { "type": "integer", "minimum": 1 },
+        "maxPerItem": { "type": "integer", "minimum": 1 },
+        "checkoutMode": { "type": "string" },
+        "shippingCents": { "type": "integer" },
+        "discountCents": { "type": "integer" }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "properties": {
+        "target": { "enum": ["preview", "public"] },
+        "requireApprovedAssets": { "type": "boolean" },
+        "rejectPlaceholderPhone": { "type": "boolean" },
+        "excludeEditorControls": { "type": "boolean" }
+      }
+    }
+  }
+}
