@@ -1,84 +1,535 @@
-import { useState, type FormEvent } from 'react';
-import { ArrowRight, CalendarDays, MessageSquare, ScanSearch } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import {
+  ArrowRight,
+  Check,
+  Eye,
+  EyeOff,
+  Mail,
+  MessageSquare,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Store,
+} from 'lucide-react';
+import { ActionButton, ModalContainer, useToast } from '@/components/ui';
 import { supabase } from '@/services/supabase-client';
 
-export function AuthFlowView() {
-  const [mode, setMode] = useState<'login' | 'signup' | 'link'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState<{ error: boolean; message: string } | null>(null);
+const SIGNUP_DRAFT_KEY = 'cg_signup_draft_v1';
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+interface SignupDraft {
+  companyName: string;
+  email: string;
+}
+
+function readSignupDraft(): SignupDraft {
+  if (typeof window === 'undefined') return { companyName: '', email: '' };
+  try {
+    const raw = window.sessionStorage.getItem(SIGNUP_DRAFT_KEY);
+    if (!raw) return { companyName: '', email: '' };
+    const parsed = JSON.parse(raw) as Partial<SignupDraft>;
+    return {
+      companyName: typeof parsed.companyName === 'string' ? parsed.companyName : '',
+      email: typeof parsed.email === 'string' ? parsed.email : '',
+    };
+  } catch {
+    return { companyName: '', email: '' };
+  }
+}
+
+export function AuthFlowView() {
+  const { showToast } = useToast();
+  const initialDraft = readSignupDraft();
+
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [companyName, setCompanyName] = useState(initialDraft.companyName);
+  const [email, setEmail] = useState(initialDraft.email);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [busy, setBusy] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [feedback, setFeedback] = useState<{ error: boolean; duplicate?: boolean; message: string } | null>(null);
+
+  // TELA 03: Modal Recuperar Senha
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.sessionStorage.setItem(
+        SIGNUP_DRAFT_KEY,
+        JSON.stringify({ companyName, email }),
+      );
+    } catch {
+      // Ignore sessionStorage errors
+    }
+  }, [companyName, email]);
+
+  const isCoolingDown = Date.now() < cooldownUntil;
+  const isLoginBlocked = email.trim().length === 0 || password.length === 0 || isCoolingDown;
+  const isSignupBlocked =
+    companyName.trim().length < 2 || !email.includes('@') || password.length < 6;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy || isCoolingDown) return;
+
     setBusy(true);
     setFeedback(null);
     try {
-      if (mode === 'link') {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: email.trim(),
-          options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname },
+      const cleanEmail = email.trim();
+      if (mode === 'login') {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
         });
         if (error) throw error;
-        setFeedback({ error: false, message: 'Se este e-mail estiver cadastrado, você receberá um link de acesso.' });
+
+        setFailedAttempts(0);
+        showToast({
+          type: 'success',
+          message: 'Login confirmado! Carregando seu espaço...',
+          durationMs: 1500,
+        });
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          try {
+            navigator.vibrate(15);
+          } catch {
+            // Ignore vibration failures
+          }
+        }
         return;
       }
-      const credentials = { email: email.trim(), password };
-      const { data, error } = mode === 'login'
-        ? await supabase.auth.signInWithPassword(credentials)
-        : await supabase.auth.signUp(credentials);
-      if (error) throw error;
-      if (!data.session) setFeedback({ error: false, message: 'Confira seu e-mail para confirmar a conta.' });
+
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          data: {
+            company_name: companyName.trim(),
+          },
+        },
+      });
+      if (error) {
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
+          setFeedback({
+            error: true,
+            duplicate: true,
+            message: 'Este e-mail já possui uma loja cadastrada.',
+          });
+          return;
+        }
+        throw error;
+      }
+
+      try {
+        window.sessionStorage.removeItem(SIGNUP_DRAFT_KEY);
+      } catch {
+        // Ignore sessionStorage errors
+      }
+      showToast({
+        type: 'success',
+        message: 'Conta criada com sucesso! Vamos configurar sua loja...',
+        durationMs: 2000,
+      });
+      if (!data.session) {
+        setFeedback({
+          error: false,
+          message: 'Conta criada! Confira seu e-mail para confirmar o acesso.',
+        });
+      }
     } catch {
-      setFeedback({ error: true, message: 'Não foi possível continuar. Confira os dados ou tente entrar por e-mail.' });
+      const nextFails = failedAttempts + 1;
+      setFailedAttempts(nextFails);
+      if (mode === 'login' && nextFails >= 3) {
+        setCooldownUntil(Date.now() + 3000);
+        window.setTimeout(() => setCooldownUntil(0), 3100);
+      }
+      const message =
+        mode === 'login'
+          ? 'E-mail ou senha incorretos. Verifique suas credenciais e tente novamente.'
+          : 'Falha de conexão com o servidor. Seus dados continuam preenchidos, tente novamente.';
+      setFeedback({ error: true, message });
+      showToast({ type: 'error', message, durationMs: 3500 });
     } finally {
       setBusy(false);
     }
   }
 
+  async function handleResetPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cleanEmail = resetEmail.trim();
+    if (resetBusy || !cleanEmail.includes('@')) return;
+
+    setResetBusy(true);
+    setResetMessage('');
+    try {
+      await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo:
+          typeof window !== 'undefined'
+            ? window.location.origin + window.location.pathname
+            : undefined,
+      });
+    } catch {
+      // Keep neutral security message against account enumeration
+    } finally {
+      setResetBusy(false);
+      setResetMessage(
+        'Se o e-mail existir em nossa base, as instruções foram enviadas.',
+      );
+      showToast({
+        type: 'success',
+        message: 'Link de recuperação enviado para sua caixa de entrada!',
+        durationMs: 3000,
+      });
+    }
+  }
+
   return (
-    <main className="min-h-dvh bg-[#f1f3ef] p-4 text-[#152927] md:grid md:grid-cols-2 md:items-center md:gap-12 md:p-12">
-      <section className="flex min-h-64 flex-col justify-between rounded-[1.6rem] bg-[#143d36] p-7 text-[#f5f7ed] md:min-h-[34rem] md:p-12">
-        <p className="text-xl font-semibold tracking-tight">CompanyGen</p>
-        <div className="mt-8">
-          <h1 className="max-w-md text-4xl font-semibold tracking-tight md:text-6xl">Studio e atendimento</h1>
-          <ul className="mt-8 grid gap-3 text-sm text-[#d3e1d8]">
-            <li className="flex items-center gap-3"><CalendarDays size={18} /> Planeje e edite suas publicações</li>
-            <li className="flex items-center gap-3"><ScanSearch size={18} /> Busque imagens para o catálogo</li>
-            <li className="flex items-center gap-3"><MessageSquare size={18} /> Atenda pelo WhatsApp da sua conta</li>
+    <main className="min-h-dvh bg-[#F8FAFC] text-[#0F172A] md:grid md:grid-cols-2 md:items-stretch">
+      {/* Left Brand Panel (Desktop Royal Blue & Slate Highlight) */}
+      <section
+        aria-label="Apresentação CompanyGen"
+        className="flex flex-col justify-between bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#1D4ED8] p-6 text-white sm:p-10 md:p-12"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-[#2563EB] text-sm font-extrabold tracking-tight text-white shadow-md shadow-blue-600/30">
+            CG
+          </div>
+          <div>
+            <p className="text-lg font-bold tracking-tight text-white">CompanyGen</p>
+            <p className="text-xs font-medium text-blue-200">
+              Vitrine Online & Atendimento WhatsApp
+            </p>
+          </div>
+        </div>
+
+        <div className="my-8 space-y-6">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-blue-100">
+            <Sparkles className="size-3.5 text-[#F59E0B]" aria-hidden="true" />
+            <span>Pronto para vender em minutos</span>
+          </div>
+
+          <h1 className="max-w-md text-3xl font-bold tracking-tight text-white md:text-4xl">
+            Sua loja online e seu WhatsApp trabalhando juntos
+          </h1>
+          <p className="max-w-md text-sm leading-relaxed text-slate-200">
+            Cadastre seus produtos, publique sua vitrine personalizada e receba pedidos organizados direto no WhatsApp e no painel de caixa.
+          </p>
+
+          <ul className="grid gap-3 pt-2 text-sm text-slate-100">
+            <li className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-blue-200">
+                <Store className="size-4" aria-hidden="true" />
+              </span>
+              <span>Vitrine profissional pronta para compartilhar no Instagram</span>
+            </li>
+            <li className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-emerald-300">
+                <MessageSquare className="size-4" aria-hidden="true" />
+              </span>
+              <span>WhatsApp real integrado com respostas rápidas e chave Pix</span>
+            </li>
+            <li className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-blue-200">
+                <ShoppingBag className="size-4" aria-hidden="true" />
+              </span>
+              <span>Controle de pedidos da vitrine e vendas do balcão em tempo real</span>
+            </li>
           </ul>
         </div>
-      </section>
-      <section className="mx-auto w-full max-w-sm px-1 py-10" aria-labelledby="auth-heading">
-        <h2 id="auth-heading" className="text-3xl font-semibold tracking-tight">
-          {mode === 'signup' ? 'Criar conta' : mode === 'link' ? 'Entrar por e-mail' : 'Entrar no CompanyGen'}
-        </h2>
-        <form onSubmit={submit} className="mt-7 grid gap-4">
-          <label className="grid gap-1.5 text-sm font-medium">
-            E-mail
-            <input autoComplete="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="cg-field" />
-          </label>
-          {mode !== 'link' && (
-            <label className="grid gap-1.5 text-sm font-medium">
-              Senha
-              <input type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} required minLength={mode === 'signup' ? 8 : undefined}
-                value={password} onChange={e => setPassword(e.target.value)} className="cg-field" />
-            </label>
-          )}
-          {feedback && <p role={feedback.error ? 'alert' : 'status'} className={feedback.error ? 'text-sm text-red-800' : 'text-sm'}>{feedback.message}</p>}
-          <button type="submit" disabled={busy} className="cg-primary justify-between">
-            {busy ? 'Aguarde…' : mode === 'signup' ? 'Criar conta' : mode === 'link' ? 'Enviar link' : 'Entrar'} <ArrowRight size={17} />
-          </button>
-        </form>
-        <div className="mt-6 flex flex-wrap gap-4 text-sm font-medium">
-          {(mode === 'login' ? ['signup', 'link'] as const : ['login'] as const).map(option => (
-            <button key={option} type="button" className="underline underline-offset-4"
-              onClick={() => { setMode(option); setFeedback(null); setPassword(''); }}>
-              {option === 'signup' ? 'Criar conta' : option === 'link' ? 'Usar link por e-mail' : 'Voltar para login'}
-            </button>
-          ))}
+
+        <div className="flex items-center gap-2 text-xs text-slate-300">
+          <ShieldCheck className="size-4 text-emerald-400" aria-hidden="true" />
+          <span>Dados isolados por conta e backup automático seguro</span>
         </div>
       </section>
+
+      {/* Right Auth Card (TELA 01 Login / TELA 02 Signup) */}
+      <section
+        aria-labelledby="auth-heading"
+        className="flex items-center justify-center p-4 py-8 sm:p-8 md:p-12"
+      >
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-[#2563EB]">
+              {mode === 'signup' ? 'Nova loja' : 'Acesso do lojista'}
+            </p>
+            <h2
+              id="auth-heading"
+              className="text-2xl font-bold tracking-tight text-[#0F172A]"
+            >
+              {mode === 'signup'
+                ? 'Comece a Vender Online em Minutos'
+                : 'Entrar no CompanyGen'}
+            </h2>
+            <p className="text-sm text-slate-600">
+              {mode === 'signup'
+                ? 'Crie sua conta grátis para configurar sua vitrine e atender clientes.'
+                : 'Acesse o painel da sua loja e acompanhe pedidos em tempo real.'}
+            </p>
+          </div>
+
+          <form
+            role="form"
+            aria-label={
+              mode === 'signup'
+                ? 'Cadastro de Nova Loja'
+                : 'Acesso ao Painel da Loja'
+            }
+            onSubmit={handleSubmit}
+            className="mt-6 space-y-4"
+          >
+            {mode === 'signup' ? (
+              <div>
+                <label
+                  htmlFor="auth-company-name"
+                  className="mb-1.5 block text-sm font-semibold text-[#0F172A]"
+                >
+                  Nome da Sua Loja
+                </label>
+                <input
+                  id="auth-company-name"
+                  type="text"
+                  required
+                  aria-required="true"
+                  minLength={2}
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Ex: Atelier Bella Vista"
+                  className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm text-[#0F172A] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                />
+              </div>
+            ) : null}
+
+            <div>
+              <label
+                htmlFor="auth-email"
+                className="mb-1.5 block text-sm font-semibold text-[#0F172A]"
+              >
+                {mode === 'signup' ? 'Seu Melhor E-mail' : 'E-mail de Acesso'}
+              </label>
+              <input
+                id="auth-email"
+                type="email"
+                autoComplete="email"
+                required
+                aria-required="true"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="lojista@empresa.com.br"
+                className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm text-[#0F172A] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+              />
+            </div>
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label
+                  htmlFor="auth-password"
+                  className="block text-sm font-semibold text-[#0F172A]"
+                >
+                  {mode === 'signup' ? 'Crie uma Senha Forte' : 'Sua Senha'}
+                </label>
+                {mode === 'login' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetEmail(email);
+                      setResetMessage('');
+                      setResetModalOpen(true);
+                    }}
+                    className="text-xs font-medium text-slate-500 underline-offset-4 hover:text-[#2563EB] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
+                  >
+                    Esqueci minha senha
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="relative">
+                <input
+                  id="auth-password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  required
+                  aria-required="true"
+                  minLength={mode === 'signup' ? 6 : undefined}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white pr-12 pl-3.5 text-sm text-[#0F172A] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? 'Ocultar Senha' : 'Mostrar Senha'}
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-1 flex min-w-[44px] items-center justify-center rounded-lg text-slate-500 hover:text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
+                >
+                  {showPassword ? (
+                    <EyeOff className="size-[18px]" aria-hidden="true" />
+                  ) : (
+                    <Eye className="size-[18px]" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+              {mode === 'signup' ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  Mínimo de 6 letras e números
+                </p>
+              ) : null}
+            </div>
+
+            {feedback ? (
+              <div
+                role={feedback.error ? 'alert' : 'status'}
+                className={
+                  feedback.duplicate
+                    ? 'rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900'
+                    : feedback.error
+                      ? 'rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700'
+                      : 'rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800'
+                }
+              >
+                <span>{feedback.message}</span>
+                {feedback.duplicate ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('login');
+                      setFeedback(null);
+                    }}
+                    className="ml-2 font-semibold text-[#1D4ED8] underline underline-offset-4"
+                  >
+                    Fazer Login
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            <ActionButton
+              type="submit"
+              variant="primary"
+              size={48}
+              fullWidth
+              disabled={mode === 'login' ? isLoginBlocked : isSignupBlocked}
+              isLoading={busy}
+              loadingText={mode === 'signup' ? 'Criando loja...' : 'Entrando...'}
+              rightIcon={
+                mode === 'signup' ? (
+                  <Check className="size-[18px]" aria-hidden="true" />
+                ) : (
+                  <ArrowRight className="size-[18px]" aria-hidden="true" />
+                )
+              }
+            >
+              {mode === 'signup'
+                ? 'Criar Minha Conta e Começar'
+                : 'Entrar no Meu Painel'}
+            </ActionButton>
+          </form>
+
+          <div className="mt-6 border-t border-slate-100 pt-4 text-center">
+            {mode === 'login' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('signup');
+                  setFeedback(null);
+                }}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-[#2563EB] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
+              >
+                Criar conta da minha loja
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('login');
+                  setFeedback(null);
+                }}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-[#2563EB] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
+              >
+                Já tenho conta · Fazer Login
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* TELA 03: Modal Recuperar Senha */}
+      <ModalContainer
+        open={resetModalOpen}
+        onOpenChange={setResetModalOpen}
+        role="dialog"
+        maxWidth="sm"
+        mobileHeight="auto"
+        preventCloseWhileSubmitting={resetBusy}
+        title="Recuperar Acesso à Conta"
+        description="Digite o e-mail cadastrado na sua loja para enviarmos o link de recuperação."
+        footer={
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <ActionButton
+              variant="secondary"
+              size={44}
+              disabled={resetBusy}
+              onClick={() => setResetModalOpen(false)}
+            >
+              Cancelar
+            </ActionButton>
+            <ActionButton
+              type="submit"
+              form="reset-password-form"
+              variant="primary"
+              size={46}
+              disabled={!resetEmail.includes('@')}
+              isLoading={resetBusy}
+              loadingText="Enviando..."
+              leftIcon={<Mail className="size-4" aria-hidden="true" />}
+            >
+              Enviar Link de Recuperação
+            </ActionButton>
+          </div>
+        }
+      >
+        <form
+          id="reset-password-form"
+          onSubmit={handleResetPassword}
+          className="space-y-4"
+        >
+          <div>
+            <label
+              htmlFor="reset-password-email"
+              className="mb-1.5 block text-sm font-semibold text-[#0F172A]"
+            >
+              E-mail cadastrado
+            </label>
+            <input
+              id="reset-password-email"
+              type="email"
+              required
+              autoFocus
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              placeholder="lojista@empresa.com.br"
+              className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm text-[#0F172A] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+            />
+          </div>
+
+          {resetMessage ? (
+            <p
+              role="status"
+              className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
+            >
+              {resetMessage}
+            </p>
+          ) : null}
+        </form>
+      </ModalContainer>
     </main>
   );
 }

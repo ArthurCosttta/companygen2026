@@ -4,11 +4,109 @@ import { workspaceUser } from './local-storage';
 import {
   BusinessProfileSchema,
   createEmptyProfile,
+  sanitizePhoneE164,
   type BusinessOrder,
   type BusinessProfile,
   type CatalogProduct,
   type DashboardMetricsProjection,
 } from '@/schemas/profile.schema';
+
+export type BackendOrderStatus = BusinessOrder['status'];
+export type DashboardPeriodDays = 7 | 30 | 90 | 'all';
+
+export const ORDER_STATUS_UI_MAP: Record<BackendOrderStatus, string> = {
+  aguardando_dados: 'Novo',
+  aguardando_pagamento: 'Aguardando Pagamento',
+  confirmado: 'Pago',
+  concluido: 'Entregue',
+  cancelado: 'Cancelado',
+};
+
+export const UI_LABEL_TO_ORDER_STATUS: Record<string, BackendOrderStatus> = {
+  novo: 'aguardando_dados',
+  aguardando_dados: 'aguardando_dados',
+  'aguardando pagamento': 'aguardando_pagamento',
+  aguardando_pagamento: 'aguardando_pagamento',
+  pago: 'confirmado',
+  confirmado: 'confirmado',
+  entregue: 'concluido',
+  concluido: 'concluido',
+  cancelado: 'cancelado',
+};
+
+export const ORDER_STATUS_META: Record<
+  BackendOrderStatus,
+  { status: BackendOrderStatus; label: string; tone: 'amber' | 'green' | 'blue' | 'red'; badgeClass: string }
+> = {
+  aguardando_dados: {
+    status: 'aguardando_dados',
+    label: 'Novo',
+    tone: 'amber',
+    badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
+  },
+  aguardando_pagamento: {
+    status: 'aguardando_pagamento',
+    label: 'Aguardando Pagamento',
+    tone: 'amber',
+    badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
+  },
+  confirmado: {
+    status: 'confirmado',
+    label: 'Pago',
+    tone: 'green',
+    badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  },
+  concluido: {
+    status: 'concluido',
+    label: 'Entregue',
+    tone: 'blue',
+    badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
+  },
+  cancelado: {
+    status: 'cancelado',
+    label: 'Cancelado',
+    tone: 'red',
+    badgeClass: 'bg-red-100 text-red-800 border-red-200',
+  },
+};
+
+export function getOrderStatusLabel(status: string): string {
+  return ORDER_STATUS_UI_MAP[status as BackendOrderStatus] || status;
+}
+
+export function resolveBackendOrderStatus(input: string): BackendOrderStatus | null {
+  const key = String(input || '').trim().toLowerCase();
+  return UI_LABEL_TO_ORDER_STATUS[key] ?? null;
+}
+
+export interface ManualOrderItemInput {
+  sku?: string;
+  productId?: string;
+  name?: string;
+  customItemName?: string;
+  quantity?: number;
+  qty?: number;
+  unitPriceCents?: number;
+  overrideTotalCents?: number;
+}
+
+export interface ManualOrderPayload {
+  customerName: string;
+  customerPhone?: string;
+  customerJid?: string;
+  productId?: string;
+  sku?: string;
+  customItemName?: string;
+  items?: ManualOrderItemInput[];
+  totalCents?: number;
+  discountCents?: number;
+  deliveryCents?: number;
+  shippingCents?: number;
+  paymentMethod: string;
+  status?: BackendOrderStatus;
+  markAsPaid?: boolean;
+  orderRef?: string;
+}
 
 export type ProfileSnapshot = {
   revision: number;
@@ -88,10 +186,14 @@ export function updateBusinessProfile(
   });
 }
 
-export async function loadDashboardMetrics(owner = workspaceUser()): Promise<DashboardMetricsProjection> {
-  const response = await authenticatedFetch('/api/dashboard', undefined, owner);
+export async function loadDashboardMetrics(
+  owner = workspaceUser(),
+  periodDays: DashboardPeriodDays = 7,
+): Promise<DashboardMetricsProjection> {
+  const query = `?days=${encodeURIComponent(String(periodDays))}`;
+  const response = await authenticatedFetch(`/api/dashboard${query}`, undefined, owner);
   const raw = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(raw.error || 'Não foi possível carregar o dashboard.');
+  if (!response.ok) throw new Error(raw.error || 'Não foi possível carregar o painel de vendas.');
   return raw.dashboard;
 }
 
@@ -100,6 +202,62 @@ export async function loadOrders(owner = workspaceUser()): Promise<BusinessOrder
   const raw = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(raw.error || 'Não foi possível listar pedidos.');
   return Array.isArray(raw.orders) ? raw.orders : [];
+}
+
+export async function createManualOrder(
+  payload: ManualOrderPayload,
+  owner = workspaceUser(),
+): Promise<BusinessOrder> {
+  const customerName = String(payload.customerName || '').trim();
+  if (!customerName) {
+    throw new Error('Informe o nome do cliente para registrar a venda.');
+  }
+  const phoneDigits = sanitizePhoneE164(payload.customerPhone || '');
+  const response = await authenticatedFetch(
+    '/api/orders',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        manual: true,
+        customerName,
+        customerPhone: phoneDigits,
+        customerJid: payload.customerJid || (phoneDigits ? `${phoneDigits}@s.whatsapp.net` : ''),
+      }),
+    },
+    owner,
+  );
+  const raw = await response.json().catch(() => ({}));
+  if (!response.ok || !raw.order) {
+    throw new Error(raw.error || 'Não foi possível registrar a venda. Tente novamente.');
+  }
+  return raw.order as BusinessOrder;
+}
+
+export async function updateOrderStatus(
+  orderRef: string,
+  status: BackendOrderStatus,
+  owner = workspaceUser(),
+): Promise<BusinessOrder> {
+  const cleanRef = String(orderRef || '').trim();
+  if (!cleanRef) {
+    throw new Error('Identificador do pedido inválido.');
+  }
+  const response = await authenticatedFetch(
+    '/api/orders',
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderRef: cleanRef, status }),
+    },
+    owner,
+  );
+  const raw = await response.json().catch(() => ({}));
+  if (!response.ok || !raw.order) {
+    throw new Error(raw.error || 'Falha ao atualizar status do pedido. Tente novamente.');
+  }
+  return raw.order as BusinessOrder;
 }
 
 export async function recordStoreVisit(owner = workspaceUser()): Promise<void> {

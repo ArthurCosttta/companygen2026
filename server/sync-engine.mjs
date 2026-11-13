@@ -510,9 +510,24 @@ export function recalculateOrderTotals(rawItems = [], skus = [], shippingCents =
   };
 }
 
-export function buildDashboardProjection(profileRaw, sourceRevision, orders = [], metrics = {}, whatsappData = {}) {
+export function buildDashboardProjection(profileRaw, sourceRevision, orders = [], metrics = {}, whatsappData = {}, options = {}) {
   const profile = normalizeProfile(profileRaw);
   const safeOrders = Array.isArray(orders) ? orders : [];
+  const rawDays = options?.days;
+  const isAll = rawDays === 'all' || rawDays === 'todos' || rawDays === null;
+  const parsedDays = Number(rawDays);
+  const periodDays = isAll ? 'all' : (Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : 7);
+
+  let filteredOrders = safeOrders;
+  if (periodDays !== 'all') {
+    const cutoffMs = Date.now() - periodDays * 24 * 60 * 60 * 1000;
+    filteredOrders = safeOrders.filter(order => {
+      if (!order?.created_at) return true;
+      const ts = new Date(order.created_at).getTime();
+      return !Number.isFinite(ts) || ts >= cutoffMs;
+    });
+  }
+
   const conversas = Array.isArray(whatsappData?.conversas) ? whatsappData.conversas : [];
 
   let messagesCount = 0;
@@ -523,22 +538,23 @@ export function buildDashboardProjection(profileRaw, sourceRevision, orders = []
 
   const activeProducts = profile.catalog.products.filter(p => p.active);
   const stockUnits = activeProducts.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
-  const salesCents = safeOrders
+  const salesCents = filteredOrders
     .filter(order => order?.status !== 'cancelado')
     .reduce((sum, order) => sum + (Number(order?.total_cents) || 0), 0);
 
   return {
     sourceRevision,
+    periodDays,
     businessName: profile.business.name || 'Minha Loja',
     whatsappConnected: profile.whatsapp.connected || Boolean(whatsappData?.conectado),
     displayPhone: profile.whatsapp.displayPhone || profile.whatsapp.phoneE164 || '',
     visitsTotal: Number(metrics?.visits_total || 0),
     visitsByDay: metrics?.visits_by_day && typeof metrics.visits_by_day === 'object' ? metrics.visits_by_day : {},
-    ordersCount: safeOrders.length,
+    ordersCount: filteredOrders.length,
     salesCents,
     messagesCount,
     catalogCount: activeProducts.length,
     stockUnits,
-    recentOrders: safeOrders.slice(0, 20),
+    recentOrders: filteredOrders.slice(0, 50),
   };
 }

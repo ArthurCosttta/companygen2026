@@ -92,6 +92,7 @@ export function createWorkspaceApi(options = {}) {
   const writes = new Map();
   const sessions = new Map();
   const whatsappCloud = new Map();
+  const recentOrderDedupe = new Map();
   let activeSearches = 0;
 
   async function cloudFetch(route, token, init) {
@@ -757,63 +758,206 @@ export function createWorkspaceApi(options = {}) {
     });
   }
 
+  function buildManualOrderComputation(body, catalogProducts) {
+    const products = Array.isArray(catalogProducts) ? catalogProducts : [];
+    const byId = new Map();
+    const bySku = new Map();
+    const byName = new Map();
+    for (const prod of products) {
+      if (prod?.id) byId.set(String(prod.id).trim(), prod);
+      if (prod?.sku) bySku.set(String(prod.sku).trim().toUpperCase(), prod);
+      if (prod?.name) byName.set(String(prod.name).trim().toLowerCase(), prod);
+    }
+
+    const resolveProduct = (candidate) => {
+      const idKey = String(candidate?.productId || '').trim();
+      const skuKey = String(candidate?.sku || '').trim().toUpperCase();
+      const nameKey = String(candidate?.name || candidate?.customItemName || '').trim().toLowerCase();
+      return (idKey && byId.get(idKey)) || (skuKey && bySku.get(skuKey)) || (nameKey && byName.get(nameKey)) || null;
+    };
+
+    const items = [];
+    const rawItems = Array.isArray(body.items) ? body.items : [];
+    if (rawItems.length > 0) {
+      for (const raw of rawItems) {
+        const matched = resolveProduct(raw);
+        const quantity = Math.max(1, Math.min(999, Math.round(Number(raw?.quantity || raw?.qty || 1))));
+        let unitPriceCents = 0;
+        let lineTotalCents = 0;
+        if (raw?.overrideTotalCents !== undefined && raw?.overrideTotalCents !== null && Number.isFinite(Number(raw.overrideTotalCents))) {
+          lineTotalCents = Math.max(0, Math.round(Number(raw.overrideTotalCents)));
+          unitPriceCents = Math.round(lineTotalCents / quantity);
+        } else if (raw?.unitPriceCents !== undefined && raw?.unitPriceCents !== null && Number.isFinite(Number(raw.unitPriceCents))) {
+          unitPriceCents = Math.max(0, Math.round(Number(raw.unitPriceCents)));
+          lineTotalCents = unitPriceCents * quantity;
+        } else if (matched) {
+          unitPriceCents = Math.max(0, Math.round(Number(matched.priceCents) || 0));
+          lineTotalCents = unitPriceCents * quantity;
+        }
+        items.push({
+          sku: matched?.sku || String(raw?.sku || 'AVULSO').trim().toUpperCase() || 'AVULSO',
+          name: matched?.name || String(raw?.customItemName || raw?.name || 'Venda avulsa').trim() || 'Venda avulsa',
+          variation: matched?.variation || String(raw?.variation || 'Balcão').trim() || 'Balcão',
+          quantity,
+          unitPriceCents,
+          lineTotalCents,
+        });
+      }
+    } else {
+      const matched = resolveProduct(body);
+      const explicitTotal = Number(body.overrideTotalCents ?? body.totalCents);
+      const lineTotalCents = Number.isFinite(explicitTotal)
+        ? Math.max(0, Math.round(explicitTotal))
+        : Math.max(0, Math.round(Number(matched?.priceCents) || 0));
+      items.push({
+        sku: matched?.sku || String(body.sku || 'AVULSO').trim().toUpperCase() || 'AVULSO',
+        name: matched?.name || String(body.customItemName || 'Venda manual').trim() || 'Venda manual',
+        variation: matched?.variation || 'Balcão',
+        quantity: 1,
+        unitPriceCents: lineTotalCents,
+        lineTotalCents,
+      });
+    }
+
+    const rawSubtotal = items.reduce((sum, item) => sum + item.lineTotalCents, 0);
+    const discountCents = Math.max(0, Math.round(Number(body.discountCents) || 0));
+    const deliveryCents = Math.max(0, Math.round(Number(body.deliveryCents ?? body.shippingCents) || 0));
+    const subtotalCents = Math.max(0, rawSubtotal - discountCents);
+    const totalCents = subtotalCents + deliveryCents;
+    return { items, subtotalCents, shippingCents: deliveryCents, totalCents };
+  }
+
   async function ordersHandler(req, res, user, directory) {
+    const allowedStatuses = new Set(['aguardando_dados', 'aguardando_pagamento', 'confirmado', 'cancelado', 'concluido']);
     if (req.method === 'GET') {
       const orders = await syncLocalOrders(user, directory);
       return send(res, 200, { orders });
     }
     if (req.method === 'POST') {
       const body = await readJson(req);
-      const { current } = await loadProfileState(user, directory);
-      const profile = normalizeProfile(current.data);
-      const calc = recalculateOrderTotals(body.items || [], profile.catalog.products, Number(body.shippingCents) || 0);
-      if (calc.verifiedItems.length === 0) {
-        throw new ApiError(400, 'Nenhum produto válido do catálogo encontrado no pedido.');
-      }
-      const now = new Date().toISOString();
-      const order = {
-        id: randomUUID(),
-        order_ref: String(body.orderRef || ('CG-' + randomUUID().slice(0, 4).toUpperCase())),
-        customer_jid: String(body.customerJid || ''),
-        customer_name: String(body.customerName || 'Cliente'),
-        items: calc.verifiedItems,
-        subtotal_cents: calc.subtotalCents,
-        shipping_cents: calc.shippingCents,
-        total_cents: calc.totalCents,
-        payment_method: String(body.paymentMethod || 'pendente'),
-        delivery_address: body.deliveryAddress && typeof body.deliveryAddress === 'object' ? body.deliveryAddress : {},
-        status: 'aguardando_dados',
-        source_revision: current.revision,
-        created_at: now,
-        updated_at: now,
-      };
-      const localOrders = await readJsonFile(path.join(directory, 'orders.json'), []);
-      const filtered = localOrders.filter(o => o.order_ref !== order.order_ref);
-      await atomicWriteJson(path.join(directory, 'orders.json'), [order, ...filtered]);
-      await cloudUpsertOrder(user.bearer, order);
-      return send(res, 201, { order, unmatchedItems: calc.unmatchedItems });
+      return await queue(user.id + ':orders', async () => {
+        const isManual = body?.manual === true;
+        const nowMs = Date.now();
+        for (const [k, entry] of recentOrderDedupe.entries()) {
+          if (entry.expiresAt <= nowMs) recentOrderDedupe.delete(k);
+        }
+
+        const dedupePhone = String(body.customerPhone || body.customerJid || body.customerName || '').trim().toLowerCase();
+        const dedupeSignature = createHash('sha256')
+          .update(JSON.stringify({
+            userId: user.id,
+            manual: isManual,
+            orderRef: body.orderRef || '',
+            customer: dedupePhone,
+            items: body.items || [],
+            productId: body.productId || '',
+            customItemName: body.customItemName || '',
+            totalCents: body.totalCents ?? null,
+          }))
+          .digest('hex');
+        const cachedDup = recentOrderDedupe.get(dedupeSignature);
+        if (cachedDup && cachedDup.expiresAt > nowMs) {
+          return send(res, 200, { order: cachedDup.order, deduplicated: true, unmatchedItems: [] });
+        }
+
+        const { current } = await loadProfileState(user, directory);
+        const profile = normalizeProfile(current.data);
+
+        let verifiedItems = [];
+        let unmatchedItems = [];
+        let subtotalCents = 0;
+        let shippingCents = 0;
+        let totalCents = 0;
+        let initialStatus = 'aguardando_dados';
+
+        if (isManual) {
+          const customerName = String(body.customerName || '').trim();
+          if (!customerName) {
+            throw new ApiError(400, 'Informe o nome do cliente para registrar a venda.');
+          }
+          const manualCalc = buildManualOrderComputation(body, profile.catalog.products);
+          if (manualCalc.totalCents <= 0) {
+            throw new ApiError(400, 'O valor da venda precisa ser maior que zero.');
+          }
+          verifiedItems = manualCalc.items;
+          subtotalCents = manualCalc.subtotalCents;
+          shippingCents = manualCalc.shippingCents;
+          totalCents = manualCalc.totalCents;
+          if (body.status && allowedStatuses.has(body.status)) {
+            initialStatus = body.status;
+          } else {
+            initialStatus = body.markAsPaid === false ? 'aguardando_pagamento' : 'confirmado';
+          }
+        } else {
+          const calc = recalculateOrderTotals(body.items || [], profile.catalog.products, Number(body.shippingCents) || 0);
+          if (calc.verifiedItems.length === 0) {
+            throw new ApiError(400, 'Nenhum produto válido do catálogo encontrado no pedido.');
+          }
+          verifiedItems = calc.verifiedItems;
+          unmatchedItems = calc.unmatchedItems;
+          subtotalCents = calc.subtotalCents;
+          shippingCents = calc.shippingCents;
+          totalCents = calc.totalCents;
+        }
+
+        const now = new Date().toISOString();
+        const order = {
+          id: randomUUID(),
+          order_ref: String(body.orderRef || ((isManual ? 'PED-' : 'CG-') + randomUUID().slice(0, 4).toUpperCase())),
+          customer_jid: String(body.customerJid || body.customerPhone || ''),
+          customer_name: String(body.customerName || 'Cliente').trim() || 'Cliente',
+          items: verifiedItems,
+          subtotal_cents: subtotalCents,
+          shipping_cents: shippingCents,
+          total_cents: totalCents,
+          payment_method: String(body.paymentMethod || 'pendente'),
+          delivery_address: body.deliveryAddress && typeof body.deliveryAddress === 'object' ? body.deliveryAddress : {},
+          status: initialStatus,
+          source_revision: current.revision,
+          created_at: now,
+          updated_at: now,
+        };
+        const localOrders = await readJsonFile(path.join(directory, 'orders.json'), []);
+        const filtered = localOrders.filter(o => o.order_ref !== order.order_ref);
+        await atomicWriteJson(path.join(directory, 'orders.json'), [order, ...filtered]);
+        await cloudUpsertOrder(user.bearer, order);
+        recentOrderDedupe.set(dedupeSignature, { expiresAt: nowMs + 10000, order });
+        return send(res, 201, { order, unmatchedItems });
+      });
     }
     if (req.method === 'PATCH') {
       const body = await readJson(req);
       const orderRef = String(body.orderRef || '').trim();
       if (!orderRef) throw new ApiError(400, 'orderRef obrigatório.');
-      const allowedStatuses = new Set(['aguardando_dados', 'aguardando_pagamento', 'confirmado', 'cancelado', 'concluido']);
-      const localOrders = await readJsonFile(path.join(directory, 'orders.json'), []);
-      const target = localOrders.find(o => o.order_ref === orderRef);
-      if (!target) throw new ApiError(404, 'Pedido não encontrado.');
-      if (body.status && allowedStatuses.has(body.status)) target.status = body.status;
-      if (typeof body.paymentMethod === 'string' && body.paymentMethod.trim()) target.payment_method = body.paymentMethod.trim();
-      if (body.deliveryAddress && typeof body.deliveryAddress === 'object') target.delivery_address = body.deliveryAddress;
-      target.updated_at = new Date().toISOString();
-      await atomicWriteJson(path.join(directory, 'orders.json'), localOrders);
-      await cloudUpsertOrder(user.bearer, target);
-      return send(res, 200, { order: target });
+      if (body.status !== undefined && !allowedStatuses.has(body.status)) {
+        throw new ApiError(400, 'Status de pedido inválido.');
+      }
+      return await queue(user.id + ':orders', async () => {
+        const localOrders = await readJsonFile(path.join(directory, 'orders.json'), []);
+        const target = localOrders.find(o => o.order_ref === orderRef || o.id === orderRef);
+        if (!target) throw new ApiError(404, 'Pedido não encontrado.');
+        if (body.status && allowedStatuses.has(body.status)) target.status = body.status;
+        if (typeof body.paymentMethod === 'string' && body.paymentMethod.trim()) target.payment_method = body.paymentMethod.trim();
+        if (body.deliveryAddress && typeof body.deliveryAddress === 'object') target.delivery_address = body.deliveryAddress;
+        target.updated_at = new Date().toISOString();
+        await atomicWriteJson(path.join(directory, 'orders.json'), localOrders);
+        await cloudUpsertOrder(user.bearer, target);
+        return send(res, 200, { order: target });
+      });
     }
     throw new ApiError(405, 'Método indisponível.');
   }
 
   async function dashboardHandler(req, res, user, directory) {
     if (req.method !== 'GET') throw new ApiError(405, 'Método indisponível.');
+    const parsedUrl = new URL(req.url || '/api/dashboard', 'http://localhost');
+    const rawDays = parsedUrl.searchParams.get('days');
+    const days = rawDays === 'all' || rawDays === 'todos'
+      ? 'all'
+      : Number.isFinite(Number(rawDays)) && Number(rawDays) > 0
+        ? Number(rawDays)
+        : 7;
+
     const { current } = await loadProfileState(user, directory);
     const orders = await syncLocalOrders(user, directory);
     const localMetrics = await readJsonFile(path.join(directory, 'store_metrics.json'), { visits_total: 0, visits_by_day: {} });
@@ -824,7 +968,7 @@ export function createWorkspaceApi(options = {}) {
     const dashboard = buildDashboardProjection(current.data, current.revision, orders, metrics, {
       conversas,
       conectado: Boolean(config?.conectado),
-    });
+    }, { days });
     send(res, 200, { dashboard });
   }
 
