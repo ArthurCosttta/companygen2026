@@ -210,18 +210,15 @@ export function AuthFlowView() {
         aria-label="Apresentação CompanyGen"
         className="flex flex-col justify-between bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#1D4ED8] p-6 text-white sm:p-10 md:p-12"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-1.5">
           <img
-            src="/brand/companygen-logo.jpg"
+            src="/brand/logo-horizontal-escura.webp"
             alt="CompanyGen"
-            className="size-11 shrink-0 rounded-xl border border-white/20 bg-white object-cover shadow-md shadow-blue-950/30"
+            className="h-10 w-auto self-start object-contain"
           />
-          <div>
-            <p className="text-lg font-bold tracking-tight text-white">CompanyGen</p>
-            <p className="text-xs font-medium text-blue-200">
-              Vitrine Online & Atendimento WhatsApp
-            </p>
-          </div>
+          <p className="text-xs font-medium text-blue-200">
+            Vitrine Online & Atendimento WhatsApp
+          </p>
         </div>
 
         <div className="my-8 space-y-6">

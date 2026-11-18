@@ -204,14 +204,11 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
         {/* Header CompanyGen Studio */}
         <div className="relative flex flex-col items-center text-center">
           <img
-            src="/brand/companygen-logo.jpg"
-            alt="CompanyGen"
-            className="mb-4 size-16 rounded-2xl border border-slate-700/80 bg-white object-cover shadow-lg shadow-blue-500/20"
+            src="/brand/logo-vertical-escura.webp"
+            alt="CompanyGen Studio"
+            className="mb-3 h-24 w-auto object-contain drop-shadow-[0_6px_18px_rgba(37,99,235,0.28)]"
           />
 
-          <span className="text-xs font-mono font-bold tracking-widest text-[#38BDF8] uppercase mb-1">
-            CompanyGen Studio
-          </span>
           <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">
             BEM-VINDO À PLATAFORMA
           </h1>

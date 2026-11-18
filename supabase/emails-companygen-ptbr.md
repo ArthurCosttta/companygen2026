@@ -3,7 +3,7 @@
 Cole estes templates no painel do Supabase:
 **Authentication → Email Templates** (`https://supabase.com/dashboard/project/irahjajgudbdkgggffum/auth/templates`)
 
-> **Observação:** Após publicar o domínio `https://companygen.store` com o app atualizado, a URL `https://companygen.store/brand/companygen-logo.jpg` carregará a Logo oficial diretamente nos e-mails.
+> **Observação:** Após publicar o domínio `https://companygen.store` com o app atualizado, a URL `https://companygen.store/brand/assinatura-email.png` carregará a assinatura oficial transparente diretamente nos e-mails.
 
 ---
 
@@ -16,12 +16,8 @@ Cole estes templates no painel do Supabase:
 ```html
 <div style="font-family:Inter,Arial,sans-serif;background:#F8FAFC;padding:32px 16px;color:#0F172A;">
   <div style="max-width:520px;margin:0 auto;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;padding:32px;">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
-      <img src="https://companygen.store/brand/companygen-logo.jpg" alt="CompanyGen" width="44" height="44" style="border-radius:10px;border:1px solid #E2E8F0;object-fit:cover;" />
-      <div>
-        <div style="font-weight:800;font-size:16px;color:#0F172A;">CompanyGen</div>
-        <div style="font-size:12px;color:#64748B;">Sua Loja & Atendimento WhatsApp com IA</div>
-      </div>
+    <div style="margin-bottom:24px;">
+      <img src="https://companygen.store/brand/assinatura-email.png" alt="CompanyGen — Sua loja e atendimento com IA" height="48" style="display:block;height:48px;width:auto;" />
     </div>
 
     <h1 style="font-size:20px;font-weight:800;margin:0 0 12px;color:#0F172A;">
@@ -55,12 +51,8 @@ Cole estes templates no painel do Supabase:
 ```html
 <div style="font-family:Inter,Arial,sans-serif;background:#F8FAFC;padding:32px 16px;color:#0F172A;">
   <div style="max-width:520px;margin:0 auto;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;padding:32px;">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
-      <img src="https://companygen.store/brand/companygen-logo.jpg" alt="CompanyGen" width="44" height="44" style="border-radius:10px;border:1px solid #E2E8F0;object-fit:cover;" />
-      <div>
-        <div style="font-weight:800;font-size:16px;color:#0F172A;">CompanyGen</div>
-        <div style="font-size:12px;color:#64748B;">Convite de Acesso Liberado</div>
-      </div>
+    <div style="margin-bottom:24px;">
+      <img src="https://companygen.store/brand/assinatura-email.png" alt="CompanyGen — Sua loja e atendimento com IA" height="48" style="display:block;height:48px;width:auto;" />
     </div>
 
     <h1 style="font-size:20px;font-weight:800;margin:0 0 12px;color:#0F172A;">

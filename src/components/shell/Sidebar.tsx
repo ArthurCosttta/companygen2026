@@ -123,9 +123,9 @@ export function Sidebar({
           {/* Brand / Store Identity */}
           <div className="flex items-center gap-3 px-2">
             <img
-              src="/brand/companygen-logo.jpg"
+              src="/brand/simbolo-colorido.webp"
               alt="CompanyGen"
-              className="size-10 shrink-0 rounded-xl border border-slate-200 bg-white object-cover shadow-xs"
+              className="size-10 shrink-0 object-contain drop-shadow-xs"
             />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold tracking-tight text-[#0F172A]">

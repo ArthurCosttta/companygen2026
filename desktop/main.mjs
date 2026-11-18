@@ -540,6 +540,15 @@ async function logoutEmbeddedWhatsappWebview() {
 }
 
 function createTrayIconImage() {
+  try {
+    const trayIconPath = path.join(projectRoot, 'public', 'brand', 'favicon-32.png');
+    if (fs.existsSync(trayIconPath)) {
+      const img = nativeImage.createFromPath(trayIconPath);
+      if (img && !img.isEmpty()) return img;
+    }
+  } catch {
+    // Fallback para bitmap gerado em memória abaixo
+  }
   const size = 16;
   const buf = Buffer.alloc(size * size * 4);
   for (let y = 0; y < size; y += 1) {
@@ -628,12 +637,14 @@ function showDesktopNotification({ title = 'CompanyGen Sofia IA', body = '' } = 
 }
 
 function createWindow() {
+  const winIconPath = path.join(projectRoot, 'public', 'brand', 'app-icon-512.png');
   const window = new BrowserWindow({
     width: 1480,
     height: 940,
     minWidth: 1024,
     minHeight: 700,
     title: 'CompanyGen',
+    ...(fs.existsSync(winIconPath) ? { icon: winIconPath } : {}),
     backgroundColor: '#f4f7f5',
     autoHideMenuBar: true,
     webPreferences: {

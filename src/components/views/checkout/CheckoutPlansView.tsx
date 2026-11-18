@@ -302,9 +302,16 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
               Voltar ao Aplicativo
             </button>
             <div>
-              <span className="text-xs font-mono font-bold tracking-widest text-[#38BDF8] uppercase">
-                ◈ CRÉDITOS, PAGAMENTOS & CONSUMO
-              </span>
+              <div className="mb-1 flex flex-wrap items-center gap-3">
+                <img
+                  src="/brand/logo-horizontal-escura.webp"
+                  alt="CompanyGen"
+                  className="h-7 w-auto object-contain"
+                />
+                <span className="text-xs font-mono font-bold tracking-widest text-[#38BDF8] uppercase">
+                  ◈ CRÉDITOS, PAGAMENTOS & CONSUMO
+                </span>
+              </div>
               <h1 className="text-2xl font-black text-white sm:text-3xl">
                 Planos & Telemetria da Conta
               </h1>

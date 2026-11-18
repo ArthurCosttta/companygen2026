@@ -21,7 +21,7 @@ Nenhuma alteração de UI é considerada concluída apenas por inspeção de JSX
 - **T4 — Carga Cognitiva & Divulgação Progressiva:** Configurações avançadas ficam colapsáveis em acordeões (`<details>`/toggle) para não poluir fluxos de uso frequente (como drawers do WhatsApp).
 - **T5 — Filtro Anti-Jargão Técnico:** Nunca expor nomes crus de schema/componentes (`HeroSection`, `DifferentialsStrip`, `sec_diff`, `Fallback N3 RAG`) ou `/mês` em pacotes sem validade.
 - **T6 — Paridade Multi-Estado:** Verificar estados Vazio, Carregando, Cheio, Erro (`402`/rede) e Mobile.
-- **T7 — Governança de Brand & Assets V1:** Usar exclusivamente a Logo oficial (`/brand/companygen-logo.jpg`) e o pacote editorial de ilustrações V1 (`/brand/illustrations/*`).
+- **T7 — Governança de Brand & Assets:** Usar exclusivamente o kit oficial transparente de logotipos e ícones (`/favicon.ico`, `/brand/simbolo-colorido.webp`, `/brand/logo-horizontal-escura.webp`, `/brand/logo-vertical-escura.webp`, `/brand/assinatura-email.png`, `/brand/app-icon-512.png`, `/brand/og-companygen.png`) e o pacote editorial de ilustrações (`/brand/illustrations/*`).
 
 ## Cláusulas Contratuais (`UI-C01` .. `UI-C08`)
 - `UI-C01`: **Proibido deletar recurso útil**; reorganizar, colapsar ou mover para sub-aba dedicada.
