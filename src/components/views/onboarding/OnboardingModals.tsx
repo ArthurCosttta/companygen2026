@@ -5,13 +5,17 @@ import {
   BookmarkCheck,
   Check,
   Copy,
+  Download,
   HelpCircle,
+  Monitor,
   PartyPopper,
   QrCode,
+  Smartphone,
   Sparkles,
   Store,
 } from 'lucide-react';
 import { ActionButton, ModalContainer, useToast } from '@/components/ui';
+import { renderQrPngDataUrl } from '@/utils/qrPng';
 import {
   buildPublicStoreShareUrl,
   type ExpressFichaDraft,
@@ -401,11 +405,23 @@ export function StoreCreatedSuccessModal({
 }: StoreCreatedSuccessModalProps) {
   const { showToast } = useToast();
   const [copied, setCopied] = React.useState(false);
+  const [previewDevice, setPreviewDevice] = React.useState<'desktop' | 'mobile'>('desktop');
 
   const resolvedUrl = React.useMemo(() => {
     if (storeUrl) return storeUrl;
     return buildPublicStoreShareUrl(publicSlug, ownerId);
   }, [storeUrl, publicSlug, ownerId]);
+
+  const qrPngUrl = React.useMemo(() => {
+    if (!resolvedUrl) return '';
+    return renderQrPngDataUrl(resolvedUrl, 220);
+  }, [resolvedUrl]);
+
+  React.useEffect(() => {
+    if (!open) {
+      setCopied(false);
+    }
+  }, [open]);
 
   React.useEffect(() => {
     if (!copied) return;
@@ -499,13 +515,40 @@ export function StoreCreatedSuccessModal({
         </div>
 
         {resolvedUrl ? (
-          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <label
-              htmlFor="onboarding-store-link"
-              className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
-            >
-              Link da sua vitrine online
-            </label>
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label
+                htmlFor="onboarding-store-link"
+                className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
+              >
+                Link da sua vitrine online
+              </label>
+              <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[11px] font-bold">
+                <button
+                  type="button"
+                  data-testid="victory-preview-desktop-btn"
+                  onClick={() => setPreviewDevice('desktop')}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${
+                    previewDevice === 'desktop' ? 'bg-[#0F172A] text-white' : 'text-slate-600'
+                  }`}
+                >
+                  <Monitor className="size-3" />
+                  <span>Desktop</span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="victory-preview-mobile-btn"
+                  onClick={() => setPreviewDevice('mobile')}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${
+                    previewDevice === 'mobile' ? 'bg-[#0F172A] text-white' : 'text-slate-600'
+                  }`}
+                >
+                  <Smartphone className="size-3" />
+                  <span>Celular</span>
+                </button>
+              </div>
+            </div>
+
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 id="onboarding-store-link"
@@ -530,8 +573,59 @@ export function StoreCreatedSuccessModal({
                 {copied ? 'Copiado!' : 'Copiar Link'}
               </ActionButton>
             </div>
+
+            {/* Prévia responsiva + QR Code offline PNG */}
+            <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-12 sm:items-stretch">
+              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-3 sm:col-span-6">
+                <div
+                  className={`mx-auto rounded-lg border border-slate-200 bg-[#F8FAFC] p-2.5 text-center transition-all ${
+                    previewDevice === 'mobile' ? 'max-w-[180px]' : 'w-full'
+                  }`}
+                >
+                  <p className="truncate text-xs font-extrabold text-[#0F172A]">{storeName.trim() || 'Sua Loja'}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    {previewDevice === 'mobile' ? 'Visual Mobile 390px' : 'Visual Desktop Completo'}
+                  </p>
+                </div>
+              </div>
+              {qrPngUrl ? (
+                <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-slate-200 bg-white p-3 sm:col-span-6 sm:flex-col sm:items-center sm:justify-center">
+                  <img
+                    src={qrPngUrl}
+                    alt="QR Code da loja"
+                    data-testid="victory-qr-img"
+                    className="size-16 shrink-0 rounded-lg border border-slate-100"
+                  />
+                  <a
+                    href={qrPngUrl}
+                    download={`qrcode-${(publicSlug || 'loja').replace(/[^a-z0-9-]/gi, '')}.png`}
+                    data-testid="victory-download-qr-btn"
+                    className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-slate-50 px-3 text-[11px] font-bold text-[#0F172A] hover:bg-slate-100"
+                  >
+                    <Download className="size-3.5 shrink-0" />
+                    <span>Baixar QR Code (.png)</span>
+                  </a>
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : null}
+
+        {/* Trilha de lançamento 3 passos */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-3.5 text-xs">
+          <p className="font-bold text-[#0F172A] mb-2">Próximos 3 passos para vender hoje</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 font-semibold text-emerald-900">
+              1. Página no ar ✓
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
+              2. Testar 3 msgs da Sofia
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
+              3. Baixar App Windows (.exe)
+            </div>
+          </div>
+        </div>
 
         <p className="text-xs leading-relaxed text-slate-500">
           {whatsappConnected

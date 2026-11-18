@@ -31,6 +31,7 @@ export {
   buildProductPlaceholderDataUri,
   buildStorePublicUrl,
   getPublishBlockers,
+  readImageFileAsDataUrl,
   resolveProductImageUrl,
   type PublishBlocker,
 } from './storefront-utils';

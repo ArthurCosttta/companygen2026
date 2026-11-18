@@ -1,6 +1,7 @@
 import {
   MessageSquare,
   Settings,
+  ShieldCheck,
   ShoppingBag,
   Store,
   type LucideIcon,
@@ -8,7 +9,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { ConnectionPhaseInfo } from '@/hooks/useConnectionPhase';
 
-export type SidebarTab = 'store' | 'whatsapp' | 'dashboard' | 'settings';
+export type SidebarTab = 'store' | 'whatsapp' | 'dashboard' | 'settings' | 'admin';
 
 export interface SidebarNavItem {
   id: SidebarTab;
@@ -24,11 +25,19 @@ export const SIDEBAR_TABS: readonly SidebarNavItem[] = [
   { id: 'settings', label: 'Ajustes', icon: Settings, testId: 'nav-tab-settings' },
 ] as const;
 
+export const ADMIN_SIDEBAR_TAB: SidebarNavItem = {
+  id: 'admin',
+  label: 'Admin',
+  icon: ShieldCheck,
+  testId: 'nav-tab-admin',
+};
+
 export const SIDEBAR_TITLES: Record<SidebarTab, string> = {
   store: 'Minha Loja',
   whatsapp: 'WhatsApp',
   dashboard: 'Pedidos',
   settings: 'Ajustes',
+  admin: 'Admin',
 };
 
 export interface SidebarProps {
@@ -37,6 +46,8 @@ export interface SidebarProps {
   onSelectTab: (tab: SidebarTab) => void;
   connectionPhaseInfo?: ConnectionPhaseInfo;
   pendingOrdersCount?: number;
+  waitingHumanCount?: number;
+  isAdmin?: boolean;
 }
 
 export function Sidebar({
@@ -45,8 +56,11 @@ export function Sidebar({
   onSelectTab,
   connectionPhaseInfo,
   pendingOrdersCount = 0,
+  waitingHumanCount = 0,
+  isAdmin = false,
 }: SidebarProps) {
   const cleanStoreName = storeName.trim() || 'Minha Loja';
+  const visibleTabs = isAdmin ? [...SIDEBAR_TABS, ADMIN_SIDEBAR_TAB] : SIDEBAR_TABS;
 
   const renderTabBadge = (tabId: SidebarTab, compact = false) => {
     if (tabId === 'dashboard' && pendingOrdersCount > 0) {
@@ -65,17 +79,34 @@ export function Sidebar({
       );
     }
 
-    if (tabId === 'whatsapp' && connectionPhaseInfo) {
-      return (
-        <span
-          aria-hidden="true"
-          className={cn(
-            'rounded-full shrink-0',
-            compact ? 'absolute top-1.5 right-3 size-2' : 'ml-auto size-2.5',
-          )}
-          style={{ backgroundColor: connectionPhaseInfo.colorHex }}
-        />
-      );
+    if (tabId === 'whatsapp') {
+      if (waitingHumanCount > 0) {
+        return (
+          <span
+            aria-label={`${waitingHumanCount} cliente aguardando humano`}
+            className={cn(
+              'inline-flex items-center justify-center rounded-full bg-[#FF2E54] font-bold text-white animate-pulse ring-2 ring-[#FF2E54]/40',
+              compact
+                ? 'absolute top-1 right-2.5 min-w-[18px] h-[18px] px-1 text-[10px]'
+                : 'ml-auto min-w-[22px] h-[22px] px-1.5 text-[11px]',
+            )}
+          >
+            {waitingHumanCount > 9 ? '9+' : waitingHumanCount}
+          </span>
+        );
+      }
+      if (connectionPhaseInfo) {
+        return (
+          <span
+            aria-hidden="true"
+            className={cn(
+              'rounded-full shrink-0',
+              compact ? 'absolute top-1.5 right-3 size-2' : 'ml-auto size-2.5',
+            )}
+            style={{ backgroundColor: connectionPhaseInfo.colorHex }}
+          />
+        );
+      }
     }
 
     return null;
@@ -91,12 +122,11 @@ export function Sidebar({
         <div className="space-y-6">
           {/* Brand / Store Identity */}
           <div className="flex items-center gap-3 px-2">
-            <div
-              aria-hidden="true"
-              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#0F172A] text-xs font-extrabold tracking-tight text-white shadow-xs"
-            >
-              CG
-            </div>
+            <img
+              src="/brand/companygen-logo.jpg"
+              alt="CompanyGen"
+              className="size-10 shrink-0 rounded-xl border border-slate-200 bg-white object-cover shadow-xs"
+            />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold tracking-tight text-[#0F172A]">
                 CompanyGen
@@ -112,7 +142,7 @@ export function Sidebar({
 
           {/* Strictly 4 Clean Navigation Tabs */}
           <nav aria-label="Navegação principal" className="space-y-1.5">
-            {SIDEBAR_TABS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
@@ -151,35 +181,17 @@ export function Sidebar({
             })}
           </nav>
         </div>
-
-        {/* Friendly Non-Technical WhatsApp Status Footer */}
-        {connectionPhaseInfo ? (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5">
-            <div className="flex items-start gap-2.5">
-              <span
-                aria-hidden="true"
-                className="mt-1 size-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: connectionPhaseInfo.colorHex }}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-[#0F172A]">
-                  Atendimento
-                </p>
-                <p className="mt-0.5 text-xs leading-snug text-slate-600">
-                  {connectionPhaseInfo.labelPT}
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : null}
       </aside>
 
       {/* Mobile Fixed Bottom Bar (<= 768px, 64px height) */}
       <nav
         aria-label="Navegação inferior"
-        className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 items-center gap-1 border-t border-slate-200 bg-white/95 px-2 backdrop-blur-md min-[769px]:hidden"
+        className={cn(
+          'fixed inset-x-0 bottom-0 z-40 grid h-16 items-center gap-1 border-t border-slate-200 bg-white/95 px-2 backdrop-blur-md min-[769px]:hidden',
+          isAdmin ? 'grid-cols-5' : 'grid-cols-4',
+        )}
       >
-        {SIDEBAR_TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (

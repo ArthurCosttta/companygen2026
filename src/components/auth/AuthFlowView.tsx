@@ -12,7 +12,7 @@ import {
   Store,
 } from 'lucide-react';
 import { ActionButton, ModalContainer, useToast } from '@/components/ui';
-import { supabase } from '@/services/supabase-client';
+import { saveLocalShowcaseSession, supabase } from '@/services/supabase-client';
 
 const SIGNUP_DRAFT_KEY = 'cg_signup_draft_v1';
 
@@ -39,6 +39,19 @@ function readSignupDraft(): SignupDraft {
 export function AuthFlowView() {
   const { showToast } = useToast();
   const initialDraft = readSignupDraft();
+  const [validatedInvite] = useState<{ code: string; credits: number } | null>(() => {
+    try {
+      const raw = sessionStorage.getItem('cg_validated_invite');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { code?: string; credits?: number };
+      if (parsed && typeof parsed.code === 'string' && parsed.code.trim()) {
+        return { code: parsed.code.trim(), credits: Number(parsed.credits) || 100 };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
 
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [companyName, setCompanyName] = useState(initialDraft.companyName);
@@ -198,9 +211,11 @@ export function AuthFlowView() {
         className="flex flex-col justify-between bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#1D4ED8] p-6 text-white sm:p-10 md:p-12"
       >
         <div className="flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center rounded-xl bg-[#2563EB] text-sm font-extrabold tracking-tight text-white shadow-md shadow-blue-600/30">
-            CG
-          </div>
+          <img
+            src="/brand/companygen-logo.jpg"
+            alt="CompanyGen"
+            className="size-11 shrink-0 rounded-xl border border-white/20 bg-white object-cover shadow-md shadow-blue-950/30"
+          />
           <div>
             <p className="text-lg font-bold tracking-tight text-white">CompanyGen</p>
             <p className="text-xs font-medium text-blue-200">
@@ -256,6 +271,65 @@ export function AuthFlowView() {
         className="flex items-center justify-center p-4 py-8 sm:p-8 md:p-12"
       >
         <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          {validatedInvite ? (
+            <div
+              data-testid="auth-invite-banner"
+              className="mb-5 flex flex-col gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-900"
+            >
+              <div className="flex items-start gap-2.5">
+                <Check className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                <div>
+                  <p className="font-bold">
+                    Convite {validatedInvite.code} validado (+{validatedInvite.credits} créditos de IA)
+                  </p>
+                  <p className="text-[11px] text-emerald-700">
+                    Entre ou crie sua conta abaixo para resgatar seus créditos imediatamente.
+                  </p>
+                </div>
+              </div>
+              {validatedInvite.code.toUpperCase() === 'AI10-FARM-LUME' ? (
+                <button
+                  type="button"
+                  data-testid="auth-open-showcase-lume-btn"
+                  onClick={async () => {
+                    try {
+                      const r = await fetch('/api/access/local-showcase-login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: 'AI10-FARM-LUME' }),
+                      });
+                      const j = await r.json().catch(() => null);
+                      if (r.ok && j?.ok && j.token) {
+                        saveLocalShowcaseSession({
+                          token: j.token,
+                          user: j.user,
+                          code: 'AI10-FARM-LUME',
+                          credits: Number(j.credits) || 65,
+                          balance: Number(j.balance ?? 65),
+                          savedAt: new Date().toISOString(),
+                        });
+                      } else {
+                        setFeedback({
+                          error: true,
+                          message: j?.error || 'Não foi possível carregar o perfil de teste.',
+                        });
+                      }
+                    } catch (err) {
+                      console.warn('[AuthFlowView] Falha ao entrar no perfil showcase:', err);
+                      setFeedback({
+                        error: true,
+                        message: 'Erro de conexão ao carregar o perfil de teste.',
+                      });
+                    }
+                  }}
+                  className="w-full rounded-lg bg-emerald-700 px-3 py-2 text-center text-xs font-bold text-white hover:bg-emerald-800 transition"
+                >
+                  Carregar Perfil de Teste (AI10-FARM-LUME) →
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-wider text-[#2563EB]">
               {mode === 'signup' ? 'Nova loja' : 'Acesso do lojista'}
@@ -433,7 +507,29 @@ export function AuthFlowView() {
             </ActionButton>
           </form>
 
-          <div className="mt-6 border-t border-slate-100 pt-4 text-center">
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              data-testid="auth-open-access-btn"
+              onClick={() => {
+                try {
+                  const url = new URL(window.location.href);
+                  url.pathname = '/access';
+                  url.searchParams.delete('route');
+                  window.history.pushState({}, '', url.toString());
+                } catch (err) {
+                  console.warn('[AuthFlowView] Falha ao atualizar histórico de navegação:', err);
+                }
+                window.dispatchEvent(new CustomEvent('companygen:open-access'));
+              }}
+              className="text-xs font-medium text-slate-600 hover:text-[#2563EB] transition"
+            >
+              Possui código de convite?{' '}
+              <span className="font-bold underline underline-offset-2">Inserir código de acesso</span>
+            </button>
+          </div>
+
+          <div className="mt-4 border-t border-slate-100 pt-4 text-center">
             {mode === 'login' ? (
               <button
                 type="button"

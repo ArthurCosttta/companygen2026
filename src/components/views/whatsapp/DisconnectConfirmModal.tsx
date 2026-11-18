@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Unplug } from 'lucide-react';
 import { ActionButton, ModalContainer, useToast } from '@/components/ui';
 import { authenticatedFetch } from '@/services/supabase-client';
+import { getDesktopBridge } from '@/hooks/useWebviewWhatsappResponder';
 
 export interface DisconnectConfirmModalProps {
   open: boolean;
@@ -41,7 +42,11 @@ export function DisconnectConfirmModal({
           owner,
         );
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || data.ok === false) {
+        const bridge = getDesktopBridge();
+        if (bridge?.logoutWhatsAppWebview) {
+          await bridge.logoutWhatsAppWebview().catch(() => {});
+        }
+        if ((!res.ok || data.ok === false) && !bridge?.isDesktop) {
           throw new Error(data.erro || data.error || 'Não foi possível desconectar agora.');
         }
       }

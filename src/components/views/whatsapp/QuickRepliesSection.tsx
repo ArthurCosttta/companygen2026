@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Check, Copy, MessageSquareText, Plus, Search, Sparkles } from 'lucide-react';
+import { Check, Copy, MessageSquareText, Pencil, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import {
   ActionButton,
   EmptyStateCard,
@@ -175,25 +175,42 @@ export function QuickRepliesSection({
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
   const copyTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Create new message modal state
+  // Create/Edit message modal state
+  const [localTemplates, setLocalTemplates] = React.useState<QuickReplyTemplate[] | null>(null);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [newTitle, setNewTitle] = React.useState('');
   const [newTriggers, setNewTriggers] = React.useState('');
   const [newBody, setNewBody] = React.useState('');
   const [formError, setFormError] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const bodyTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
 
+  const loadLocalTemplates = React.useCallback(async () => {
+    try {
+      const res = await authenticatedFetch('/api/whatsapp/ai/templates', { method: 'GET' }, owner);
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok && Array.isArray(data.templates)) {
+        setLocalTemplates(data.templates);
+      }
+    } catch {
+      // Fall back to passed prop or defaults.
+    }
+  }, [owner]);
+
   React.useEffect(() => {
+    void loadLocalTemplates();
     return () => {
       if (copyTimerRef.current) {
         clearTimeout(copyTimerRef.current);
       }
     };
-  }, []);
+  }, [loadLocalTemplates]);
 
-  const hasCustomTemplates = Boolean(templates && templates.length > 0);
-  const sourceList = hasCustomTemplates ? templates! : DEFAULT_QUICK_REPLIES;
+  const effectiveTemplates = localTemplates !== null ? localTemplates : templates;
+  const hasCustomTemplates = Boolean(effectiveTemplates && effectiveTemplates.length > 0);
+  const sourceList = hasCustomTemplates ? effectiveTemplates! : DEFAULT_QUICK_REPLIES;
 
   const normalizedList = React.useMemo<NormalizedQuickReply[]>(() => {
     return sourceList.map((item, idx) => ({
@@ -265,8 +282,48 @@ export function QuickRepliesSection({
   };
 
   const handleOpenCreate = () => {
+    setEditingId(null);
+    setNewTitle('');
+    setNewTriggers('');
+    setNewBody('');
     setFormError('');
     setCreateOpen(true);
+  };
+
+  const handleOpenEdit = (item: NormalizedQuickReply) => {
+    setEditingId(item.isFallback ? null : item.id);
+    setNewTitle(item.title);
+    setNewTriggers(item.triggers.join(', '));
+    setNewBody(item.body);
+    setFormError('');
+    setCreateOpen(true);
+  };
+
+  const handleDeleteTemplate = async (item: NormalizedQuickReply) => {
+    if (item.isFallback || deletingId) return;
+    setDeletingId(item.id);
+    try {
+      const res = await authenticatedFetch(
+        `/api/whatsapp/ai/templates/${encodeURIComponent(item.id)}`,
+        { method: 'DELETE' },
+        owner,
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.erro || data.error || 'Não foi possível excluir a mensagem.');
+      }
+      if (Array.isArray(data.templates)) setLocalTemplates(data.templates);
+      showToast({ type: 'success', message: 'Mensagem excluída.', durationMs: 2200 });
+      await onTemplateSaved?.();
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Erro ao excluir mensagem.',
+        durationMs: 3200,
+      });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleSaveNewTemplate = async (event: React.FormEvent) => {
@@ -298,12 +355,12 @@ export function QuickRepliesSection({
     setFormError('');
     try {
       const res = await authenticatedFetch(
-        '/api/whatsapp/api/templates/save',
+        '/api/whatsapp/ai/templates',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: '',
+            id: editingId || '',
             titulo: cleanTitle,
             gatilhos: triggersToSend.length > 0 ? triggersToSend : ['atendimento'],
             resposta: cleanBody,
@@ -315,14 +372,18 @@ export function QuickRepliesSection({
       if (!res.ok || data.ok === false) {
         throw new Error(data.erro || data.error || 'Não foi possível salvar o modelo.');
       }
+      if (Array.isArray(data.templates)) {
+        setLocalTemplates(data.templates);
+      }
 
+      setEditingId(null);
       setNewTitle('');
       setNewTriggers('');
       setNewBody('');
       setCreateOpen(false);
       showToast({
         type: 'success',
-        message: 'Resposta rápida adicionada à biblioteca!',
+        message: editingId ? 'Resposta rápida atualizada!' : 'Resposta rápida adicionada à biblioteca!',
         durationMs: 2500,
       });
       await onTemplateSaved?.();
@@ -346,8 +407,8 @@ export function QuickRepliesSection({
       aria-label="Biblioteca de Respostas Rápidas"
       className="flex flex-col gap-4"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1">
+      <div className={compact ? 'flex flex-col gap-2.5' : 'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'}>
+        <div className="relative flex-1 min-w-0">
           <Search
             className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400"
             aria-hidden="true"
@@ -367,7 +428,7 @@ export function QuickRepliesSection({
           size={44}
           leftIcon={<Plus className="size-4" aria-hidden="true" />}
           onClick={handleOpenCreate}
-          className="shrink-0"
+          className={compact ? 'w-full justify-center' : 'shrink-0'}
         >
           Criar nova mensagem
         </ActionButton>
@@ -418,35 +479,60 @@ export function QuickRepliesSection({
                 className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-slate-300"
               >
                 <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className={compact ? 'flex flex-col gap-2' : 'flex items-start justify-between gap-2'}>
                     <div className="min-w-0">
-                      <span className="inline-block rounded-full bg-[#EFF6FF] px-2.5 py-0.5 text-[11px] font-semibold text-[#1D4ED8]">
+                      <span className="inline-block whitespace-nowrap rounded-full bg-[#EFF6FF] px-2.5 py-0.5 text-[11px] font-semibold text-[#1D4ED8]">
                         {item.category}
                       </span>
                       <h3 className="mt-1.5 text-sm font-bold text-[#0F172A]">{item.title}</h3>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => void handleCopy(item)}
-                      className={`inline-flex min-h-[44px] min-w-[104px] shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-all duration-[100ms] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
-                        isCopied
-                          ? 'border border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]'
-                          : 'bg-[#F1F5F9] text-[#0F172A] hover:bg-[#E2E8F0]'
-                      }`}
-                    >
-                      {isCopied ? (
+                    <div className={compact ? 'flex flex-wrap items-center gap-1.5' : 'flex shrink-0 items-center gap-1.5'}>
+                      {!item.isFallback && (
                         <>
-                          <Check className="size-3.5" aria-hidden="true" />
-                          <span>Copiado!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="size-3.5" aria-hidden="true" />
-                          <span>Copiar Texto</span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(item)}
+                            aria-label={`Editar ${item.title}`}
+                            data-testid={`quick-reply-edit-${item.id}`}
+                            className="inline-flex min-h-[44px] w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-[#2563EB]"
+                          >
+                            <Pencil className="size-3.5" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deletingId === item.id}
+                            onClick={() => void handleDeleteTemplate(item)}
+                            aria-label={`Excluir ${item.title}`}
+                            data-testid={`quick-reply-delete-${item.id}`}
+                            className="inline-flex min-h-[44px] w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                          >
+                            <Trash2 className="size-3.5" aria-hidden="true" />
+                          </button>
                         </>
                       )}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopy(item)}
+                        className={`inline-flex min-h-[44px] min-w-[104px] shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-all duration-[100ms] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
+                          isCopied
+                            ? 'border border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]'
+                            : 'bg-[#F1F5F9] text-[#0F172A] hover:bg-[#E2E8F0]'
+                        }`}
+                      >
+                        {isCopied ? (
+                          <>
+                            <Check className="size-3.5" aria-hidden="true" />
+                            <span>Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="size-3.5" aria-hidden="true" />
+                            <span>Copiar Texto</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <p className="whitespace-pre-wrap rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-700">
@@ -480,8 +566,8 @@ export function QuickRepliesSection({
         maxWidth="md"
         mobileHeight="90%"
         preventCloseWhileSubmitting={isSaving}
-        title="Nova Resposta Rápida"
-        description="Crie um atalho de mensagem para copiar no atendimento ou usar nas respostas da loja."
+        title={editingId ? 'Editar Resposta Rápida' : 'Nova Resposta Rápida'}
+        description="Crie um atalho de mensagem para copiar no atendimento ou usar por palavra-gatilho (0 créditos)."
         footer={
           <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
             <ActionButton

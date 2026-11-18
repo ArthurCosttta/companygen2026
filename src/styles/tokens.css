@@ -2,10 +2,12 @@
 :root {
   --cg-background: #f7faff;
   --cg-surface: #ffffff;
+  --cg-surface-elevated: #f8fafc;
   --cg-primary: #0867e8;
   --cg-primary-dark: #064bb8;
   --cg-text: #0b1d52;
   --cg-text-secondary: #64748b;
+  --cg-text-muted: #64748b;
   --cg-border: #e6effb;
   --cg-hover: #edf4ff;
   --cg-success: #24a677;
@@ -23,14 +25,16 @@
 }
 
 .dark {
-  --cg-background: #0b132b;
-  --cg-surface: #131e3a;
+  --cg-background: #09090b;
+  --cg-surface: #121215;
+  --cg-surface-elevated: #18181b;
   --cg-primary: #3b82f6;
   --cg-primary-dark: #2563eb;
-  --cg-text: #f8fafc;
-  --cg-text-secondary: #94a3b8;
-  --cg-border: #1e2d4a;
-  --cg-hover: #1e2e50;
+  --cg-text: #ffffff;
+  --cg-text-secondary: #f4f4f5;
+  --cg-text-muted: #e4e4e7;
+  --cg-border: #27272a;
+  --cg-hover: #18181b;
   --cg-success: #10b981;
   --cg-warning: #f59e0b;
   --cg-error: #ef4444;

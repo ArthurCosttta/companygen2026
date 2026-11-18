@@ -15,6 +15,7 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, Cambria, 'Times New Roman', serif;
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -35,10 +36,12 @@
   --color-background: var(--background);
   --color-cg-bg: var(--cg-background);
   --color-cg-surface: var(--cg-surface);
+  --color-cg-surface-elevated: var(--cg-surface-elevated);
   --color-cg-primary: var(--cg-primary);
   --color-cg-primary-dark: var(--cg-primary-dark);
   --color-cg-text: var(--cg-text);
   --color-cg-muted: var(--cg-text-secondary);
+  --color-cg-text-muted: var(--cg-text-muted);
   --color-cg-border: var(--cg-border);
   --color-cg-hover: var(--cg-hover);
   --color-cg-success: var(--cg-success);
@@ -87,89 +90,233 @@
   --secondary: var(--cg-hover);
   --secondary-foreground: var(--cg-text);
   --muted: var(--cg-hover);
-  --muted-foreground: var(--cg-text-secondary);
+  --muted-foreground: var(--cg-text-muted);
   --accent: var(--cg-hover);
   --accent-foreground: var(--cg-text);
   --destructive: var(--cg-error);
   --border: var(--cg-border);
-  --input: #1e2d4a;
+  --input: #27272a;
   --ring: var(--cg-primary);
 }
 
-/* Global Dark Mode overrides for arbitrary color classes */
-html.dark, html.dark body {
-  background-color: #0b132b !important;
-  color: #f8fafc !important;
+/* Global Dark Mode overrides — Carbono Neutro (#09090B/#121215/#18181B) + 100% White Text Hierarchy (INV-10) */
+html.dark,
+html.dark body {
+  background-color: #09090b !important;
+  color: #ffffff !important;
+  color-scheme: dark;
 }
 
-html.dark .bg-white {
-  background-color: #131e3a !important;
-}
-
+/* Base page surfaces */
 html.dark .bg-\[\#F7FAFF\],
-html.dark .bg-\[\#F8FAFC\] {
-  background-color: #0b132b !important;
+html.dark .bg-\[\#F7FAFF\]\/80,
+html.dark .bg-\[\#F8FAFC\],
+html.dark .bg-\[\#F8FAFC\]\/50,
+html.dark .bg-\[\#F8FBFF\],
+html.dark .bg-\[\#0B132B\],
+html.dark .bg-\[\#071336\],
+html.dark .bg-slate-950 {
+  background-color: #09090b !important;
 }
 
+/* Cards, modals, drawers & white containers */
+html.dark .bg-white,
+html.dark .bg-white\/95,
+html.dark .bg-white\/90,
+html.dark .bg-white\/80,
+html.dark .bg-white\/75,
+html.dark .bg-white\/60,
+html.dark .bg-\[\#FDFEFE\],
+html.dark .bg-\[\#1A264E\],
+html.dark .bg-slate-900 {
+  background-color: #121215 !important;
+}
+
+/* Elevated containers, subtle surfaces, inputs & badges */
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/80,
+html.dark .bg-slate-50\/70,
+html.dark .bg-slate-50\/50,
+html.dark .bg-slate-100,
+html.dark .bg-slate-100\/70,
+html.dark .bg-slate-200,
+html.dark .bg-slate-800,
+html.dark .bg-gray-50,
+html.dark .bg-gray-100,
+html.dark .bg-zinc-50,
+html.dark .bg-zinc-100,
+html.dark .bg-\[\#0F172A\],
 html.dark .bg-\[\#F1F5F9\],
-html.dark .bg-\[\#F9FAFB\] {
-  background-color: #1a284a !important;
-}
-
+html.dark .bg-\[\#F9FAFB\],
+html.dark .bg-\[\#F3F7FD\],
 html.dark .bg-\[\#EDF4FF\],
-html.dark .bg-\[\#EFF6FF\] {
-  background-color: #1e2e50 !important;
+html.dark .bg-\[\#EDF4FF\]\/30,
+html.dark .bg-\[\#EDF4FF\]\/40,
+html.dark .bg-\[\#EDF4FF\]\/50,
+html.dark .bg-\[\#EDF4FF\]\/70,
+html.dark .bg-\[\#EDF5FF\],
+html.dark .bg-\[\#EFF6FF\],
+html.dark .bg-\[\#EFF6FF\]\/60,
+html.dark .bg-\[\#EFF6FF\]\/70,
+html.dark .bg-\[\#EAF2FF\],
+html.dark .bg-\[\#E5F1FF\],
+html.dark .bg-\[\#E6EFFB\],
+html.dark .bg-\[\#E8EEF7\],
+html.dark .bg-\[\#E0E9F7\],
+html.dark .bg-\[\#DBEAFE\] {
+  background-color: #18181b !important;
 }
 
+/* Pastel semantic status boxes darkened for Carbon Dark contrast */
+html.dark .bg-\[\#ECFDF5\],
+html.dark .bg-\[\#DCFCE7\],
+html.dark .bg-\[\#DDFBE1\],
+html.dark .bg-\[\#DFFBE6\] {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+
+html.dark .bg-\[\#FEF3C7\],
+html.dark .bg-\[\#FFFBEB\] {
+  background-color: rgba(245, 158, 11, 0.14) !important;
+}
+
+html.dark .bg-\[\#FEF2F2\],
+html.dark .bg-\[\#FFE4E6\] {
+  background-color: rgba(239, 68, 68, 0.14) !important;
+}
+
+html.dark .bg-\[\#F3E8FF\] {
+  background-color: rgba(139, 92, 246, 0.14) !important;
+}
+
+/* Primary headings & body -> #ffffff */
+html.dark .text-\[\#0F172A\],
 html.dark .text-\[\#0B1D52\],
 html.dark .text-\[\#101F41\],
 html.dark .text-\[\#1E293B\],
+html.dark .text-slate-950,
 html.dark .text-slate-900,
-html.dark .text-slate-800 {
-  color: #f8fafc !important;
-}
-
-html.dark .text-\[\#64748B\],
-html.dark .text-\[\#526483\],
-html.dark .text-slate-600,
-html.dark .text-slate-500 {
-  color: #94a3b8 !important;
-}
-
-html.dark .border-\[\#E6EFFB\],
-html.dark .border-\[\#DCE8FA\],
-html.dark .border-\[\#CEE0FA\],
-html.dark .border-slate-200,
-html.dark .border-slate-100 {
-  border-color: #1e2d4a !important;
-}
-
-html.dark .hover\:bg-\[\#F7FAFF\]:hover,
-html.dark .hover\:bg-\[\#F1F5F9\]:hover {
-  background-color: #1e284a !important;
-}
-
-html.dark .hover\:bg-\[\#EDF4FF\]:hover {
-  background-color: #233560 !important;
-}
-
-html.dark .hover\:text-\[\#0B1D52\]:hover {
+html.dark .text-slate-800,
+html.dark .text-gray-950,
+html.dark .text-gray-900,
+html.dark .text-gray-800,
+html.dark .text-zinc-950,
+html.dark .text-zinc-900,
+html.dark .text-zinc-800,
+html.dark .text-black {
   color: #ffffff !important;
 }
 
+/* Secondary / labels -> #f4f4f5 */
+html.dark .text-\[\#334155\],
+html.dark .text-\[\#475569\],
+html.dark .text-slate-700,
+html.dark .text-gray-700,
+html.dark .text-zinc-700 {
+  color: #f4f4f5 !important;
+}
+
+/* Muted / helper -> #e4e4e7 */
+html.dark .text-\[\#64748B\],
+html.dark .text-\[\#526483\],
+html.dark .text-\[\#94A3B8\],
+html.dark .text-slate-600,
+html.dark .text-slate-500,
+html.dark .text-slate-400,
+html.dark .text-gray-600,
+html.dark .text-gray-500,
+html.dark .text-gray-400,
+html.dark .text-zinc-600,
+html.dark .text-zinc-500,
+html.dark .text-zinc-400 {
+  color: #e4e4e7 !important;
+}
+
+/* Semantic dark text brightened on carbon surfaces */
+html.dark .text-\[\#1D4ED8\] {
+  color: #93c5fd !important;
+}
+html.dark .text-\[\#15803D\],
+html.dark .text-\[\#008E2D\] {
+  color: #4ade80 !important;
+}
+html.dark .text-\[\#B45309\] {
+  color: #fcd34d !important;
+}
+html.dark .text-\[\#B91C1C\],
+html.dark .text-\[\#BE123C\],
+html.dark .text-\[\#D94C4C\] {
+  color: #fca5a5 !important;
+}
+html.dark .text-\[\#7E22CE\] {
+  color: #d8b4fe !important;
+}
+
+/* Borders */
+html.dark .border-\[\#E6EFFB\],
+html.dark .border-\[\#DCE8FA\],
+html.dark .border-\[\#DCE8F7\],
+html.dark .border-\[\#CEE0FA\],
+html.dark .border-\[\#E0EAF8\],
+html.dark .border-\[\#E2E8F0\],
+html.dark .border-\[\#E2ECF9\],
+html.dark .border-\[\#CBD5E1\],
+html.dark .border-\[\#BFDBFE\],
+html.dark .border-\[\#F1F5F9\],
+html.dark .border-slate-200,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-100,
+html.dark .border-slate-300,
+html.dark .border-slate-700,
+html.dark .border-slate-800,
+html.dark .border-gray-200,
+html.dark .border-gray-100,
+html.dark .border-zinc-200,
+html.dark .divide-slate-100 > :not(:last-child) {
+  border-color: #27272a !important;
+}
+
+/* Hover states */
+html.dark .hover\:bg-\[\#F7FAFF\]:hover,
+html.dark .hover\:bg-\[\#F1F5F9\]:hover,
+html.dark .hover\:bg-\[\#EDF4FF\]:hover,
+html.dark .hover\:bg-\[\#EFF6FF\]:hover,
+html.dark .hover\:bg-\[\#DBEAFE\]:hover,
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-100:hover,
+html.dark .hover\:bg-gray-100:hover,
+html.dark .hover\:bg-zinc-100:hover {
+  background-color: #18181b !important;
+}
+
+html.dark .hover\:text-\[\#0B1D52\]:hover,
+html.dark .hover\:text-\[\#0F172A\]:hover,
+html.dark .hover\:text-slate-900:hover,
+html.dark .hover\:text-slate-800:hover {
+  color: #ffffff !important;
+}
+
+/* Inputs, selects, textareas & placeholders */
 html.dark input,
 html.dark textarea,
 html.dark select {
-  background-color: #131e3a !important;
-  color: #f8fafc !important;
-  border-color: #1e2d4a !important;
+  background-color: #18181b !important;
+  color: #ffffff !important;
+  border-color: #27272a !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: rgba(255, 255, 255, 0.62) !important;
+  opacity: 1;
 }
 
 html.dark .shadow-xs,
 html.dark .shadow-sm,
 html.dark .shadow-md,
-html.dark .shadow-lg {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+html.dark .shadow-lg,
+html.dark .cg-card-shadow {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.55) !important;
 }
 
 @layer base {
@@ -200,10 +347,11 @@ html.dark .shadow-lg {
   padding-inline: 16px;
   font-weight: 600;
   font-size: 14px;
-  transition: background-color 160ms var(--cg-ease), box-shadow 160ms var(--cg-ease), transform 120ms var(--cg-ease);
+  transition: transform 120ms var(--cg-ease), opacity 160ms var(--cg-ease);
+  will-change: transform;
 }
 .cg-btn:active {
-  transform: translateY(1px);
+  transform: translate3d(0, 1px, 0) scale3d(0.98, 0.98, 1);
 }
 .cg-scroll {
   overflow-y: auto;
@@ -211,13 +359,17 @@ html.dark .shadow-lg {
   scrollbar-width: thin;
   scrollbar-color: #c9d8ee transparent;
 }
+.dark .cg-scroll {
+  scrollbar-color: #27272a transparent;
+}
 .cg-card-shadow {
   box-shadow: 0 1px 2px rgba(11, 29, 82, 0.04), 0 4px 16px rgba(11, 29, 82, 0.05);
 }
 
 /* Shared application shell and authenticated WhatsApp workspace. */
 .cg-shell { --cg-paper:#fff; --cg-bg:#f1f3ef; --cg-ink:#152927; --cg-muted:#64716b; --cg-line:#dfe5de; --cg-green:#17634f; height:100dvh; display:flex; overflow:hidden; background:var(--cg-bg); color:var(--cg-ink); }
-.dark .cg-shell { --cg-paper:#142521; --cg-bg:#0c1b17; --cg-ink:#edf3e9; --cg-muted:#a7b8ad; --cg-line:#2c4139; --cg-green:#a0d8bc; }
+.dark .cg-shell { --cg-paper:#121215; --cg-bg:#09090b; --cg-ink:#ffffff; --cg-muted:#e4e4e7; --cg-line:#27272a; --cg-green:#10b981; }
+.dark .cg-center { background:#09090b; color:#ffffff; }
 .cg-center { min-height:100dvh; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:1rem; background:#f1f3ef; color:#152927; padding:2rem; text-align:center; }
 .cg-stage { flex:1; min-width:0; display:flex; flex-direction:column; }
 .cg-sidebar { width:224px; height:100dvh; padding:24px 12px; background:var(--cg-paper); border-right:1px solid var(--cg-line); overflow-y:auto; }
@@ -231,7 +383,7 @@ html.dark .shadow-lg {
 .cg-nav-group button { width:100%; display:flex; gap:11px; align-items:center; padding:9px 12px; margin-top:2px; font-size:12px; font-weight:500; text-align:left; border-radius:7px; color:var(--cg-muted); }
 .cg-nav-group button:hover { background:var(--cg-bg); color:var(--cg-ink); }
 .cg-nav-group button[aria-current] { background:#e5eee5; color:#164e3e; font-weight:650; }
-.dark .cg-nav-group button[aria-current] { background:#254737; color:#cde9d7; }
+.dark .cg-nav-group button[aria-current] { background:#18181b; color:#ffffff; }
 .cg-nav-group small { margin-left:auto; }
 .cg-topbar { min-height:68px; display:flex; gap:1rem; align-items:center; justify-content:space-between; padding:12px 26px; background:var(--cg-paper); border-bottom:1px solid var(--cg-line); flex-shrink:0; }
 .cg-topbar-title,.cg-topbar-actions,.cg-inline { display:flex; gap:10px; align-items:center; }
@@ -270,6 +422,7 @@ html.dark .shadow-lg {
 .cg-wa-nav nav { flex:1 1 840px; min-width:0; flex-wrap:wrap; gap:6px; overflow:visible; }
 .cg-wa-nav nav button { display:inline-flex; align-items:center; gap:7px; min-height:36px; padding:8px 10px; border:1px solid var(--cg-line); border-radius:8px; white-space:normal; line-height:1.2; }
 .cg-wa-nav nav button[aria-current] { background:#e9f5ee; color:#17634f; border-color:#a8d5b6; }
+.dark .cg-wa-nav nav button[aria-current] { background:#18181b; color:#ffffff; border-color:#3b82f6; }
 .cg-wa-nav .cg-connection { padding:8px 4px; white-space:nowrap; }
 .cg-connection { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--cg-muted); white-space:nowrap; }
 .cg-connection i { width:6px; height:6px; border-radius:100%; background:#9aafa4; }
@@ -290,8 +443,8 @@ html.dark .shadow-lg {
 .cg-real-whatsapp-fallback > svg { color:#22a06b; }
 .cg-real-whatsapp-fallback h2 { margin:0; font-size:22px; }
 .cg-real-whatsapp-fallback p { max-width:580px; margin:0; color:var(--cg-muted); line-height:1.6; }
-.cg-spin { animation:cg-spin .8s linear infinite; }
-@keyframes cg-spin { to { transform:rotate(360deg); } }
+.cg-spin { animation:cg-spin .8s linear infinite; will-change:transform; }
+@keyframes cg-spin { to { transform:rotate3d(0,0,1,360deg); } }
 .cg-inbox { min-height:0; flex:1; display:grid; grid-template-columns:310px minmax(0,1fr); }
 .cg-inbox-list { border-right:1px solid var(--cg-line); background:var(--cg-paper); display:flex; flex-direction:column; min-height:0; }
 .cg-inbox-filter { padding:20px 16px 12px; }
@@ -317,7 +470,10 @@ html.dark .shadow-lg {
 .cg-bubble img { max-width:100%; max-height:260px; border-radius:7px; object-fit:contain; }
 .cg-bubble audio { max-width:100%; }
 .cg-bubble-out { align-self:flex-end; border-radius:12px 12px 3px 12px; background:#dcebdd; color:#183c2c; border-color:#d2e4d3; }
+.dark .cg-bubble-out { background:#18181b; color:#ffffff; border-color:#27272a; }
 .cg-bubble small { display:block; color:#718277; text-align:right; font-size:10px; margin-top:6px; }
+.dark .cg-bubble small { color:#e4e4e7; }
+.dark .cg-real-whatsapp, .dark .cg-real-whatsapp-host { background:#09090b; }
 .cg-compose { display:flex; gap:10px; padding:16px 24px; background:var(--cg-paper); border-top:1px solid var(--cg-line); }
 .cg-compose .cg-field { flex:1; }
 .cg-thread-empty { flex:1; display:flex; flex-direction:column; gap:16px; justify-content:center; align-items:center; text-align:center; padding:30px; }
@@ -401,7 +557,7 @@ html.dark .shadow-lg {
 .cg-onboarding-products strong { font-size:12px; }
 .cg-onboarding-products p { margin-top:4px; color:var(--cg-muted); font-size:11px; line-height:1.5; }
 .cg-onboarding-actions-end { justify-content:flex-end; padding-top:26px; border-top:1px solid var(--cg-line); }
-@keyframes cg-spin { to { transform:rotate(360deg); } }
+@keyframes cg-spin { to { transform:rotate3d(0,0,1,360deg); } }
 .cg-between { justify-content:space-between; }
 .cg-products { display:grid; gap:7px; }
 .cg-products > p { color:var(--cg-muted); font-size:12px; line-height:1.7; }
@@ -464,11 +620,26 @@ html.dark .shadow-lg {
 .cg-store-whatsapp-prompt p { margin:0; display:flex; flex-direction:column; gap:2px; font-size:12px; line-height:1.35; }
 .cg-store-whatsapp-prompt p strong { font-size:13px; }
 .cg-store-whatsapp-prompt p span { color:#45675a; }
-.cg-store-whatsapp-prompt > button { min-height:38px; padding:0 16px; border-radius:9px; background:#168c55; color:#fff; font-size:12px; font-weight:800; white-space:nowrap; box-shadow:0 0 0 0 rgba(22,140,85,.34); animation:cg-whatsapp-attention 1.8s ease-out infinite; }
+.cg-store-whatsapp-prompt > button { min-height:38px; padding:0 16px; border-radius:9px; background:#168c55; color:#fff; font-size:12px; font-weight:800; white-space:nowrap; transition:transform 160ms ease,opacity 160ms ease; animation:cg-whatsapp-attention 1.8s ease-in-out infinite; will-change:transform,opacity; }
 .cg-store-whatsapp-prompt > button:hover { background:#0f7244; }
 .cg-store-whatsapp-prompt > button:focus-visible { outline:3px solid rgba(22,140,85,.28); outline-offset:3px; }
-@keyframes cg-whatsapp-attention { 0%,45% { box-shadow:0 0 0 0 rgba(22,140,85,.34); } 80%,100% { box-shadow:0 0 0 9px rgba(22,140,85,0); } }
+.dark .cg-store-whatsapp-prompt { background:#121215; border-bottom-color:#27272a; color:#ffffff; }
+.dark .cg-store-whatsapp-prompt p span { color:#e4e4e7; }
+.dark .cg-qr-stage, .dark .cg-profile-card, .dark .cg-onboarding-feedback { background:#18181b; border-color:#27272a; color:#ffffff; }
+.dark .cg-qr-wait strong, .dark .cg-qr-stage > p, .dark .cg-profile-card span, .dark .cg-profile-card small { color:#f4f4f5; }
+.dark .cg-menu-scrim { background:rgba(0,0,0,0.65); }
+@keyframes cg-whatsapp-attention { 0%,100% { transform:scale3d(1,1,1); opacity:1; } 50% { transform:scale3d(1.025,1.025,1); opacity:0.92; } }
 @media (max-width:720px) { .cg-store-whatsapp-prompt { align-items:stretch; } .cg-store-whatsapp-prompt > button { width:100%; } }
+@keyframes cg-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+
+.cg-shake {
+  animation: cg-shake 200ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
 @media (prefers-reduced-motion:reduce) { .cg-shell * { scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
 
 /* Navegador 2 responsivo dentro da Dual View sem corte horizontal */

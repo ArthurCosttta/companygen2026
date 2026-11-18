@@ -43,6 +43,32 @@ export function computeDigest(value) {
   return createHash('sha256').update(JSON.stringify(stableSortValue(value))).digest('hex');
 }
 
+const ALLOWED_ITEM_TYPES = new Set([
+  'produto_fisico',
+  'servico_agendado',
+  'kit_combo',
+  'sob_medida',
+]);
+
+export function buildDefaultMensagemMoldeServer(product = {}, storeName = '') {
+  const name = String(product.name || product.nome || 'Item').trim();
+  const itemType = ALLOWED_ITEM_TYPES.has(product.itemType) ? product.itemType : 'produto_fisico';
+  const variation = product.variation && product.variation !== 'Padrão' ? ` (${product.variation})` : '';
+  const priceText = Number(product.priceCents || 0) > 0 ? formatBRL(product.priceCents) : 'sob consulta';
+  const prazo = product.prazoOuDuracao ? ` | Prazo/Duração: ${product.prazoOuDuracao}` : '';
+  const lojaSuffix = storeName ? ` na ${storeName}` : '';
+  if (itemType === 'servico_agendado') {
+    return `Olá${lojaSuffix}! Quero agendar o serviço *${name}*${variation} (${priceText}${prazo}). Quais horários disponíveis?`;
+  }
+  if (itemType === 'kit_combo') {
+    return `Olá${lojaSuffix}! Tenho interesse no Kit *${name}*${variation} por ${priceText}. Pode me confirmar?`;
+  }
+  if (itemType === 'sob_medida') {
+    return `Olá${lojaSuffix}! Quero orçamento sob medida para *${name}*${variation} (ref. ${priceText}${prazo}). Minhas especificações: `;
+  }
+  return `Olá${lojaSuffix}! Quero pedir *${name}*${variation} — valor ${priceText}${prazo}. Está disponível?`;
+}
+
 export function normalizeCatalogProduct(raw, index = 0) {
   const id = String(raw?.id || raw?.sku || `prod-${index + 1}`).trim();
   const sku = String(raw?.sku || id).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
@@ -53,18 +79,39 @@ export function normalizeCatalogProduct(raw, index = 0) {
     ? Math.max(0, Math.round(Number(raw?.stock ?? raw?.estoque)))
     : 0;
   const imageUrl = String(raw?.imageUrl || raw?.fotoUrl || raw?.foto || '').trim();
+  const name = String(raw?.name || raw?.nome || `Produto ${index + 1}`).trim();
+  const variation = String(raw?.variation || raw?.variacao || 'Padrão').trim() || 'Padrão';
+  const rawType = String(raw?.itemType || raw?.tipo || 'produto_fisico').trim();
+  const itemType = ALLOWED_ITEM_TYPES.has(rawType) ? rawType : 'produto_fisico';
+  const prazoOuDuracao = String(raw?.prazoOuDuracao || raw?.prazo || raw?.duracao || '').trim().slice(0, 120);
+  const itensInclusosKit = Array.isArray(raw?.itensInclusosKit)
+    ? raw.itensInclusosKit.map(x => String(x || '').trim()).filter(Boolean).slice(0, 30)
+    : [];
+  const rawMolde = String(raw?.mensagemMolde || '').trim().slice(0, 1000);
+  const mensagemMolde = rawMolde || buildDefaultMensagemMoldeServer({
+    name,
+    variation,
+    priceCents,
+    itemType,
+    prazoOuDuracao,
+  });
+
   return {
     id,
     sku: sku || `SKU-${index + 1}`,
-    name: String(raw?.name || raw?.nome || `Produto ${index + 1}`).trim(),
+    name,
     category: String(raw?.category || raw?.categoria || 'Geral').trim() || 'Geral',
     description: String(raw?.description || raw?.descricao || '').trim(),
     priceCents,
-    variation: String(raw?.variation || raw?.variacao || 'Padrão').trim() || 'Padrão',
+    variation,
     stock,
     active: raw?.active !== false && raw?.ativo !== false,
     imageUrl,
     approvedAsset: Boolean(raw?.approvedAsset ?? Boolean(imageUrl)),
+    itemType,
+    mensagemMolde,
+    prazoOuDuracao,
+    itensInclusosKit,
     updatedAt: String(raw?.updatedAt || new Date().toISOString()),
   };
 }
@@ -80,6 +127,7 @@ export function normalizeProfile(raw = {}) {
   const onboarding = safe.onboarding && typeof safe.onboarding === 'object' ? safe.onboarding : {};
   const catalog = safe.catalog && typeof safe.catalog === 'object' ? safe.catalog : {};
   const publishedStore = safe.publishedStore && typeof safe.publishedStore === 'object' ? safe.publishedStore : {};
+  const storeLayoutRaw = safe.storeLayout && typeof safe.storeLayout === 'object' ? safe.storeLayout : {};
 
   const productsRaw = Array.isArray(catalog.products) ? catalog.products : [];
   const seenSkus = new Set();
@@ -98,6 +146,15 @@ export function normalizeProfile(raw = {}) {
 
   const toneAllowed = new Set(['proximo', 'formal', 'direto', 'consultivo']);
   const tone = toneAllowed.has(agent.tone) ? agent.tone : 'proximo';
+  const businessModel = ['produtos', 'servicos', 'hibrido'].includes(business.businessModel)
+    ? business.businessModel
+    : 'produtos';
+  const differentials = Array.isArray(business.differentials)
+    ? business.differentials.map(d => String(d || '').trim().slice(0, 80)).filter(Boolean).slice(0, 6)
+    : [];
+  const fontStyle = ['modern_sans', 'editorial_serif', 'clean_geometric'].includes(brand.fontStyle)
+    ? brand.fontStyle
+    : 'modern_sans';
 
   return {
     schemaVersion: 1,
@@ -110,7 +167,11 @@ export function normalizeProfile(raw = {}) {
     business: {
       name: String(business.name || '').trim().slice(0, 120),
       segment: String(business.segment || 'Geral').trim().slice(0, 80) || 'Geral',
+      businessModel,
       description: String(business.description || '').trim().slice(0, 500),
+      experienceGoal: String(business.experienceGoal || '').trim().slice(0, 260),
+      differentials,
+      campaignTheme: String(business.campaignTheme || '').trim().slice(0, 120),
       address: String(business.address || '').trim().slice(0, 240),
       mapsUrl: String(business.mapsUrl || '').trim().slice(0, 300),
       hours: String(business.hours || 'Seg a Sáb · 09h às 19h').trim().slice(0, 140),
@@ -147,9 +208,24 @@ export function normalizeProfile(raw = {}) {
     },
     brand: {
       instagram: String(brand.instagram || '').trim().slice(0, 80),
-      logoUrl: String(brand.logoUrl || '').trim().slice(0, 500),
+      logoUrl: String(brand.logoUrl || '').trim().slice(0, 600000),
+      storefrontPhotoUrl: String(brand.storefrontPhotoUrl || '').trim().slice(0, 600000),
+      heroImageUrl: String(brand.heroImageUrl || '').trim().slice(0, 600000),
+      heroBackgroundUrl: String(brand.heroBackgroundUrl || '').trim().slice(0, 600000),
+      pageBackgroundUrl: String(brand.pageBackgroundUrl || '').trim().slice(0, 600000),
+      sectionBackgrounds:
+        brand.sectionBackgrounds && typeof brand.sectionBackgrounds === 'object'
+          ? Object.fromEntries(
+              Object.entries(brand.sectionBackgrounds)
+                .filter(([k, v]) => typeof k === 'string' && k.length <= 48 && typeof v === 'string' && v.trim())
+                .slice(0, 24)
+                .map(([k, v]) => [k, String(v).trim().slice(0, 600000)]),
+            )
+          : {},
       primaryColor: /^#[0-9a-f]{3,8}$/i.test(String(brand.primaryColor || '')) ? String(brand.primaryColor) : '#111827',
       accentColor: /^#[0-9a-f]{3,8}$/i.test(String(brand.accentColor || '')) ? String(brand.accentColor) : '#10b981',
+      fontStyle,
+      generateAiLogo: Boolean(brand.generateAiLogo),
       themePreset: String(brand.themePreset || 'minimal-luxury').trim().slice(0, 60) || 'minimal-luxury',
     },
     catalog: {
@@ -160,6 +236,20 @@ export function normalizeProfile(raw = {}) {
       publishedAt: publishedStore.publishedAt ? String(publishedStore.publishedAt) : null,
       publicSlug: String(publishedStore.publicSlug || '').trim().slice(0, 100),
       sourceRevision: Math.max(0, Math.round(Number(publishedStore.sourceRevision) || 0)),
+    },
+    storeLayout: {
+      storePrompt: String(storeLayoutRaw.storePrompt || '').trim().slice(0, 4000),
+      presetBase: String(storeLayoutRaw.presetBase || 'HYBRID_EDITORIAL_COMMERCE').trim().slice(0, 80),
+      widgets: Array.isArray(storeLayoutRaw.widgets) ? storeLayoutRaw.widgets.slice(0, 60) : [],
+      ...(storeLayoutRaw.executionPlan && typeof storeLayoutRaw.executionPlan === 'object'
+        ? { executionPlan: storeLayoutRaw.executionPlan }
+        : {}),
+      ...(storeLayoutRaw.formulasIr && typeof storeLayoutRaw.formulasIr === 'object'
+        ? { formulasIr: storeLayoutRaw.formulasIr }
+        : {}),
+      reviews: Array.isArray(storeLayoutRaw.reviews) ? storeLayoutRaw.reviews.slice(0, 50) : [],
+      faq: Array.isArray(storeLayoutRaw.faq) ? storeLayoutRaw.faq.slice(0, 50) : [],
+      updatedAt: String(storeLayoutRaw.updatedAt || '').trim(),
     },
   };
 }
@@ -200,7 +290,7 @@ export function diffProfile(prevRaw, nextRaw) {
     } else if (changed.startsWith('brand.')) {
       targets.add('store');
       targets.add('dashboard');
-    } else if (changed.startsWith('onboarding.') || changed.startsWith('publishedStore.')) {
+    } else if (changed.startsWith('onboarding.') || changed.startsWith('publishedStore.') || changed.startsWith('storeLayout.')) {
       targets.add('store');
       targets.add('dashboard');
     }
@@ -375,6 +465,10 @@ export function buildBotProjections(profileRaw, sourceRevision = 0) {
     imagem: product.imageUrl,
     fotoUrl: product.imageUrl,
     approvedAsset: product.approvedAsset,
+    itemType: product.itemType,
+    mensagemMolde: product.mensagemMolde,
+    prazoOuDuracao: product.prazoOuDuracao,
+    itensInclusosKit: product.itensInclusosKit,
     sourceRevision,
   }));
 
@@ -400,6 +494,7 @@ export function buildPublicStoreProjection(profileRaw, sourceRevision = 0) {
     business: {
       name: profile.business.name || 'Minha Loja',
       segment: profile.business.segment,
+      businessModel: profile.business.businessModel,
       description: profile.business.description,
       address: profile.business.address,
       mapsUrl: profile.business.mapsUrl,
@@ -425,8 +520,10 @@ export function buildPublicStoreProjection(profileRaw, sourceRevision = 0) {
     brand: {
       instagram: profile.brand.instagram,
       logoUrl: profile.brand.logoUrl,
+      storefrontPhotoUrl: profile.brand.storefrontPhotoUrl,
       primaryColor: profile.brand.primaryColor,
       accentColor: profile.brand.accentColor,
+      fontStyle: profile.brand.fontStyle,
       themePreset: profile.brand.themePreset,
     },
     products: profile.catalog.products
@@ -442,7 +539,12 @@ export function buildPublicStoreProjection(profileRaw, sourceRevision = 0) {
         stock: p.stock,
         imageUrl: p.imageUrl,
         approvedAsset: p.approvedAsset,
+        itemType: p.itemType,
+        mensagemMolde: p.mensagemMolde,
+        prazoOuDuracao: p.prazoOuDuracao,
+        itensInclusosKit: p.itensInclusosKit,
       })),
+    storeLayout: profile.storeLayout,
   };
 }
 

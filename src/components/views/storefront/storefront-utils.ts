@@ -34,6 +34,8 @@ function utf8ToBase64(input: string): string {
   return '';
 }
 
+const placeholderDataUriCache = new Map<string, string>();
+
 /**
  * Generates a valid, self-contained SVG data-URI placeholder for products
  * without custom photos so publishing never triggers HTTP 422.
@@ -44,14 +46,19 @@ export function buildProductPlaceholderDataUri(
   primaryColor = '#2563EB',
 ): string {
   const cleanName = String(productName || 'Produto').trim() || 'Produto';
+  const safeColor = /^#[0-9A-Fa-f]{6}$/.test(primaryColor) ? primaryColor : '#2563EB';
+  const cleanCategory = String(category || 'Catálogo').trim().slice(0, 22);
+  const cacheKey = `${cleanName}\0${cleanCategory}\0${safeColor}`;
+  const cached = placeholderDataUriCache.get(cacheKey);
+  if (cached) return cached;
+
   const words = cleanName.split(/\s+/).filter(Boolean);
   const initials =
     words.length >= 2
       ? `${words[0][0]}${words[1][0]}`.toUpperCase()
       : cleanName.slice(0, 2).toUpperCase();
 
-  const safeColor = /^#[0-9A-Fa-f]{6}$/.test(primaryColor) ? primaryColor : '#2563EB';
-  const safeCategory = escapeXml(String(category || 'Catálogo').trim().slice(0, 22));
+  const safeCategory = escapeXml(cleanCategory);
   const safeInitials = escapeXml(initials || 'PR');
 
   const svg = [
@@ -72,10 +79,14 @@ export function buildProductPlaceholderDataUri(
   ].join('');
 
   const encoded = utf8ToBase64(svg);
-  if (encoded) {
-    return `data:image/svg+xml;base64,${encoded}`;
+  const result = encoded
+    ? `data:image/svg+xml;base64,${encoded}`
+    : `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  if (placeholderDataUriCache.size >= 500) {
+    placeholderDataUriCache.clear();
   }
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  placeholderDataUriCache.set(cacheKey, result);
+  return result;
 }
 
 export function resolveProductImageUrl(
@@ -155,13 +166,13 @@ export function getPublishBlockers(profile: BusinessProfile): PublishBlocker[] {
     });
   }
 
-  const missingPhotoProducts = activeProducts.filter((p) => !p.imageUrl || !p.approvedAsset);
+  const missingPhotoProducts = activeProducts.filter((p) => !p.approvedAsset);
   if (missingPhotoProducts.length > 0) {
     blockers.push({
       id: 'missing_photo',
-      title: `${missingPhotoProducts.length} ${missingPhotoProducts.length === 1 ? 'produto sem imagem confirmada' : 'produtos sem imagem confirmada'}`,
-      description: `Confirme uma foto ou aplique uma capa padrão para: ${missingPhotoProducts.map((p) => p.name).slice(0, 3).join(', ')}.`,
-      actionLabel: 'Aplicar Capa Padrão',
+      title: `${missingPhotoProducts.length} ${missingPhotoProducts.length === 1 ? 'item sem revisão de catálogo' : 'itens sem revisão de catálogo'}`,
+      description: `Revise os itens ou busque fotos grátis da internet (0 cr) para: ${missingPhotoProducts.map((p) => p.name).slice(0, 3).join(', ')}.`,
+      actionLabel: 'Aprovar Capa Neutra',
       productIds: missingPhotoProducts.map((p) => p.id),
     });
   }
@@ -240,6 +251,51 @@ export function buildWhatsappDirectUrl(phoneE164: string, message: string): stri
   const digits = sanitizePhoneE164(phoneE164);
   if (!digits) return '';
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
+export async function readImageFileAsDataUrl(file: File): Promise<string> {
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+  if (!allowed.includes(file.type)) {
+    throw new Error('Escolha uma imagem JPG, PNG, WebP, GIF ou SVG.');
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    throw new Error('A imagem deve ter no máximo 2 MB.');
+  }
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      if (!result) reject(new Error('Falha ao ler arquivo de imagem.'));
+      else resolve(result);
+    };
+    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo selecionado.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+export function safeHref(raw: unknown, fallback = '#'): string {
+  const value = String(raw ?? '').trim();
+  if (!value) return fallback;
+  if (
+    value.startsWith('#') ||
+    (value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/\\'))
+  ) {
+    return value;
+  }
+  try {
+    const parsed = new URL(value);
+    if (
+      parsed.protocol === 'http:' ||
+      parsed.protocol === 'https:' ||
+      parsed.protocol === 'mailto:' ||
+      parsed.protocol === 'tel:'
+    ) {
+      return value;
+    }
+  } catch {
+    // Reject non-allowlisted or malformed URIs
+  }
+  return fallback;
 }
 
 export function sanitizeProductForCustomerDisplay(product: CatalogProduct): {

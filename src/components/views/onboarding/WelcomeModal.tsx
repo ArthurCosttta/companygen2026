@@ -110,7 +110,7 @@ export function WelcomeModal({
             <ActionButton
               variant="secondary"
               size={44}
-              fullWidth
+              className="w-full sm:flex-1"
               onClick={handleExplore}
             >
               Explorar o painel primeiro

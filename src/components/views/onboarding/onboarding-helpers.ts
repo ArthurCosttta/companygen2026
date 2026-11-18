@@ -1,6 +1,6 @@
 import type { BusinessProfile } from '@/schemas/profile.schema';
 
-export type OnboardingWizardStep = 1 | 2 | 3;
+export type OnboardingWizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 export type OnboardingHelpTopic =
   | 'general'
@@ -11,10 +11,27 @@ export type OnboardingHelpTopic =
 
 export type AcceptedPaymentMethod = 'pix' | 'credit_card' | 'debit_card' | 'cash';
 
+export type OnboardingBusinessModel = 'produtos' | 'servicos' | 'hibrido';
+export type OnboardingFontStyle = 'modern_sans' | 'editorial_serif' | 'clean_geometric';
+
 export interface ExpressFichaDraft {
   currentStep: OnboardingWizardStep;
   businessName: string;
+  instagramHandle: string;
+  businessDescription: string;
   segment: string;
+  businessModel: OnboardingBusinessModel;
+  differentials: string[];
+  experienceGoal: string;
+  campaignTheme: string;
+  logoUrl: string;
+  storefrontPhotoUrl: string;
+  generateAiLogo: boolean;
+  noPhysicalLocation: boolean;
+  primaryColor: string;
+  fontStyle: OnboardingFontStyle;
+  businessAddress: string;
+  businessHours: string;
   phoneInput: string;
   deliveryEnabled: boolean;
   pickupEnabled: boolean;
@@ -35,15 +52,68 @@ export interface ExpressFichaDraft {
 }
 
 export const SEGMENT_OPTIONS = [
+  'Petshop & Estética Animal',
+  'Gastronomia & Confeitaria',
   'Moda & Acessórios',
   'Beleza & Cosméticos',
-  'Alimentação & Doces',
+  'Clínicas & Saúde',
+  'Educação & Cursos',
   'Casa & Decoração',
-  'Eletrônicos & Acessórios',
-  'Saúde & Bem-estar',
-  'Serviços',
+  'Eletrônicos & Assistência',
+  'Serviços Locais',
   'Geral',
 ] as const;
+
+export const ONBOARDING_DIFFERENTIAL_CHIPS = [
+  'Hora marcada',
+  'Entrega no mesmo dia',
+  'Atendimento personalizado',
+  'Sem gaiolas / Baixo estresse',
+  'Leva e traz',
+  'Sob encomenda',
+  'Produção artesanal',
+  'Garantia inclusa',
+] as const;
+
+export const ONBOARDING_EXPERIENCE_PRESETS = [
+  {
+    id: 'calc_combo',
+    title: 'Montar kit ou combo na hora',
+    prompt: 'Permitir que o cliente monte seu próprio kit ou combinação e veja o subtotal em tempo real.',
+  },
+  {
+    id: 'schedule_estimator',
+    title: 'Simular serviço por porte ou necessidade',
+    prompt: 'Ajudar o cliente a selecionar porte, características ou objetivo e receber indicação de serviços do catálogo.',
+  },
+  {
+    id: 'compare_options',
+    title: 'Comparar itens e vantagens lado a lado',
+    prompt: 'Exibir comparativo claro entre planos, variações ou produtos para facilitar a escolha sem dúvidas.',
+  },
+  {
+    id: 'showcase_story',
+    title: 'Apresentar vitrine + história da marca',
+    prompt: 'Destacar o espaço físico, diferenciais e catálogo organizado para pedido rápido no WhatsApp.',
+  },
+] as const;
+
+export const ONBOARDING_COLOR_SWATCHES = [
+  { hex: '#0B4DB8', label: 'Azul Confiança' },
+  { hex: '#2F6F4E', label: 'Verde Botânico' },
+  { hex: '#B4532A', label: 'Terracota Quente' },
+  { hex: '#0F172A', label: 'Grafite Editorial' },
+  { hex: '#6D28D9', label: 'Roxo Criativo' },
+  { hex: '#CA8A04', label: 'Âmbar Dourado' },
+] as const;
+
+export function clampOnboardingStep(value: unknown): OnboardingWizardStep {
+  const num = Number(value);
+  if (Number.isInteger(num) && num >= 1 && num <= 8) {
+    return num as OnboardingWizardStep;
+  }
+  return 1;
+}
 
 const DRAFT_KEY_PREFIX = 'cg_express_ficha_draft_v1:';
 
@@ -59,10 +129,39 @@ export function readExpressFichaDraft(owner?: string): ExpressFichaDraft | null 
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ExpressFichaDraft>;
     if (!parsed || typeof parsed !== 'object') return null;
+    const validModel =
+      parsed.businessModel === 'produtos' ||
+      parsed.businessModel === 'servicos' ||
+      parsed.businessModel === 'hibrido'
+        ? parsed.businessModel
+        : 'hibrido';
+    const validFont =
+      parsed.fontStyle === 'modern_sans' ||
+      parsed.fontStyle === 'editorial_serif' ||
+      parsed.fontStyle === 'clean_geometric'
+        ? parsed.fontStyle
+        : 'modern_sans';
+
     return {
-      currentStep: parsed.currentStep === 2 || parsed.currentStep === 3 ? parsed.currentStep : 1,
+      currentStep: clampOnboardingStep(parsed.currentStep),
       businessName: typeof parsed.businessName === 'string' ? parsed.businessName : '',
+      instagramHandle: typeof parsed.instagramHandle === 'string' ? parsed.instagramHandle : '',
+      businessDescription: typeof parsed.businessDescription === 'string' ? parsed.businessDescription : '',
       segment: typeof parsed.segment === 'string' && parsed.segment ? parsed.segment : 'Geral',
+      businessModel: validModel,
+      differentials: Array.isArray(parsed.differentials)
+        ? parsed.differentials.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).slice(0, 3)
+        : [],
+      experienceGoal: typeof parsed.experienceGoal === 'string' ? parsed.experienceGoal : '',
+      campaignTheme: typeof parsed.campaignTheme === 'string' ? parsed.campaignTheme : '',
+      logoUrl: typeof parsed.logoUrl === 'string' ? parsed.logoUrl : '',
+      storefrontPhotoUrl: typeof parsed.storefrontPhotoUrl === 'string' ? parsed.storefrontPhotoUrl : '',
+      generateAiLogo: Boolean(parsed.generateAiLogo),
+      noPhysicalLocation: Boolean(parsed.noPhysicalLocation),
+      primaryColor: typeof parsed.primaryColor === 'string' && parsed.primaryColor ? parsed.primaryColor : '#0B4DB8',
+      fontStyle: validFont,
+      businessAddress: typeof parsed.businessAddress === 'string' ? parsed.businessAddress : '',
+      businessHours: typeof parsed.businessHours === 'string' ? parsed.businessHours : '',
       phoneInput: typeof parsed.phoneInput === 'string' ? parsed.phoneInput : '',
       deliveryEnabled: parsed.deliveryEnabled !== false,
       pickupEnabled: parsed.pickupEnabled !== false,
@@ -121,9 +220,23 @@ export function buildDraftFromProfile(
   const feeCents = profile?.delivery?.defaultFeeCents ?? 0;
 
   return {
-    currentStep: initialStep,
+    currentStep: clampOnboardingStep(initialStep),
     businessName: profile?.business?.name ?? '',
+    instagramHandle: profile?.brand?.instagram ?? '',
+    businessDescription: profile?.business?.description ?? '',
     segment: profile?.business?.segment || 'Geral',
+    businessModel: profile?.business?.businessModel ?? 'hibrido',
+    differentials: Array.isArray(profile?.business?.differentials) ? [...profile.business.differentials].slice(0, 3) : [],
+    experienceGoal: profile?.business?.experienceGoal ?? '',
+    campaignTheme: profile?.business?.campaignTheme ?? '',
+    logoUrl: profile?.brand?.logoUrl ?? '',
+    storefrontPhotoUrl: profile?.brand?.storefrontPhotoUrl ?? '',
+    generateAiLogo: Boolean(profile?.brand?.generateAiLogo),
+    noPhysicalLocation: !profile?.business?.address?.trim() && !profile?.brand?.storefrontPhotoUrl,
+    primaryColor: profile?.brand?.primaryColor || '#0B4DB8',
+    fontStyle: profile?.brand?.fontStyle ?? 'modern_sans',
+    businessAddress: profile?.business?.address ?? '',
+    businessHours: profile?.business?.hours ?? '',
     phoneInput: formatBrazilPhoneDisplay(rawPhone),
     deliveryEnabled: profile?.delivery?.deliveryEnabled !== false,
     pickupEnabled: profile?.delivery?.pickupEnabled !== false,

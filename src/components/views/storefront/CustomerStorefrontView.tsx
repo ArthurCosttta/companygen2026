@@ -2,31 +2,37 @@ import * as React from 'react';
 import {
   ArrowLeft,
   Check,
-  MapPin,
   MessageCircle,
   Minus,
   Plus,
-  Search,
   Send,
   ShoppingBag,
   Sparkles,
   Trash2,
 } from 'lucide-react';
 import {
+  buildDefaultMensagemMolde,
   formatCurrencyBRL,
+  hydrateMensagemMolde,
   isValidProductionPhone,
   sanitizePhoneE164,
   type BusinessOrder,
   type BusinessProfile,
   type CatalogProduct,
 } from '@/schemas/profile.schema';
+import type { WhatsappRuntimeStatus } from '@/hooks/useConnectionPhase';
+import { FormulaTreeRenderer } from './FormulaTreeRenderer';
+import {
+  sanitizeFormulaV9Document,
+  type FormulaV9Document,
+} from '@/schemas/formula-v9.schema';
+import { ensureFormulaV9 } from '../../../../shared/formula-ir/neutral-fallback-v9.mjs';
 import { authenticatedFetch } from '@/services/supabase-client';
 import {
   ActionButton,
   DrawerContainer,
   EmptyStateCard,
   ModalContainer,
-  SkeletonBlock,
   useToast,
 } from '@/components/ui';
 import {
@@ -53,9 +59,13 @@ export interface CustomerStorefrontViewProps {
   profile: BusinessProfile;
   ownerId?: string;
   mode?: 'preview' | 'public';
+  hidePreviewBanner?: boolean;
   isLoading?: boolean;
+  runtimeStatus?: WhatsappRuntimeStatus | null;
   onBackToAdmin?: () => void;
   onOrderCreated?: (order: BusinessOrder) => void;
+  onUploadProductImage?: (productId: string, file: File) => void | Promise<void>;
+  onUploadBrandAsset?: (slot: string, file: File) => void | Promise<void>;
 }
 
 function getCartStorageKey(profile: BusinessProfile, ownerId?: string): string {
@@ -88,7 +98,8 @@ export function CustomerStorefrontView({
   profile,
   ownerId,
   mode = 'public',
-  isLoading = false,
+  hidePreviewBanner = false,
+  runtimeStatus,
   onBackToAdmin,
   onOrderCreated,
 }: CustomerStorefrontViewProps) {
@@ -96,11 +107,10 @@ export function CustomerStorefrontView({
   const storageKey = getCartStorageKey(profile, ownerId);
 
   const [cart, setCart] = React.useState<StoreCartItem[]>(() => loadPersistedCart(storageKey));
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [selectedCategory, setSelectedCategory] = React.useState('Todas');
   const [detailProduct, setDetailProduct] = React.useState<CatalogProduct | null>(null);
   const [detailQty, setDetailQty] = React.useState(1);
   const [cartOpen, setCartOpen] = React.useState(false);
+  const [lastDirectWaUrl, setLastDirectWaUrl] = React.useState<string>('');
 
   // Checkout fields
   const [customerName, setCustomerName] = React.useState('');
@@ -124,38 +134,26 @@ export function CustomerStorefrontView({
     }
   }, [cart, storageKey]);
 
+  const activeFormulaV9 = React.useMemo<FormulaV9Document>(
+    () => sanitizeFormulaV9Document(ensureFormulaV9(profile), profile) as FormulaV9Document,
+    [profile],
+  );
+
   const brandName = profile.business?.name?.trim() || 'Minha Loja';
-  const brandColor = profile.brand?.primaryColor || '#2563EB';
-  const storePhone = profile.whatsapp?.phoneE164 || '';
-  const hasStorePhone = isValidProductionPhone(storePhone);
+  const brandColor = profile.brand?.primaryColor || '#0B4DB8';
+  const storePhone = sanitizePhoneE164(
+    runtimeStatus?.numeroBot ||
+      runtimeStatus?.phoneE164 ||
+      profile.whatsapp?.phoneE164 ||
+      profile.whatsapp?.displayPhone ||
+      '',
+  );
+  const hasStorePhone = isValidProductionPhone(storePhone) || storePhone.length >= 10;
 
   const activeProducts = React.useMemo(
     () => (profile.catalog?.products ?? []).filter((p) => p.active !== false),
     [profile.catalog?.products],
   );
-
-  const categories = React.useMemo(() => {
-    const set = new Set<string>(['Todas']);
-    for (const p of activeProducts) {
-      set.add((p.category || 'Geral').trim() || 'Geral');
-    }
-    return [...set];
-  }, [activeProducts]);
-
-  const filteredProducts = React.useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return activeProducts.filter((p) => {
-      const cat = (p.category || 'Geral').trim() || 'Geral';
-      const matchesCat = selectedCategory === 'Todas' || cat === selectedCategory;
-      if (!matchesCat) return false;
-      if (!query) return true;
-      return (
-        p.name.toLowerCase().includes(query) ||
-        cat.toLowerCase().includes(query) ||
-        (p.description || '').toLowerCase().includes(query)
-      );
-    });
-  }, [activeProducts, searchQuery, selectedCategory]);
 
   const totalItemsCount = React.useMemo(
     () => cart.reduce((sum, item) => sum + item.quantity, 0),
@@ -166,6 +164,20 @@ export function CustomerStorefrontView({
     () => cart.reduce((sum, item) => sum + item.priceCents * item.quantity, 0),
     [cart],
   );
+
+  const activeShippingCents = React.useMemo(() => {
+    if (deliveryType !== 'entrega') return 0;
+    return profile.delivery?.deliveryEnabled !== false
+      ? Math.max(0, Number(profile.delivery?.defaultFeeCents || 0))
+      : 0;
+  }, [deliveryType, profile.delivery?.defaultFeeCents, profile.delivery?.deliveryEnabled]);
+
+  const pixDiscountPercent = Math.max(0, Number(profile.payment?.pixDiscountPercent || 0));
+  const pixDiscountCents =
+    paymentMethod === 'pix' && pixDiscountPercent > 0
+      ? Math.round((totalCents * pixDiscountPercent) / 100)
+      : 0;
+  const grandTotalCents = Math.max(0, totalCents - pixDiscountCents) + activeShippingCents;
 
   function getImageSrc(product: { id: string; imageUrl?: string; name: string; category?: string }) {
     if (brokenImages[product.id]) {
@@ -220,13 +232,11 @@ export function CustomerStorefrontView({
       } catch {}
     }
 
+    const wasDetailOpen = Boolean(detailProduct);
     setDetailProduct(null);
-    setCartOpen(true);
-    showToast({
-      type: 'success',
-      message: `${product.name} adicionado à sacola!`,
-      durationMs: 2200,
-    });
+    if (wasDetailOpen) {
+      setCartOpen(true);
+    }
   }
 
   function handleUpdateCartQty(productId: string, nextQty: number) {
@@ -258,25 +268,43 @@ export function CustomerStorefrontView({
 
   const cleanCustomerName = customerName.trim();
   const cleanCustomerPhoneDigits = customerPhone.replace(/\D/g, '');
-  const isCheckoutReady =
-    cart.length > 0 &&
-    cleanCustomerName.length > 0 &&
-    cleanCustomerPhoneDigits.length >= 10 &&
-    !isSubmitting;
+  // GATE SUPREMO: nunca bloquear envio ao WhatsApp por falta de nome/telefone/endereço
+  const isCheckoutReady = cart.length > 0 && !isSubmitting;
 
   function buildOrderWhatsappText(orderRef?: string): string {
+    const firstCart = cart[0];
+    const matchedFirst = firstCart
+      ? activeProducts.find((p) => p.id === firstCart.productId)
+      : undefined;
+    const baseTemplate =
+      cart.length === 1 && matchedFirst
+        ? hydrateMensagemMolde(
+            matchedFirst.mensagemMolde || buildDefaultMensagemMolde(matchedFirst, brandName),
+            matchedFirst,
+            { quantity: firstCart.quantity, storeName: brandName },
+          )
+        : '';
+
     const lines = [
-      `Olá, *${brandName}*! Gostaria de fazer um pedido:`,
+      baseTemplate || `Olá, *${brandName}*! Gostaria de fazer um pedido:`,
       orderRef ? `Pedido: *#${orderRef}*` : '',
-      '',
-      ...cart.map(
-        (item) =>
-          `• ${item.quantity}x ${item.name}${item.variation && item.variation !== 'Padrão' ? ` (${item.variation})` : ''} — ${formatCurrencyBRL(item.priceCents * item.quantity)}`,
-      ),
-      '',
-      `*Total: ${formatCurrencyBRL(totalCents)}*`,
-      `Nome: ${cleanCustomerName}`,
-      `WhatsApp: ${customerPhone}`,
+      ...(cart.length > 1
+        ? [
+            '',
+            ...cart.map(
+              (item) =>
+                `• ${item.quantity}x ${item.name}${item.variation && item.variation !== 'Padrão' ? ` (${item.variation})` : ''} — ${formatCurrencyBRL(item.priceCents * item.quantity)}`,
+            ),
+            activeShippingCents > 0 ? `Taxa de entrega local: ${formatCurrencyBRL(activeShippingCents)}` : '',
+            '',
+            `*Total: ${formatCurrencyBRL(grandTotalCents)}*`,
+          ]
+        : [
+            activeShippingCents > 0 ? `Taxa de entrega local: ${formatCurrencyBRL(activeShippingCents)}` : '',
+            `Total: *${formatCurrencyBRL(grandTotalCents)}*`,
+          ]),
+      cleanCustomerName ? `Nome: ${cleanCustomerName}` : '',
+      customerPhone.trim() ? `WhatsApp: ${customerPhone.trim()}` : '',
       `Recebimento: ${deliveryType === 'retirada' ? 'Retirar na loja' : 'Entrega'}`,
       deliveryNotes.trim() ? `Obs/Endereço: ${deliveryNotes.trim()}` : '',
       `Pagamento: ${paymentMethod === 'pix' ? 'Pix' : paymentMethod === 'credit_card' ? 'Cartão' : 'Dinheiro'}`,
@@ -284,21 +312,30 @@ export function CustomerStorefrontView({
     return lines.join('\n');
   }
 
-  async function openWhatsappFallback(text: string) {
+  function openWhatsappSync(text: string): string {
     if (hasStorePhone) {
       const waUrl = buildWhatsappDirectUrl(storePhone, text);
       if (waUrl) {
-        window.open(waUrl, '_blank', 'noopener,noreferrer');
-        return true;
+        setLastDirectWaUrl(waUrl);
+        if (typeof window !== 'undefined') {
+          window.open(waUrl, '_blank', 'noopener,noreferrer');
+        }
+        return waUrl;
       }
     }
-    await copyTextToClipboard(text);
-    return false;
+    return '';
   }
 
   async function handleSubmitOrder(event: React.FormEvent) {
     event.preventDefault();
     if (!isCheckoutReady) return;
+
+    // 1) GATE SUPREMO: Dispara link wa.me SINCRONAMENTE no gesto do cliente, sem bloquear por endereço/cadastro
+    const immediateMessage = buildOrderWhatsappText();
+    const waUrl = openWhatsappSync(immediateMessage);
+    if (!waUrl) {
+      await copyTextToClipboard(immediateMessage);
+    }
 
     setIsSubmitting(true);
     try {
@@ -308,14 +345,14 @@ export function CustomerStorefrontView({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            customerName: cleanCustomerName,
-            customerPhone: sanitizePhoneE164(cleanCustomerPhoneDigits),
+            customerName: cleanCustomerName || 'Cliente Vitrine',
+            customerPhone: cleanCustomerPhoneDigits ? sanitizePhoneE164(cleanCustomerPhoneDigits) : '',
             paymentMethod,
             deliveryAddress: {
               mode: deliveryType,
               notes: deliveryNotes.trim(),
             },
-            shippingCents: 0,
+            shippingCents: activeShippingCents,
             items: cart.map((item) => ({
               sku: item.sku,
               name: item.name,
@@ -335,26 +372,21 @@ export function CustomerStorefrontView({
       const createdOrder = raw.order as BusinessOrder;
       onOrderCreated?.(createdOrder);
 
-      const messageText = buildOrderWhatsappText(createdOrder.order_ref);
-      const openedWa = await openWhatsappFallback(messageText);
-
       setCart([]);
       setCartOpen(false);
       showToast({
         type: 'success',
-        message: openedWa
-          ? `Pedido #${createdOrder.order_ref} gerado! Abrindo WhatsApp...`
+        message: waUrl
+          ? `Pedido #${createdOrder.order_ref} salvo e link wa.me aberto para o WhatsApp conectado!`
           : `Pedido #${createdOrder.order_ref} salvo com sucesso!`,
-        durationMs: 3500,
+        durationMs: 4000,
       });
     } catch {
-      const fallbackText = buildOrderWhatsappText();
-      const openedWa = await openWhatsappFallback(fallbackText);
       showToast({
         type: 'amber',
-        message: openedWa
-          ? 'Sem conexão com o servidor. Abrindo seu pedido diretamente no WhatsApp!'
-          : 'Sem conexão agora. Resumo do pedido copiado para você enviar no WhatsApp!',
+        message: waUrl
+          ? 'Link do WhatsApp gerado! Pedido salvo em modo offline para atendimento direto.'
+          : 'Resumo do pedido copiado para você enviar no WhatsApp!',
         durationMs: 4000,
       });
     } finally {
@@ -363,16 +395,50 @@ export function CustomerStorefrontView({
   }
 
   const detailSanitized = detailProduct ? sanitizeProductForCustomerDisplay(detailProduct) : null;
+  const activeThemeMode = 'light';
+  const isCarbonDark = false;
 
   return (
-    <div className="min-h-full bg-[#F8FAFC] text-[#0F172A]">
+    <div
+      data-testid="tela-40-v5-storefront"
+      data-theme-mode={activeThemeMode}
+      className={
+        isCarbonDark
+          ? 'min-h-full bg-[#09090B] text-white'
+          : 'min-h-full bg-[#F8FAFC] text-[#0F172A]'
+      }
+      style={
+        isCarbonDark
+          ? { backgroundColor: '#09090B', color: '#FFFFFF' }
+          : undefined
+      }
+    >
       {/* Faixa Modo Preview do Lojista */}
-      {mode === 'preview' ? (
-        <div className="sticky top-0 z-30 border-b border-blue-200 bg-[#EFF6FF] px-4 py-2.5">
+      {mode === 'preview' && !hidePreviewBanner ? (
+        <div
+          className={
+            isCarbonDark
+              ? 'relative z-40 border-b border-[#27272A] bg-[#121215] px-4 py-2 text-white'
+              : 'relative z-40 border-b border-blue-200 bg-[#EFF6FF] px-4 py-2'
+          }
+        >
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#1D4ED8] sm:text-sm">
+            <div
+              className={`flex flex-wrap items-center gap-2 text-xs font-semibold sm:text-sm ${
+                isCarbonDark ? 'text-[#F4F4F5]' : 'text-[#1D4ED8]'
+              }`}
+            >
               <Sparkles className="size-4 shrink-0" aria-hidden="true" />
               <span>Visualização de como seus clientes veem a loja</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                  isCarbonDark
+                    ? 'border border-[#27272A] bg-[#18181B] text-[#E4E4E7]'
+                    : 'bg-blue-100 text-[#1D4ED8]'
+                }`}
+              >
+                {activeFormulaV9.analysis?.mainExperienceSummary ? 'Formula v9' : 'Vitrine v9'}
+              </span>
             </div>
             {onBackToAdmin ? (
               <ActionButton
@@ -380,6 +446,11 @@ export function CustomerStorefrontView({
                 size={44}
                 leftIcon={<ArrowLeft className="size-4" />}
                 onClick={onBackToAdmin}
+                className={
+                  isCarbonDark
+                    ? '!border-[#27272A] !bg-[#18181B] !text-white hover:!bg-[#27272A]'
+                    : undefined
+                }
               >
                 Voltar ao Painel
               </ActionButton>
@@ -388,214 +459,58 @@ export function CustomerStorefrontView({
         </div>
       ) : null}
 
-      {/* Cabeçalho da Vitrine */}
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5 sm:px-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              {profile.brand?.logoUrl ? (
-                <img
-                  src={profile.brand.logoUrl}
-                  alt={brandName}
-                  className="size-12 shrink-0 rounded-2xl border border-slate-200 object-cover"
-                />
-              ) : (
-                <div
-                  className="flex size-12 shrink-0 items-center justify-center rounded-2xl text-lg font-bold text-white shadow-xs"
-                  style={{ backgroundColor: brandColor }}
-                  aria-hidden="true"
-                >
-                  {brandName.slice(0, 2).toUpperCase()}
-                </div>
-              )}
-              <div className="min-w-0">
-                <h1 className="truncate text-lg font-bold tracking-tight text-[#0F172A] sm:text-xl">
-                  {brandName}
-                </h1>
-                <p className="truncate text-xs text-slate-600 sm:text-sm">
-                  {profile.business?.description ||
-                    profile.business?.hours ||
-                    'Escolha seus produtos e finalize direto pelo WhatsApp'}
-                </p>
-              </div>
-            </div>
-
-            <ActionButton
-              variant="primary"
-              size={44}
-              leftIcon={<ShoppingBag className="size-4" />}
-              onClick={() => setCartOpen(true)}
-              aria-label={`Abrir sacola com ${totalItemsCount} itens`}
+      {/* Faixa Banner de Link WhatsApp Gerado (GATE SUPREMO) */}
+      {lastDirectWaUrl ? (
+        <div
+          data-testid="storefront-wa-direct-banner"
+          className="border-b border-emerald-200 bg-emerald-50 px-4 py-2.5 text-emerald-950"
+        >
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-semibold sm:text-sm">
+              Mensagem pronta para o WhatsApp conectado da loja:
+            </span>
+            <a
+              data-testid="storefront-wa-direct-link"
+              href={lastDirectWaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-[#16A34A] px-3.5 text-xs font-bold text-white hover:bg-[#15803D]"
             >
-              <span>Sacola</span>
-              {totalItemsCount > 0 ? (
-                <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-xs font-bold text-[#2563EB]">
-                  {totalItemsCount}
-                </span>
-              ) : null}
-            </ActionButton>
-          </div>
-
-          {profile.business?.address ? (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="size-3.5" aria-hidden="true" />
-                {profile.business.address}
-              </span>
-              {profile.business?.hours ? <span>{profile.business.hours}</span> : null}
-            </div>
-          ) : null}
-
-          {/* Busca + Categorias */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1 sm:max-w-md">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400"
-                aria-hidden="true"
-              />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="O que você procura hoje?"
-                aria-label="Buscar produtos na loja"
-                className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-slate-50 pr-3.5 pl-10 text-sm text-[#0F172A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {categories.map((cat) => {
-                const selected = selectedCategory === cat;
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`min-h-[44px] shrink-0 rounded-xl px-3.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
-                      selected
-                        ? 'bg-[#0F172A] text-white'
-                        : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                );
-              })}
-            </div>
+              <MessageCircle className="size-4" />
+              Abrir no WhatsApp (wa.me)
+            </a>
           </div>
         </div>
-      </header>
+      ) : null}
 
-      {/* Grade de Produtos (TELA 22) */}
-      <main
-        role="region"
-        aria-label="Catálogo da Vitrine"
-        className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:px-6"
-      >
-        {isLoading ? (
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
-                <SkeletonBlock className="aspect-square w-full" rounded="xl" />
-                <SkeletonBlock className="h-4 w-3/4" />
-                <SkeletonBlock className="h-5 w-1/2" />
-                <SkeletonBlock className="h-11 w-full" />
-              </div>
-            ))}
-          </div>
-        ) : activeProducts.length === 0 ? (
-          <EmptyStateCard
-            icon={<ShoppingBag className="size-7" />}
-            title="Vitrine em preparação"
-            description="Esta loja ainda está organizando seus produtos. Volte em instantes ou fale no WhatsApp."
-            ctaLabel={hasStorePhone ? 'Falar no WhatsApp' : undefined}
-            onCta={
-              hasStorePhone
-                ? () => {
-                    const url = buildWhatsappDirectUrl(
-                      storePhone,
-                      `Olá, ${brandName}! Gostaria de saber sobre os produtos disponíveis.`,
-                    );
-                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                  }
-                : undefined
+      {/* Grade de Produtos & Seções Modulares v9.0 */}
+      <main role="region" aria-label="Catálogo da Vitrine" className="w-full pb-24">
+        <FormulaTreeRenderer
+          formulaV9={activeFormulaV9}
+          profile={profile}
+          products={activeProducts}
+          cartCount={totalItemsCount}
+          onOpenCart={() => setCartOpen(true)}
+          onAddToCart={(product, qty = 1) => handleAddToCart(product, qty)}
+          onSelectProductDetail={(product) => handleOpenDetail(product)}
+          onDirectWhatsappSend={(message) => {
+            const url = openWhatsappSync(message);
+            if (!url) {
+              void copyTextToClipboard(message);
+              showToast({
+                type: 'amber',
+                message: 'Mensagem copiada! Conecte o número do WhatsApp nos Ajustes/WhatsApp.',
+                durationMs: 3200,
+              });
+            } else {
+              showToast({
+                type: 'success',
+                message: 'Link wa.me gerado para o WhatsApp conectado da loja!',
+                durationMs: 3200,
+              });
             }
-          />
-        ) : filteredProducts.length === 0 ? (
-          <EmptyStateCard
-            icon={<Search className="size-7" />}
-            title="Nenhum produto encontrado para sua pesquisa"
-            description="Tente buscar por outro termo ou limpe os filtros para ver todo o catálogo."
-            ctaLabel="Limpar Filtros"
-            ctaVariant="secondary"
-            onCta={() => {
-              setSearchQuery('');
-              setSelectedCategory('Todas');
-            }}
-          />
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
-            {filteredProducts.map((product) => {
-              const display = sanitizeProductForCustomerDisplay(product);
-              const outOfStock = display.stock <= 0;
-              return (
-                <article
-                  key={product.id}
-                  className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs transition-shadow hover:shadow-md"
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleOpenDetail(product)}
-                    className="group relative aspect-square w-full overflow-hidden bg-slate-50 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
-                  >
-                    <img
-                      src={getImageSrc(display)}
-                      alt={display.name}
-                      onError={() =>
-                        setBrokenImages((prev) => ({ ...prev, [product.id]: true }))
-                      }
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
-                    {outOfStock ? (
-                      <span className="absolute top-2.5 left-2.5 rounded-lg bg-slate-900/85 px-2.5 py-1 text-[11px] font-semibold text-white">
-                        Sob consulta
-                      </span>
-                    ) : null}
-                  </button>
-
-                  <div className="flex flex-1 flex-col justify-between gap-3 p-3 sm:p-4">
-                    <div className="space-y-1">
-                      <span className="inline-block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        {display.category}
-                      </span>
-                      <h2 className="line-clamp-2 text-sm font-semibold leading-snug text-[#0F172A] sm:text-base">
-                        {display.name}
-                      </h2>
-                      <p className="pt-1 text-base font-bold text-[#0F172A] sm:text-lg">
-                        {formatCurrencyBRL(display.priceCents)}
-                      </p>
-                      {display.priceCents >= 3000 ? (
-                        <p className="text-[11px] text-slate-500">
-                          em até 3x sem juros · Pix ou Cartão
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <ActionButton
-                      variant="dark"
-                      size={44}
-                      fullWidth
-                      rightIcon={<ShoppingBag className="size-4" />}
-                      onClick={() => handleOpenDetail(product)}
-                    >
-                      Comprar
-                    </ActionButton>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
+          }}
+        />
       </main>
 
       {/* Barra Flutuante Mobile da Sacola */}
@@ -608,7 +523,7 @@ export function CustomerStorefrontView({
             leftIcon={<ShoppingBag className="size-5" />}
             onClick={() => setCartOpen(true)}
           >
-            Ver Sacola ({totalItemsCount}) · {formatCurrencyBRL(totalCents)}
+            Ver Sacola ({totalItemsCount}) · {formatCurrencyBRL(grandTotalCents)}
           </ActionButton>
         </div>
       ) : null}
@@ -632,14 +547,15 @@ export function CustomerStorefrontView({
                   size={48}
                   leftIcon={<MessageCircle className="size-4 text-[#16A34A]" />}
                   onClick={() => {
-                    const url = buildWhatsappDirectUrl(
-                      storePhone,
-                      `Olá, ${brandName}! Tenho uma dúvida sobre "${detailProduct.name}" (${formatCurrencyBRL(detailProduct.priceCents)}).`,
+                    const msg = hydrateMensagemMolde(
+                      detailProduct.mensagemMolde || buildDefaultMensagemMolde(detailProduct, brandName),
+                      detailProduct,
+                      { quantity: detailQty, storeName: brandName },
                     );
-                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                    openWhatsappSync(msg);
                   }}
                 >
-                  Tirar Dúvida
+                  Enviar no WhatsApp
                 </ActionButton>
               ) : null}
               <ActionButton
@@ -729,16 +645,34 @@ export function CustomerStorefrontView({
         title="Sua Sacola de Compras"
         description={
           cart.length > 0
-            ? `${totalItemsCount} ${totalItemsCount === 1 ? 'item selecionado' : 'itens selecionados'} · Total ${formatCurrencyBRL(totalCents)}`
+            ? `${totalItemsCount} ${totalItemsCount === 1 ? 'item selecionado' : 'itens selecionados'} · Total ${formatCurrencyBRL(grandTotalCents)}`
             : 'Adicione produtos da loja para finalizar no WhatsApp.'
         }
         footer={
           cart.length > 0 ? (
             <div className="space-y-2">
+              {activeShippingCents > 0 ? (
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>Taxa de entrega local</span>
+                  <span>{formatCurrencyBRL(activeShippingCents)}</span>
+                </div>
+              ) : null}
+              {pixDiscountCents > 0 ? (
+                <div
+                  data-testid="cart-pix-discount-row"
+                  className="flex items-center justify-between rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-extrabold text-emerald-700"
+                >
+                  <span>Desconto Pix (-{pixDiscountPercent}% Pix)</span>
+                  <span>-{formatCurrencyBRL(pixDiscountCents)}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-600">Total do Pedido</span>
-                <strong className="text-xl font-bold text-[#0F172A]">
-                  {formatCurrencyBRL(totalCents)}
+                <strong
+                  data-testid="cart-grand-total"
+                  className="text-xl font-bold text-[#0F172A]"
+                >
+                  {formatCurrencyBRL(grandTotalCents)}
                 </strong>
               </div>
               <ActionButton
@@ -747,6 +681,7 @@ export function CustomerStorefrontView({
                 variant="success"
                 size={52}
                 fullWidth
+                className="min-h-[54px] py-2.5 leading-tight"
                 isSubmitting={isSubmitting}
                 loadingText="Enviando pedido..."
                 disabled={!isCheckoutReady}
@@ -754,6 +689,18 @@ export function CustomerStorefrontView({
               >
                 Finalizar Pedido e Enviar no WhatsApp
               </ActionButton>
+              {hasStorePhone ? (
+                <a
+                  data-testid="checkout-wa-direct-link"
+                  href={buildWhatsappDirectUrl(storePhone, buildOrderWhatsappText())}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-[#15803D] transition-colors hover:bg-emerald-100"
+                >
+                  <MessageCircle className="size-4" />
+                  Enviar direto para wa.me/{sanitizePhoneE164(storePhone)}
+                </a>
+              ) : null}
             </div>
           ) : undefined
         }
@@ -786,7 +733,7 @@ export function CustomerStorefrontView({
                     className="size-14 shrink-0 rounded-xl border border-slate-100 object-cover"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-[#0F172A]">{item.name}</p>
+                    <p className="line-clamp-2 text-sm font-semibold leading-snug text-[#0F172A]">{item.name}</p>
                     <p className="text-xs text-slate-500">
                       {item.variation} · {formatCurrencyBRL(item.priceCents)}
                     </p>
@@ -838,35 +785,33 @@ export function CustomerStorefrontView({
             >
               <div className="space-y-1.5">
                 <label htmlFor="checkout-customer-name" className="block text-sm font-medium text-[#0F172A]">
-                  Seu Nome Completo <span className="text-[#EF4444]">*</span>
+                  Seu Nome <span className="text-xs font-normal text-slate-500">(opcional)</span>
                 </label>
                 <input
                   id="checkout-customer-name"
                   type="text"
-                  required
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Ex: Maria Clara"
+                  placeholder="Ex: Maria Clara (pode deixar vazio)"
                   className="min-h-[48px] w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <label htmlFor="checkout-customer-phone" className="block text-sm font-medium text-[#0F172A]">
-                  WhatsApp com DDD para entrega <span className="text-[#EF4444]">*</span>
+                  Seu WhatsApp com DDD <span className="text-xs font-normal text-slate-500">(opcional)</span>
                 </label>
                 <input
                   id="checkout-customer-phone"
                   type="tel"
                   inputMode="tel"
-                  required
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="Ex: (11) 99988-7766"
+                  placeholder="Ex: (11) 99988-7766 (pode deixar vazio)"
                   className="min-h-[48px] w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                 />
                 <p className="text-xs text-slate-500">
-                  Usado apenas pela loja para combinar a entrega.
+                  Você já pode enviar o pedido agora mesmo sem preencher endereço ou cadastro.
                 </p>
               </div>
 

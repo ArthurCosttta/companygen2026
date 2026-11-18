@@ -132,7 +132,7 @@ export function ModalContainer({
         <DialogPrimitive.Overlay
           data-slot="modal-overlay"
           className={cn(
-            "fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-[4px]",
+            "fixed inset-0 z-50 bg-black/65 will-change-[opacity]",
             "transition-opacity duration-200",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
@@ -164,6 +164,8 @@ export function ModalContainer({
           className={cn(
             "fixed z-50 flex flex-col bg-white text-[#0F172A] shadow-2xl outline-none",
             "border border-slate-200/80",
+            "dark:bg-[#121215] dark:text-[#FFFFFF] dark:border-[#27272A]",
+            "transform-gpu will-change-[transform,opacity]",
             // Mobile <= 768px: Bottom Sheet 85%-95%
             "max-[768px]:inset-x-0 max-[768px]:bottom-0 max-[768px]:w-full max-[768px]:rounded-t-2xl max-[768px]:rounded-b-none",
             !layoutId &&
@@ -171,7 +173,7 @@ export function ModalContainer({
             !layoutId &&
               "max-[768px]:data-[state=closed]:animate-out max-[768px]:data-[state=closed]:slide-out-to-bottom-full max-[768px]:data-[state=closed]:duration-150",
             MOBILE_HEIGHT_CLASSES[mobileHeight],
-            // Desktop >= 769px: sem -translate-x/y quando Anime.js layout FLIP estiver ativo
+            // Desktop >= 769px: sem -translate-x/y quando layoutId estiver ativo
             layoutId
               ? "min-[769px]:inset-0 min-[769px]:m-auto min-[769px]:h-fit min-[769px]:w-[calc(100%-2rem)] min-[769px]:rounded-2xl min-[769px]:max-h-[88dvh]"
               : cn(
@@ -186,19 +188,19 @@ export function ModalContainer({
         >
           {/* Mobile Bottom Sheet drag-handle visual */}
           <div className="hidden max-[768px]:flex justify-center pt-2.5 pb-1 shrink-0" aria-hidden="true">
-            <span className="h-1 w-10 rounded-full bg-slate-300" />
+            <span className="h-1 w-10 rounded-full bg-slate-300 dark:bg-zinc-700" />
           </div>
 
           <div
             data-layout-id={titleLayoutId}
-            className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 shrink-0"
+            className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-[#27272A] px-5 py-4 shrink-0"
           >
             <div className="min-w-0 flex-1 space-y-1">
-              <DialogPrimitive.Title className="text-base font-semibold leading-snug text-[#0F172A]">
+              <DialogPrimitive.Title className="text-base font-semibold leading-snug text-[#0F172A] dark:text-[#FFFFFF]">
                 {title}
               </DialogPrimitive.Title>
               {description ? (
-                <DialogPrimitive.Description className="text-sm leading-relaxed text-slate-600">
+                <DialogPrimitive.Description className="text-sm leading-relaxed text-slate-600 dark:text-[#E4E4E7]">
                   {description}
                 </DialogPrimitive.Description>
               ) : (
@@ -213,7 +215,7 @@ export function ModalContainer({
                 <button
                   type="button"
                   aria-label="Fechar janela"
-                  className="inline-flex min-h-[44px] min-w-[44px] -mr-2 -mt-2 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
+                  className="inline-flex min-h-[44px] min-w-[44px] -mr-2 -mt-2 shrink-0 items-center justify-center rounded-xl text-slate-500 dark:text-[#F4F4F5] transition-colors hover:bg-slate-100 dark:hover:bg-[#18181B] hover:text-[#0F172A] dark:hover:text-[#FFFFFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
                 >
                   <X className="size-5" aria-hidden="true" />
                 </button>
@@ -232,7 +234,7 @@ export function ModalContainer({
           </div>
 
           {footer ? (
-            <div className="shrink-0 border-t border-slate-100 bg-slate-50/80 px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] rounded-b-2xl max-[768px]:rounded-b-none">
+            <div className="shrink-0 border-t border-slate-100 dark:border-[#27272A] bg-slate-50/80 dark:bg-[#18181B] dark:text-[#FFFFFF] px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] rounded-b-2xl max-[768px]:rounded-b-none">
               {footer}
             </div>
           ) : null}

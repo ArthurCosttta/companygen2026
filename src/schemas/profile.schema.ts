@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+export const CatalogItemTypeEnum = z.enum([
+  'produto_fisico',
+  'servico_agendado',
+  'kit_combo',
+  'sob_medida',
+]);
+export type CatalogItemType = z.infer<typeof CatalogItemTypeEnum>;
+
 export const PLACEHOLDER_PHONES = new Set([
   '5511999999999',
   '5500000000000',
@@ -41,10 +49,65 @@ export const CatalogProductSchema = z.object({
   active: z.boolean().default(true),
   imageUrl: z.string().default(''),
   approvedAsset: z.boolean().default(false),
+  itemType: CatalogItemTypeEnum.optional(),
+  mensagemMolde: z.string().optional(),
+  prazoOuDuracao: z.string().optional(),
+  itensInclusosKit: z.array(z.string()).optional(),
   updatedAt: z.string().default(() => new Date().toISOString()),
 });
 
 export type CatalogProduct = z.infer<typeof CatalogProductSchema>;
+
+export function buildDefaultMensagemMolde(
+  product: Partial<CatalogProduct> & { name: string },
+  storeName = ''
+): string {
+  const name = String(product.name || 'Item').trim();
+  const itemType = product.itemType || 'produto_fisico';
+  const variation = product.variation && product.variation !== 'Padrão' ? ` (${product.variation})` : '';
+  const priceText =
+    Number(product.priceCents || 0) > 0
+      ? formatCurrencyBRL(Number(product.priceCents || 0))
+      : 'sob consulta';
+  const prazo = product.prazoOuDuracao ? ` | Prazo/Duração: ${product.prazoOuDuracao}` : '';
+  const lojaSuffix = storeName ? ` na ${storeName}` : '';
+
+  if (itemType === 'servico_agendado') {
+    return `Olá${lojaSuffix}! Quero agendar o serviço *${name}*${variation} (${priceText}${prazo}). Quais horários disponíveis?`;
+  }
+  if (itemType === 'kit_combo') {
+    const inclusos = Array.isArray(product.itensInclusosKit) && product.itensInclusosKit.length > 0
+      ? ` [Inclui: ${product.itensInclusosKit.join(', ')}]`
+      : '';
+    return `Olá${lojaSuffix}! Tenho interesse no Kit *${name}*${variation} por ${priceText}${inclusos}. Pode me confirmar?`;
+  }
+  if (itemType === 'sob_medida') {
+    return `Olá${lojaSuffix}! Quero orçamento sob medida para *${name}*${variation} (ref. ${priceText}${prazo}). Minhas especificações: `;
+  }
+  return `Olá${lojaSuffix}! Quero pedir *${name}*${variation} — valor ${priceText}${prazo}. Está disponível?`;
+}
+
+export function hydrateMensagemMolde(
+  template: string | undefined,
+  product: CatalogProduct,
+  extras?: { storeName?: string; quantity?: number; variation?: string; customNote?: string }
+): string {
+  const storeName = extras?.storeName || '';
+  const variation = extras?.variation || product.variation || 'Padrão';
+  const rawTemplate = String(template || product.mensagemMolde || '').trim();
+  const base = rawTemplate || buildDefaultMensagemMolde({ ...product, variation }, storeName);
+  const resolved = base
+    .replace(/\{nomeProduto\}/gi, product.name)
+    .replace(/\{preco\}/gi, Number(product.priceCents || 0) > 0 ? formatCurrencyBRL(product.priceCents) : 'sob consulta')
+    .replace(/\{variacao\}/gi, variation)
+    .replace(/\{sku\}/gi, product.sku)
+    .replace(/\{itemType\}/gi, product.itemType || 'produto_fisico')
+    .replace(/\{loja\}/gi, storeName || 'loja')
+    .replace(/\{prazo\}/gi, product.prazoOuDuracao || 'a combinar');
+  const qtySuffix = extras?.quantity && extras.quantity > 1 ? `\nQuantidade: ${extras.quantity}x` : '';
+  const noteSuffix = extras?.customNote?.trim() ? `\nObservação: ${extras.customNote.trim()}` : '';
+  return `${resolved}${qtySuffix}${noteSuffix}`.trim();
+}
 
 export const BusinessProfileSchema = z.object({
   schemaVersion: z.literal(1).default(1),
@@ -62,7 +125,11 @@ export const BusinessProfileSchema = z.object({
   business: z.object({
     name: z.string().default(''),
     segment: z.string().default('Geral'),
+    businessModel: z.enum(['produtos', 'servicos', 'hibrido']).default('produtos'),
     description: z.string().default(''),
+    experienceGoal: z.string().default(''),
+    differentials: z.array(z.string()).default([]),
+    campaignTheme: z.string().default(''),
     address: z.string().default(''),
     mapsUrl: z.string().default(''),
     hours: z.string().default('Seg a Sáb · 09h às 19h'),
@@ -70,7 +137,11 @@ export const BusinessProfileSchema = z.object({
   }).default({
     name: '',
     segment: 'Geral',
+    businessModel: 'produtos',
     description: '',
+    experienceGoal: '',
+    differentials: [],
+    campaignTheme: '',
     address: '',
     mapsUrl: '',
     hours: 'Seg a Sáb · 09h às 19h',
@@ -129,14 +200,28 @@ export const BusinessProfileSchema = z.object({
   brand: z.object({
     instagram: z.string().default(''),
     logoUrl: z.string().default(''),
+    storefrontPhotoUrl: z.string().default(''),
+    heroImageUrl: z.string().default(''),
+    heroBackgroundUrl: z.string().default(''),
+    pageBackgroundUrl: z.string().default(''),
+    sectionBackgrounds: z.record(z.string(), z.string()).default({}),
     primaryColor: z.string().default('#111827'),
     accentColor: z.string().default('#10b981'),
+    fontStyle: z.enum(['modern_sans', 'editorial_serif', 'clean_geometric']).default('modern_sans'),
+    generateAiLogo: z.boolean().default(false),
     themePreset: z.string().default('minimal-luxury'),
   }).default({
     instagram: '',
     logoUrl: '',
+    storefrontPhotoUrl: '',
+    heroImageUrl: '',
+    heroBackgroundUrl: '',
+    pageBackgroundUrl: '',
+    sectionBackgrounds: {},
     primaryColor: '#111827',
     accentColor: '#10b981',
+    fontStyle: 'modern_sans',
+    generateAiLogo: false,
     themePreset: 'minimal-luxury',
   }),
   catalog: z.object({
@@ -154,6 +239,33 @@ export const BusinessProfileSchema = z.object({
     publishedAt: null,
     publicSlug: '',
     sourceRevision: 0,
+  }),
+  storeLayout: z.object({
+    storePrompt: z.string().default(''),
+    presetBase: z.string().default('HYBRID_EDITORIAL_COMMERCE'),
+    widgets: z.array(z.any()).default([]),
+    executionPlan: z.any().optional(),
+    formulasIr: z.any().optional(),
+    reviews: z.array(z.object({
+      id: z.string(),
+      author: z.string(),
+      text: z.string(),
+      productRef: z.string().default(''),
+      rating: z.number().int().min(1).max(5).default(5),
+    })).default([]),
+    faq: z.array(z.object({
+      id: z.string(),
+      question: z.string(),
+      answer: z.string(),
+    })).default([]),
+    updatedAt: z.string().default(''),
+  }).default({
+    storePrompt: '',
+    presetBase: 'HYBRID_EDITORIAL_COMMERCE',
+    widgets: [],
+    reviews: [],
+    faq: [],
+    updatedAt: '',
   }),
 });
 

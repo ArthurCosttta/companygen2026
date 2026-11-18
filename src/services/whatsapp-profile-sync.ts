@@ -54,9 +54,10 @@ export async function syncConnectedWhatsappProfile(
   }
 
   return updateBusinessProfile(draft => {
+    const connected = Boolean(connection.conectado);
     draft.whatsapp = {
       ...draft.whatsapp,
-      connected: connection.origin !== 'webview',
+      connected,
       jid: remoteProfile.jid || `${phoneE164}@s.whatsapp.net`,
       phoneE164,
       displayPhone: remoteProfile.telefoneFormatado || remoteProfile.numero || `+${phoneE164}`,
@@ -64,7 +65,7 @@ export async function syncConnectedWhatsappProfile(
       profilePhotoUrl: remoteProfile.fotoUrl || '',
       verifiedOrigin: connection.origin === 'webview' ? 'manual' : 'baileys',
     };
-    draft.onboarding.whatsappConnected = connection.origin !== 'webview';
+    draft.onboarding.whatsappConnected = connected;
     draft.onboarding.whatsappConfirmed = true;
   }, undefined, owner);
 }

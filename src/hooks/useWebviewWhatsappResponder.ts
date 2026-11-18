@@ -1,0 +1,646 @@
+import { useEffect, useRef, useState } from 'react';
+import { authenticatedFetch } from '@/services/supabase-client';
+
+export interface DesktopWhatsappBridge {
+  isDesktop?: boolean;
+  openWhatsAppExternal?: () => Promise<unknown>;
+  readWhatsAppIdentity?: () => Promise<{
+    connected?: boolean;
+    loggedIn?: boolean;
+    phoneE164?: string;
+    source?: string;
+  }>;
+  pollWhatsAppInbox?: () => Promise<{
+    loggedIn?: boolean;
+    connected?: boolean;
+    phoneE164?: string;
+    action?: string;
+    chatTitle?: string;
+    chatPhone?: string;
+    isSelfChat?: boolean;
+    msgKey?: string;
+    text?: string;
+    selectorHealth?: 'ok' | 'degraded';
+    missingSelector?: string;
+    error?: string;
+  }>;
+  sendWhatsAppReply?: (payload: {
+    chatTitle?: string;
+    text: string;
+    mediaItems?: Array<{ url: string; caption?: string; productName?: string }>;
+    typingDurationMs?: number;
+    replyJobId?: string;
+  }) => Promise<{ ok?: boolean; method?: string; mediaSentCount?: number; error?: string }>;
+  logoutWhatsAppWebview?: () => Promise<{ ok?: boolean }>;
+  showWindow?: (tab?: string) => Promise<{ ok?: boolean }>;
+  quitApp?: () => Promise<{ ok?: boolean }>;
+  notifyDesktop?: (payload: { title: string; body: string }) => Promise<{ ok?: boolean }>;
+  setTrayStatus?: (payload: {
+    active?: boolean;
+    phase?: string;
+    summary?: string;
+    repliedCount?: number;
+  }) => Promise<{ ok?: boolean }>;
+  onWhatsappTypingProgress?: (
+    callback: (data: {
+      chatTitle?: string;
+      replyJobId?: string;
+      typedChars?: number;
+      totalChars?: number;
+      phase?: string;
+      navigateTab?: string;
+    }) => void,
+  ) => () => void;
+}
+
+export interface LiveTypingPreview {
+  chatTitle: string;
+  phase: 'thinking' | 'typing' | 'sent' | 'paused_human';
+  draftText: string;
+  visibleChars: number;
+  totalChars: number;
+  etaSeconds: number;
+}
+
+export interface RuntimeFeedEvent {
+  id: string;
+  chatTitle: string;
+  phase: string;
+  summary: string;
+  mediaCount?: number;
+  createdAt: string;
+}
+
+export interface WebviewResponderStatus {
+  active: boolean;
+  processing: boolean;
+  repliedCount: number;
+  lastReplyAt: string | null;
+  lastChatTitle: string;
+  lastError: string;
+  pauseReason?: 'credit_exhausted' | 'selector_degraded' | null;
+  selectorHealth?: 'ok' | 'degraded';
+  missingSelector?: string;
+  cooldownRemainingSeconds?: number;
+  liveTypingPreview?: LiveTypingPreview | null;
+  recentEvents?: RuntimeFeedEvent[];
+}
+
+const sharedInFlightChatKeys = new Set<string>();
+const sharedProcessedMsgIds = new Map<string, number>();
+const sharedRecentBotEchoes = new Map<string, number>();
+const sharedRetryAttempts = new Map<string, number>();
+
+function normalizeEchoText(raw: string): string {
+  return String(raw || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u200e\u200f\u202a-\u202e]/g, '')
+    .replace(/[*_~`"'.,!?;:()[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function pruneSharedMaps() {
+  const now = Date.now();
+  for (const [k, ts] of sharedProcessedMsgIds.entries()) {
+    if (now - ts > 5 * 60 * 1000) sharedProcessedMsgIds.delete(k);
+  }
+  for (const [k, ts] of sharedRecentBotEchoes.entries()) {
+    if (now - ts > 2 * 60 * 1000) sharedRecentBotEchoes.delete(k);
+  }
+}
+
+export function getDesktopBridge(): DesktopWhatsappBridge | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return (window as Window & { companygenDesktop?: DesktopWhatsappBridge }).companygenDesktop;
+}
+
+export function useWebviewWhatsappResponder({
+  userId,
+  enabled,
+  connected,
+  phoneE164,
+  onActivity,
+}: {
+  userId: string;
+  enabled: boolean;
+  connected: boolean;
+  phoneE164?: string;
+  onActivity?: () => void;
+}): WebviewResponderStatus {
+  const [status, setStatus] = useState<WebviewResponderStatus>({
+    active: false,
+    processing: false,
+    repliedCount: 0,
+    lastReplyAt: null,
+    lastChatTitle: '',
+    lastError: '',
+    recentEvents: [],
+  });
+
+  const inFlightRef = useRef(false);
+  const recentKeysRef = useRef<Set<string>>(new Set());
+  const repliedCountRef = useRef(0);
+  const onActivityRef = useRef(onActivity);
+  onActivityRef.current = onActivity;
+
+  useEffect(() => {
+    try {
+      window.dispatchEvent(new CustomEvent('companygen:wa-runtime-update', { detail: status }));
+    } catch {}
+  }, [status]);
+
+  useEffect(() => {
+    const bridge = getDesktopBridge();
+    if (!bridge?.isDesktop || !bridge.pollWhatsAppInbox || !bridge.sendWhatsAppReply || !enabled || !connected) {
+      setStatus((prev) => (prev.active ? { ...prev, active: false, processing: false } : prev));
+      void bridge?.setTrayStatus?.({
+        active: false,
+        phase: 'idle',
+        summary: connected ? 'Sofia IA pausada' : 'Aguardando WhatsApp',
+      });
+      return;
+    }
+
+    const pollInbox = bridge.pollWhatsAppInbox;
+    const sendReply = bridge.sendWhatsAppReply;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const activeReplyProgressRef = { current: { replyJobId: '', visibleChars: 0, totalChars: 0 } };
+
+    const persistRuntime = (payload: Record<string, unknown>) => {
+      if (!userId) return;
+      void authenticatedFetch(
+        '/api/whatsapp/ai/runtime',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ active: true, trayBackground: true, ...payload }),
+        },
+        userId,
+      ).catch(() => {});
+    };
+
+    // Hidrata contador e histórico recente persistido no workspace ao iniciar/reabrir
+    if (userId) {
+      void authenticatedFetch('/api/whatsapp/ai/runtime', undefined, userId)
+        .then((r) => r.json())
+        .then((json: { ok?: boolean; runtime?: { repliedCount?: number; lastReplyAt?: string | null; lastChatTitle?: string; recentEvents?: RuntimeFeedEvent[] } }) => {
+          if (!live || !json?.ok || !json.runtime) return;
+          const rt = json.runtime;
+          const persistedCount = Math.max(repliedCountRef.current, Number(rt.repliedCount) || 0);
+          repliedCountRef.current = persistedCount;
+          setStatus((prev) => ({
+            ...prev,
+            repliedCount: Math.max(prev.repliedCount, persistedCount),
+            lastReplyAt: prev.lastReplyAt || rt.lastReplyAt || null,
+            lastChatTitle: prev.lastChatTitle || rt.lastChatTitle || '',
+            recentEvents:
+              (prev.recentEvents?.length || 0) > 0
+                ? prev.recentEvents
+                : Array.isArray(rt.recentEvents)
+                  ? rt.recentEvents
+                  : [],
+          }));
+          void bridge.setTrayStatus?.({
+            active: true,
+            phase: 'listening',
+            summary: `Sofia IA ativa (${Math.max(0, Number(rt.repliedCount) || 0)} enviadas)`,
+            repliedCount: Math.max(0, Number(rt.repliedCount) || 0),
+          });
+        })
+        .catch(() => {});
+    }
+
+    const unsubProgress = bridge.onWhatsappTypingProgress?.((data) => {
+      if (!live || !data) return;
+      if (data.replyJobId && activeReplyProgressRef.current.replyJobId === data.replyJobId) {
+        const nextChars = Math.max(0, Number(data.typedChars) || 0);
+        const total = Math.max(nextChars, Number(data.totalChars) || activeReplyProgressRef.current.totalChars || 1);
+        activeReplyProgressRef.current.visibleChars = nextChars;
+        const remainingEta = Math.max(1, Math.ceil(((total - nextChars) * 72) / 1000));
+        setStatus((prev) =>
+          prev.liveTypingPreview?.phase === 'typing'
+            ? {
+                ...prev,
+                liveTypingPreview: {
+                  ...prev.liveTypingPreview,
+                  visibleChars: nextChars,
+                  totalChars: total,
+                  etaSeconds: remainingEta,
+                },
+              }
+            : prev,
+        );
+      }
+    });
+
+    setStatus((prev) => ({ ...prev, active: true, lastError: '' }));
+    void bridge.setTrayStatus?.({
+      active: true,
+      phase: 'listening',
+      summary: 'Sofia IA ativa em 2º plano',
+    });
+
+    let pausedByCredits = false;
+    let consecutiveErrorBackoffMs = 0;
+
+    const handleCreditsUpdated = () => {
+      if (pausedByCredits && live) {
+        pausedByCredits = false;
+        setStatus((prev) => ({
+          ...prev,
+          active: true,
+          pauseReason: null,
+          lastError: '',
+        }));
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(runCycle, 400);
+      }
+    };
+    window.addEventListener('companygen:credits-updated', handleCreditsUpdated);
+
+    const markMessageProcessed = (msgDedupeKey: string) => {
+      sharedProcessedMsgIds.set(msgDedupeKey, Date.now());
+      sharedRetryAttempts.delete(msgDedupeKey);
+      recentKeysRef.current.add(msgDedupeKey);
+      if (recentKeysRef.current.size > 400) {
+        const first = recentKeysRef.current.values().next().value;
+        if (first) recentKeysRef.current.delete(first);
+      }
+    };
+
+    const runCycle = async () => {
+      if (!live || pausedByCredits || inFlightRef.current) {
+        if (live && !pausedByCredits) timer = setTimeout(runCycle, 1200);
+        return;
+      }
+
+      inFlightRef.current = true;
+      let nextDelayMs = 1200;
+      try {
+        const poll = await pollInbox();
+        if (!live) return;
+
+        if (poll?.selectorHealth === 'degraded') {
+          setStatus((prev) => ({
+            ...prev,
+            selectorHealth: 'degraded',
+            missingSelector: poll.missingSelector || '',
+            pauseReason: 'selector_degraded',
+            lastError: prev.lastError || `Seletor WhatsApp Web degradado (${poll.missingSelector || 'DOM alterado'}).`,
+          }));
+        } else if (poll?.loggedIn) {
+          setStatus((prev) =>
+            prev.selectorHealth === 'degraded'
+              ? { ...prev, selectorHealth: 'ok', missingSelector: '', pauseReason: prev.pauseReason === 'selector_degraded' ? null : prev.pauseReason }
+              : prev,
+          );
+        }
+
+        if (poll?.action === 'incoming' && poll.text?.trim()) {
+          pruneSharedMaps();
+          const chatTitle = String(poll.chatTitle || 'Cliente WhatsApp').trim();
+          const chatDedupKey = normalizeEchoText(poll.chatPhone || chatTitle || 'chat');
+          const msgDedupeKey = `${chatDedupKey}::${poll.msgKey || normalizeEchoText(poll.text)}`;
+          const incomingEchoKey = `${chatDedupKey}::${normalizeEchoText(poll.text)}`;
+
+          if (
+            !sharedInFlightChatKeys.has(chatDedupKey) &&
+            !sharedProcessedMsgIds.has(msgDedupeKey) &&
+            !sharedRecentBotEchoes.has(incomingEchoKey) &&
+            !recentKeysRef.current.has(msgDedupeKey)
+          ) {
+            sharedInFlightChatKeys.add(chatDedupKey);
+
+            try {
+              setStatus((prev) => ({
+                ...prev,
+                processing: true,
+                lastError: '',
+                liveTypingPreview: {
+                  chatTitle,
+                  phase: 'thinking',
+                  draftText: '',
+                  visibleChars: 0,
+                  totalChars: 0,
+                  etaSeconds: 6,
+                },
+              }));
+              void bridge.setTrayStatus?.({
+                active: true,
+                phase: 'thinking',
+                summary: `Pensando resposta para ${chatTitle}...`,
+              });
+              persistRuntime({ phase: 'thinking', chatTitle, draftText: '', typedChars: 0, totalChars: 0 });
+
+              const fallbackTitleSlug = (chatTitle || 'cliente')
+                .normalize('NFKD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-|-$/g, '') || 'cliente';
+              const resolvedCustomerPhone =
+                poll.chatPhone || (poll.isSelfChat ? phoneE164 || '' : '');
+              const resolvedCustomerJid = resolvedCustomerPhone
+                ? `${resolvedCustomerPhone}@s.whatsapp.net`
+                : `wv:${fallbackTitleSlug}`;
+
+              const aiRes = await authenticatedFetch(
+                '/api/whatsapp/ai/classify-and-draft',
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    customerName: chatTitle || 'Cliente WhatsApp',
+                    customerPhone: resolvedCustomerPhone,
+                    customerJid: resolvedCustomerJid,
+                    isSelfChat: Boolean(poll.isSelfChat),
+                    messageText: poll.text,
+                    mode: 'live_whatsapp',
+                    source: 'electron_webview',
+                  }),
+                },
+                userId,
+              );
+
+              const aiJson = (await aiRes.json().catch(() => null)) as {
+                ok?: boolean;
+                intent?: string;
+                replyText?: string;
+                mediaItems?: Array<{ url: string; caption?: string; productName?: string }>;
+                autoReplySuppressed?: boolean;
+                suppressionReason?: string;
+                cooldownSeconds?: number;
+                pausedForHuman?: boolean;
+                readDelayMs?: number;
+                typingTimeMs?: number;
+                serverElapsedMs?: number;
+                targetTotalMs?: number;
+                fallbackLevel?: number;
+                required?: number;
+                balance?: number;
+                error?: string;
+              } | null;
+
+              if (!live) return;
+
+              if (aiRes.status === 402) {
+                pausedByCredits = true;
+                const errText = aiJson?.error || 'Créditos de IA esgotados. Recarregue para continuar respondendo.';
+                setStatus((prev) => ({
+                  ...prev,
+                  active: false,
+                  processing: false,
+                  pauseReason: 'credit_exhausted',
+                  liveTypingPreview: null,
+                  lastError: errText,
+                }));
+                persistRuntime({ phase: 'paused_credits', lastError: errText });
+                try {
+                  window.dispatchEvent(new CustomEvent('companygen:insufficient-credits', { detail: aiJson || { status: 402 } }));
+                } catch {}
+                return;
+              }
+
+              if (!aiRes.ok || !aiJson?.ok) {
+                const tries = (sharedRetryAttempts.get(msgDedupeKey) || 0) + 1;
+                sharedRetryAttempts.set(msgDedupeKey, tries);
+                const errText = aiJson?.error || `Falha ao gerar resposta (${aiRes.status}).`;
+                if (tries >= 3) {
+                  markMessageProcessed(msgDedupeKey);
+                } else {
+                  consecutiveErrorBackoffMs = Math.min(8000, tries * 2000);
+                  nextDelayMs = consecutiveErrorBackoffMs;
+                }
+                setStatus((prev) => ({
+                  ...prev,
+                  processing: false,
+                  liveTypingPreview: null,
+                  lastError: errText,
+                }));
+                persistRuntime({ phase: 'error', lastError: errText });
+              } else if (!aiJson.autoReplySuppressed && String(aiJson.replyText || '').trim()) {
+                consecutiveErrorBackoffMs = 0;
+                const replyText = String(aiJson.replyText || '').trim();
+                const echoKey = `${chatDedupKey}::${normalizeEchoText(replyText)}`;
+                sharedRecentBotEchoes.set(echoKey, Date.now());
+
+                const totalChars = Array.from(replyText).length;
+                const remainingTypingMs = Math.max(2500, Math.min(35000, totalChars * 75 + 900));
+                const typingStartedAt = Date.now();
+                const replyJobId = `${chatDedupKey}-${typingStartedAt}-${Math.random().toString(36).slice(2, 7)}`;
+                activeReplyProgressRef.current = { replyJobId, visibleChars: 0, totalChars };
+
+                setStatus((prev) => ({
+                  ...prev,
+                  processing: true,
+                  liveTypingPreview: {
+                    chatTitle,
+                    phase: 'typing',
+                    draftText: replyText,
+                    visibleChars: 0,
+                    totalChars,
+                    etaSeconds: Math.max(1, Math.ceil(remainingTypingMs / 1000)),
+                  },
+                }));
+                void bridge.setTrayStatus?.({
+                  active: true,
+                  phase: 'typing',
+                  summary: `Digitando para ${chatTitle}...`,
+                });
+                persistRuntime({
+                  phase: 'typing',
+                  chatTitle,
+                  draftText: replyText,
+                  typedChars: 0,
+                  totalChars,
+                });
+
+                const animTimer = setInterval(() => {
+                  if (!live) return;
+                  if (activeReplyProgressRef.current.visibleChars > 0) return;
+                  const elapsed = Date.now() - typingStartedAt;
+                  const ratio = Math.min(0.95, elapsed / Math.max(800, remainingTypingMs));
+                  const etaSeconds = Math.max(1, Math.ceil((remainingTypingMs - elapsed) / 1000));
+                  setStatus((prev) => ({
+                    ...prev,
+                    processing: true,
+                    liveTypingPreview: {
+                      chatTitle,
+                      phase: 'typing',
+                      draftText: replyText,
+                      visibleChars: Math.max(1, Math.round(totalChars * ratio)),
+                      totalChars,
+                      etaSeconds,
+                    },
+                  }));
+                }, 140);
+
+                let sent: { ok?: boolean; method?: string; mediaSentCount?: number; error?: string } | undefined;
+                try {
+                  sent = await sendReply({
+                    chatTitle,
+                    text: replyText,
+                    mediaItems: Array.isArray(aiJson.mediaItems) ? aiJson.mediaItems : [],
+                    typingDurationMs: remainingTypingMs,
+                    replyJobId,
+                  });
+                } finally {
+                  clearInterval(animTimer);
+                  activeReplyProgressRef.current = { replyJobId: '', visibleChars: 0, totalChars: 0 };
+                }
+                if (!live) return;
+
+                if (sent?.ok) {
+                  markMessageProcessed(msgDedupeKey);
+                  const sentAt = new Date().toISOString();
+                  const nextMediaCount = Number(sent.mediaSentCount || 0);
+                  if (aiJson.pausedForHuman) {
+                    void bridge.notifyDesktop?.({
+                      title: `Fila Humana: ${chatTitle}`,
+                      body: 'Cliente pediu atendimento humano e foi pausado para você assumir.',
+                    });
+                  } else if (aiJson.intent === 'PURCHASE_ORDER') {
+                    void bridge.notifyDesktop?.({
+                      title: `Novo pedido no WhatsApp: ${chatTitle}`,
+                      body: replyText.slice(0, 120),
+                    });
+                  }
+                  const updatedCount = repliedCountRef.current + 1;
+                  repliedCountRef.current = updatedCount;
+                  setStatus((prev) => {
+                    const newEvent: RuntimeFeedEvent = {
+                      id: replyJobId,
+                      chatTitle,
+                      phase: aiJson.pausedForHuman ? 'paused_human' : 'sent',
+                      summary: replyText.slice(0, 140),
+                      mediaCount: nextMediaCount,
+                      createdAt: sentAt,
+                    };
+                    return {
+                      ...prev,
+                      processing: false,
+                      repliedCount: Math.max(prev.repliedCount + 1, updatedCount),
+                      lastReplyAt: sentAt,
+                      lastChatTitle: chatTitle,
+                      lastError: '',
+                      recentEvents: [newEvent, ...(prev.recentEvents || [])].slice(0, 20),
+                      liveTypingPreview: {
+                        chatTitle,
+                        phase: aiJson.pausedForHuman ? 'paused_human' : 'sent',
+                        draftText: replyText,
+                        visibleChars: totalChars,
+                        totalChars,
+                        etaSeconds: 0,
+                      },
+                    };
+                  });
+                  void bridge.setTrayStatus?.({
+                    active: true,
+                    phase: 'sent',
+                    summary: `Sofia IA ativa (${updatedCount} enviadas)`,
+                    repliedCount: updatedCount,
+                  });
+                  persistRuntime({
+                    phase: aiJson.pausedForHuman ? 'paused_human' : 'sent',
+                    chatTitle,
+                    lastChatTitle: chatTitle,
+                    lastReplyAt: sentAt,
+                    draftText: replyText,
+                    typedChars: totalChars,
+                    totalChars,
+                    lastMediaCount: nextMediaCount,
+                    repliedCount: updatedCount,
+                    lastError: '',
+                  });
+                } else {
+                  const tries = (sharedRetryAttempts.get(msgDedupeKey) || 0) + 1;
+                  sharedRetryAttempts.set(msgDedupeKey, tries);
+                  if (tries >= 3) markMessageProcessed(msgDedupeKey);
+                  const errText = sent?.error || 'Não foi possível enviar a resposta no WhatsApp Web.';
+                  setStatus((prev) => ({
+                    ...prev,
+                    processing: false,
+                    liveTypingPreview: null,
+                    lastError: errText,
+                  }));
+                  persistRuntime({ phase: 'error', lastError: errText });
+                }
+              } else {
+                markMessageProcessed(msgDedupeKey);
+                const suppressionMessage =
+                  aiJson.suppressionReason === 'safe_test_mode_third_party'
+                    ? 'Modo Teste Seguro ativo: resposta a terceiros ignorada.'
+                    : aiJson.suppressionReason === 'anti_ban_cooldown'
+                      ? `Proteção anti-ban ativa (${aiJson.cooldownSeconds || 15}s de pausa).`
+                      : aiJson.suppressionReason === 'bot_manual_pause'
+                        ? 'Bot pausado manualmente neste atendimento.'
+                        : aiJson.suppressionReason === 'bot_inactive' || aiJson.suppressionReason === 'brain_disabled'
+                          ? 'Auto-resposta da Sofia está desativada nas configurações do WhatsApp.'
+                          : aiJson.pausedForHuman
+                            ? `Chat "${chatTitle || 'Cliente'}" está pausado aguardando humano na Fila Humana. Clique em "Devolver para a IA" para voltar a responder.`
+                            : '';
+                setStatus((prev) => ({
+                  ...prev,
+                  processing: false,
+                  cooldownRemainingSeconds: Number(aiJson.cooldownSeconds || 0) || undefined,
+                  lastError: suppressionMessage || prev.lastError,
+                  liveTypingPreview: aiJson.pausedForHuman
+                    ? {
+                        chatTitle,
+                        phase: 'paused_human',
+                        draftText: 'Aguardando atendimento humano na Fila Humana.',
+                        visibleChars: 48,
+                        totalChars: 48,
+                        etaSeconds: 0,
+                      }
+                    : null,
+                }));
+                if (aiJson.pausedForHuman) {
+                  persistRuntime({
+                    phase: 'paused_human',
+                    chatTitle,
+                    draftText: 'Aguardando atendimento humano na Fila Humana.',
+                    typedChars: 48,
+                    totalChars: 48,
+                  });
+                }
+              }
+
+              onActivityRef.current?.();
+            } finally {
+              sharedInFlightChatKeys.delete(chatDedupKey);
+            }
+          }
+        }
+      } catch (err) {
+        if (live) {
+          setStatus((prev) => ({
+            ...prev,
+            processing: false,
+            lastError: err instanceof Error ? err.message : 'Erro no ciclo do atendente WhatsApp Web.',
+          }));
+        }
+      } finally {
+        inFlightRef.current = false;
+        if (live && !pausedByCredits) {
+          timer = setTimeout(runCycle, nextDelayMs);
+        }
+      }
+    };
+
+    void runCycle();
+
+    return () => {
+      live = false;
+      window.removeEventListener('companygen:credits-updated', handleCreditsUpdated);
+      if (timer) clearTimeout(timer);
+      unsubProgress?.();
+    };
+  }, [connected, enabled, phoneE164, userId]);
+
+  return status;
+}

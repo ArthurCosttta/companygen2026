@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, realpath, writeFile, rename, rm, stat } from 'node:fs/promises';
 import { execFile, fork } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -16,6 +16,26 @@ import {
   isValidProductionPhone,
   computeDigest,
 } from './sync-engine.mjs';
+import { handleSpreadsheetRoutes } from './ai-spreadsheet-engine.mjs';
+import { handleWhatsappAiRoutes, computeD1FunnelMetrics } from './ai-sofia-local.mjs';
+import { handleAccessAndCheckoutRoutes, verifyLocalShowcaseToken } from './access-and-checkout.mjs';
+import { handleAdminRoutes, isAdminRequest, recordUserTouchAndCheckBan } from './admin-console.mjs';
+import {
+  downloadStorefrontFileFromStorage,
+  fetchCloudPublishedFlag,
+  isCloudStorageEnabled,
+} from './supabase-storage-sync.mjs';
+import {
+  handlePublicQrRedirect,
+  handleSupportAndQrClientRoutes,
+} from './support-and-qr.mjs';
+import {
+  handleStorefrontMoldeRoutes,
+  getStorefrontMoldeDir,
+  readStorefrontMoldeState,
+  syncStorefrontMoldeFromProfile,
+  writeStorefrontMoldeToDisk,
+} from './storefront-molde-fs.mjs';
 
 const execFileAsync = promisify(execFile);
 const app = fileURLToPath(new URL('../', import.meta.url));
@@ -46,6 +66,82 @@ const routes = new Map([
   ['/api/importar-imagem', 'POST'],
 ]);
 
+export async function pruneStaleLocalWorkspaces(
+  root,
+  {
+    keepUserId = '',
+    maxCachedStores = Number(process.env.CG_LOCAL_CACHE_MAX_STORES || 15),
+    activeWorkerUserIds = new Set(),
+  } = {},
+) {
+  const limit = Math.max(1, Number.isFinite(maxCachedStores) ? maxCachedStores : 15);
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return { scanned: 0, pruned: [] };
+  }
+
+  const cachedDirs = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const uid = entry.name;
+    if (!uid || uid === 'public-visitor') continue;
+    const moldeDir = getStorefrontMoldeDir(path.join(root, uid));
+    try {
+      const st = await stat(moldeDir);
+      cachedDirs.push({ uid, moldeDir, mtimeMs: st.mtimeMs });
+    } catch {
+      // No local storefront-molde cache in this folder
+    }
+  }
+
+  if (cachedDirs.length <= limit) {
+    return { scanned: cachedDirs.length, pruned: [] };
+  }
+
+  cachedDirs.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const pruned = [];
+  let kept = 0;
+
+  for (const item of cachedDirs) {
+    const pinned = item.uid === keepUserId || activeWorkerUserIds.has(item.uid);
+    if (pinned || kept < limit) {
+      kept += 1;
+      continue;
+    }
+    try {
+      await rm(item.moldeDir, { recursive: true, force: true });
+      pruned.push(item.uid);
+    } catch {
+      // Ignore concurrent cleanup failure
+    }
+  }
+
+  return { scanned: cachedDirs.length, pruned };
+}
+
+export async function ensureMoldeFromProfile(directory, profile) {
+  const ir = profile?.storeLayout?.formulasIr;
+  if (!ir) return false;
+  const current = await readStorefrontMoldeState(directory);
+  if (current?.formulasIr) {
+    const diskUpdatedAt = String(current.formulasIr.updatedAt || '');
+    const profUpdatedAt = String(ir.updatedAt || profile?.storeLayout?.updatedAt || '');
+    const diskMs = diskUpdatedAt ? Date.parse(diskUpdatedAt) : 0;
+    const profMs = profUpdatedAt ? Date.parse(profUpdatedAt) : 0;
+    if (!Number.isFinite(profMs) || profMs <= 0 || (Number.isFinite(diskMs) && diskMs > 0 && profMs <= diskMs)) {
+      return false;
+    }
+  }
+  await writeStorefrontMoldeToDisk({
+    directory,
+    formulasIr: ir,
+    imageJobs: Array.isArray(ir.imagePlan) ? ir.imagePlan : [],
+  });
+  return true;
+}
+
 class ApiError extends Error {
   constructor(status, message) {
     super(message);
@@ -56,9 +152,16 @@ class ApiError extends Error {
 function send(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store' });
   res.end(JSON.stringify(data));
+  return true;
 }
 
 async function readJson(req, max = 24 * 1024 * 1024) {
+  if (req.method === 'POST' || req.method === 'PUT') {
+    const contentType = String(req.headers?.['content-type'] || '').toLowerCase();
+    if (!contentType.includes('application/json')) {
+      throw new ApiError(415, 'Content-Type deve ser application/json.');
+    }
+  }
   const chunks = [];
   let size = 0;
   for await (const chunk of req.iterator({ destroyOnReturn: false })) {
@@ -92,28 +195,44 @@ export function createWorkspaceApi(options = {}) {
   const writes = new Map();
   const sessions = new Map();
   const whatsappCloud = new Map();
+  const MAX_WHATSAPP_CLOUD_CACHE = 100;
+  function setWhatsappCloudState(uid, value) {
+    if (whatsappCloud.has(uid)) whatsappCloud.delete(uid);
+    whatsappCloud.set(uid, value);
+    if (whatsappCloud.size > MAX_WHATSAPP_CLOUD_CACHE) {
+      for (const [k, v] of whatsappCloud.entries()) {
+        if (whatsappCloud.size <= MAX_WHATSAPP_CLOUD_CACHE) break;
+        if (k !== uid && !workers.has(k) && !v?.syncing) {
+          whatsappCloud.delete(k);
+        }
+      }
+    }
+  }
   const recentOrderDedupe = new Map();
+  const inflightIdentify = new Map();
   let activeSearches = 0;
 
   async function cloudFetch(route, token, init) {
     const method = (init?.method || 'GET').toUpperCase();
+    const maxAttempts = 3;
+    const timeoutMs = method === 'GET' ? 3500 : 8000;
     let lastError;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const response = await request(url + route, {
-          ...init, signal: AbortSignal.timeout(8000), redirect: 'error',
+          ...init, signal: AbortSignal.timeout(timeoutMs), redirect: 'error',
           headers: { apikey: key, Authorization: 'Bearer ' + token, ...init?.headers },
         });
-        if (attempt === 2 || response.ok) return response;
+        if (attempt === maxAttempts - 1 || response.ok) return response;
         const payload = await response.clone().json().catch(() => null);
         const connectionBusy = payload?.code === 'PGRST003';
         const safeReadRetry = method === 'GET' && [429, 500, 502, 503, 504].includes(response.status);
         if (!connectionBusy && !safeReadRetry) return response;
       } catch (error) {
         lastError = error;
-        if (method !== 'GET' || attempt === 2) throw error;
+        if (method !== 'GET' || attempt === maxAttempts - 1) throw error;
       }
-      await new Promise(resolve => setTimeout(resolve, 200 * (2 ** attempt)));
+      await new Promise(resolve => setTimeout(resolve, 150 * (2 ** attempt)));
     }
     throw lastError || new Error('Supabase indisponível.');
   }
@@ -125,22 +244,33 @@ export function createWorkspaceApi(options = {}) {
   async function identify(req) {
     const bearer = /^Bearer ([\w.-]{20,8192})$/i.exec(req.headers.authorization || '')?.[1];
     if (!bearer) throw new ApiError(401, 'Entre na sua conta.');
+    const localShowcase = verifyLocalShowcaseToken(bearer);
+    if (localShowcase) {
+      return { id: localShowcase.id, email: localShowcase.email, bearer, isLocalShowcase: true };
+    }
     const digest = createHash('sha256').update(bearer).digest('hex');
     const now = Date.now();
     for (const [id, session] of sessions) if (session.until <= now) sessions.delete(id);
     const cached = sessions.get(digest);
     if (cached) return { id: cached.id, bearer };
-    const res = await cloudFetch('/auth/v1/user', bearer).catch(() => null);
-    if (!res || res.status >= 500 || res.status === 429) throw new ApiError(503, 'Validação da conta indisponível.');
-    if (!res.ok) throw new ApiError(401, 'Sessão expirada. Entre de novo.');
-    const { id } = await res.json();
-    if (typeof id !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
-      throw new ApiError(401, 'Conta inválida.');
-    }
-    const exp = JSON.parse(Buffer.from(bearer.split('.')[1] || '', 'base64url').toString('utf8')).exp;
-    if (typeof exp !== 'number' || exp * 1000 <= now) throw new ApiError(401, 'Sessão expirada.');
-    if (sessions.size < 500) sessions.set(digest, { id, until: Math.min(exp * 1000, now + 15000) });
-    return { id, bearer };
+    if (inflightIdentify.has(digest)) return inflightIdentify.get(digest);
+    const job = (async () => {
+      const res = await cloudFetch('/auth/v1/user', bearer).catch(() => null);
+      if (!res || res.status >= 500 || res.status === 429) throw new ApiError(503, 'Validação da conta indisponível.');
+      if (!res.ok) throw new ApiError(401, 'Sessão expirada. Entre de novo.');
+      const { id } = await res.json();
+      if (typeof id !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
+        throw new ApiError(401, 'Conta inválida.');
+      }
+      const exp = JSON.parse(Buffer.from(bearer.split('.')[1] || '', 'base64url').toString('utf8')).exp;
+      if (typeof exp !== 'number' || exp * 1000 <= now) throw new ApiError(401, 'Sessão expirada.');
+      if (sessions.size < 500) sessions.set(digest, { id, until: Math.min(exp * 1000, now + 15000) });
+      return { id, bearer };
+    })().finally(() => {
+      if (inflightIdentify.get(digest) === job) inflightIdentify.delete(digest);
+    });
+    inflightIdentify.set(digest, job);
+    return job;
   }
 
   function queue(id, job) {
@@ -160,14 +290,52 @@ export function createWorkspaceApi(options = {}) {
     }
   }
 
-  async function atomicWriteJson(filePath, value) {
+  async function safeRename(fromPath, toPath) {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        await rename(fromPath, toPath);
+        return;
+      } catch (error) {
+        if ((error.code === 'EPERM' || error.code === 'EBUSY' || error.code === 'EACCES') && attempt < 7) {
+          await new Promise((r) => setTimeout(r, 20 * (attempt + 1)));
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+
+  async function writeJsonAtomically(filePath, serialized) {
     await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
     const temp = filePath + '.' + randomUUID() + '.tmp';
     try {
-      await writeFile(temp, JSON.stringify(value, null, 2), { mode: 0o600 });
-      await rename(temp, filePath);
+      await writeFile(temp, serialized, { mode: 0o600 });
+      await safeRename(temp, filePath);
     } finally {
       await rm(temp, { force: true }).catch(() => {});
+    }
+  }
+
+  async function atomicWriteJson(filePath, value) {
+    const serialized = JSON.stringify(value, null, 2);
+    await writeJsonAtomically(filePath, serialized);
+    const showcaseId = 'bbbbbbbb-2222-4222-8222-222222222222';
+    const norm = path.resolve(filePath);
+    const marker = path.sep + showcaseId + path.sep;
+    const idx = norm.indexOf(marker);
+    if (idx >= 0) {
+      const rel = norm.slice(idx + marker.length);
+      const repoShowcaseDir = path.resolve(app, 'workspaces', showcaseId);
+      const mirrorTarget = path.join(repoShowcaseDir, rel);
+      if (mirrorTarget !== norm) {
+        try {
+          await writeJsonAtomically(mirrorTarget, serialized);
+          if (rel === 'profile.json') {
+            await writeJsonAtomically(path.join(repoShowcaseDir, 'studio.json'), serialized);
+            await writeJsonAtomically(path.join(path.dirname(norm), 'studio.json'), serialized);
+          }
+        } catch {}
+      }
     }
   }
 
@@ -180,8 +348,16 @@ export function createWorkspaceApi(options = {}) {
     }
   }
 
+  function isLocalOrShowcaseBearer(bearer) {
+    return (
+      process.env.CG_PERSISTENCE === 'local' ||
+      !bearer ||
+      String(bearer).startsWith('cg-local-showcase.')
+    );
+  }
+
   async function cloudProfile(id, bearer) {
-    if (process.env.CG_PERSISTENCE === 'local') return null;
+    if (isLocalOrShowcaseBearer(bearer)) return null;
     const res = await cloudFetch('/rest/v1/cg_business_profile?select=revision,data,updated_at&user_id=eq.' + id, bearer);
     const payload = await res.json();
     if (res.status === 404 && ['PGRST205', '42P01'].includes(payload?.code)) return null;
@@ -190,6 +366,7 @@ export function createWorkspaceApi(options = {}) {
   }
 
   async function cloudSaveProfile(bearer, revision, data) {
+    if (isLocalOrShowcaseBearer(bearer)) return revision + 1;
     const result = await cloudFetch('/rest/v1/rpc/cg_put_business_profile', bearer, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -202,7 +379,7 @@ export function createWorkspaceApi(options = {}) {
   }
 
   async function cloudOrders(id, bearer) {
-    if (process.env.CG_PERSISTENCE === 'local') return null;
+    if (isLocalOrShowcaseBearer(bearer)) return null;
     const res = await cloudFetch('/rest/v1/cg_orders?select=*&user_id=eq.' + id + '&order=created_at.desc&limit=100', bearer);
     const payload = await res.json();
     if (res.status === 404 && ['PGRST205', '42P01'].includes(payload?.code)) return null;
@@ -211,7 +388,7 @@ export function createWorkspaceApi(options = {}) {
   }
 
   async function cloudUpsertOrder(bearer, order) {
-    if (process.env.CG_PERSISTENCE === 'local') return null;
+    if (isLocalOrShowcaseBearer(bearer)) return null;
     const res = await cloudFetch('/rest/v1/cg_orders?on_conflict=user_id,order_ref', bearer, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' },
@@ -235,7 +412,7 @@ export function createWorkspaceApi(options = {}) {
   }
 
   async function cloudMetrics(id, bearer) {
-    if (process.env.CG_PERSISTENCE === 'local') return null;
+    if (isLocalOrShowcaseBearer(bearer)) return null;
     const res = await cloudFetch('/rest/v1/cg_store_metrics?select=visits_total,visits_by_day&user_id=eq.' + id, bearer);
     const payload = await res.json();
     if (res.status === 404 && ['PGRST205', '42P01'].includes(payload?.code)) return null;
@@ -270,7 +447,7 @@ export function createWorkspaceApi(options = {}) {
   }
 
   async function cloudState(id, bearer) {
-    if (process.env.CG_PERSISTENCE === 'local') return null;
+    if (isLocalOrShowcaseBearer(bearer)) return null;
     const res = await cloudFetch('/rest/v1/cg_workspace_state?select=revision,data&user_id=eq.' + id, bearer);
     const payload = await res.json();
     if (res.status === 404 && ['PGRST205', '42P01'].includes(payload.code)) return null;
@@ -279,6 +456,7 @@ export function createWorkspaceApi(options = {}) {
   }
 
   async function cloudSave(bearer, revision, data) {
+    if (isLocalOrShowcaseBearer(bearer)) return revision + 1;
     const result = await cloudFetch('/rest/v1/rpc/cg_put_workspace', bearer, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -303,7 +481,7 @@ export function createWorkspaceApi(options = {}) {
   }
 
   async function cloudWhatsappState(id, bearer) {
-    if (process.env.CG_PERSISTENCE === 'local') return null;
+    if (isLocalOrShowcaseBearer(bearer)) return null;
     const res = await cloudFetch('/rest/v1/cg_whatsapp_state?select=revision,data,updated_at&user_id=eq.' + id, bearer);
     const payload = await res.json();
     if (res.status === 404 && ['PGRST205', '42P01'].includes(payload.code)) return null;
@@ -401,7 +579,7 @@ export function createWorkspaceApi(options = {}) {
   async function hydrateWhatsapp(user, directory) {
     const remote = await cloudWhatsappState(user.id, user.bearer);
     if (!remote) {
-      whatsappCloud.set(user.id, { available: false, revision: 0, uploaded: new Set(), lastSync: 0, error: 'Migração pendente.' });
+      setWhatsappCloudState(user.id, { available: false, revision: 0, uploaded: new Set(), lastSync: 0, error: 'Migração pendente.' });
       return;
     }
     const markerFile = path.join(directory, 'supabase-whatsapp.json');
@@ -412,9 +590,9 @@ export function createWorkspaceApi(options = {}) {
     if (remote.revision > 0 && (!localExists || remote.revision > (marker.revision || 0))) {
       await writeWhatsappSnapshot(directory, remote.data);
       await downloadWhatsappMedia(user.id, user.bearer, directory, remote.data);
-      await writeFile(markerFile, JSON.stringify({ revision: remote.revision, syncedAt: remote.updated_at }), { mode: 0o600 });
+      await atomicWriteJson(markerFile, { revision: remote.revision, syncedAt: remote.updated_at });
     }
-    whatsappCloud.set(user.id, {
+    setWhatsappCloudState(user.id, {
       available: true, revision: remote.revision, uploaded: new Set(mediaNames(remote.data)),
       lastSync: 0, syncedAt: remote.updated_at, error: '',
       lastDigest: remote.revision > 0 ? stateDigest(remote.data) : '',
@@ -560,7 +738,7 @@ export function createWorkspaceApi(options = {}) {
   async function syncWhatsapp(user, directory, worker, force = false) {
     const state = whatsappCloud.get(user.id);
     if (!state?.available) return state;
-    if (!force && Date.now() - state.lastSync < 5000) return state;
+    if (!force && Date.now() - state.lastSync < 15000) return state;
     if (state.syncing) {
       if (force) state.dirty = true;
       return state.syncing;
@@ -580,9 +758,10 @@ export function createWorkspaceApi(options = {}) {
         state.lastSync = Date.now();
         state.syncedAt = new Date().toISOString();
         state.error = '';
-        await writeFile(path.join(directory, 'supabase-whatsapp.json'), JSON.stringify({
-          revision: state.revision, syncedAt: state.syncedAt,
-        }), { mode: 0o600 });
+        await atomicWriteJson(path.join(directory, 'supabase-whatsapp.json'), {
+          revision: state.revision,
+          syncedAt: state.syncedAt,
+        });
       } catch (error) {
         state.error = error instanceof Error ? error.message : 'Falha na sincronização.';
         if (error.status === 409) {
@@ -602,7 +781,7 @@ export function createWorkspaceApi(options = {}) {
   }
 
   async function loadProfileState(user, directory) {
-    const remote = await cloudProfile(user.id, user.bearer);
+    const remote = user?.isLocalShowcase ? null : await cloudProfile(user.id, user.bearer);
     const provider = remote ? 'supabase' : 'servidor';
     let current = remote || await readJsonFile(path.join(directory, 'profile.json'), { revision: 0, data: {} });
     if (remote?.revision === 0) {
@@ -620,9 +799,28 @@ export function createWorkspaceApi(options = {}) {
     return { current: current || { revision: 0, data: {} }, remote, provider };
   }
 
+  async function saveProfileState(user, directory, expectedRevision, rawProfile) {
+    return queue(user.id + ':profile', async () => {
+      const { current, remote } = await loadProfileState(user, directory);
+      const nextProfile = normalizeProfile(rawProfile);
+      const baseRevision = Number.isSafeInteger(expectedRevision) ? expectedRevision : Number(current?.revision || 0);
+      let nextRevision = current.revision;
+      if (remote && !user?.isLocalShowcase) {
+        nextRevision = await cloudSaveProfile(user.bearer, baseRevision, nextProfile);
+      } else {
+        nextRevision = Number(current?.revision || 0) + 1;
+      }
+      await atomicWriteJson(path.join(directory, 'profile.json'), { revision: nextRevision, data: nextProfile });
+      const bot = buildBotProjections(nextProfile, nextRevision);
+      await writeBotProjectionFiles(directory, bot);
+      await notifyWorkerProfile(user.id, bot);
+      return { revision: nextRevision, profile: nextProfile };
+    });
+  }
+
   async function syncLocalOrders(user, directory) {
     const localOrders = await readJsonFile(path.join(directory, 'orders.json'), []);
-    const remoteOrders = await cloudOrders(user.id, user.bearer);
+    const remoteOrders = user?.isLocalShowcase ? null : await cloudOrders(user.id, user.bearer);
     const byRef = new Map();
     if (Array.isArray(remoteOrders)) {
       for (const ord of remoteOrders) {
@@ -675,9 +873,9 @@ export function createWorkspaceApi(options = {}) {
         if (activeProducts.length === 0) {
           throw new ApiError(422, 'Cadastre pelo menos 1 produto ativo antes de publicar a loja.');
         }
-        const missingAsset = activeProducts.find(p => !p.imageUrl || !p.approvedAsset);
+        const missingAsset = activeProducts.find(p => !p.approvedAsset);
         if (missingAsset) {
-          throw new ApiError(422, `Aprove a foto do produto "${missingAsset.name}" antes de publicar a loja.`);
+          throw new ApiError(422, `Confirme ou revise o item "${missingAsset.name}" antes de publicar a loja.`);
         }
         nextProfile.publishedStore = {
           ...nextProfile.publishedStore,
@@ -693,6 +891,29 @@ export function createWorkspaceApi(options = {}) {
       const prevDigest = computeDigest(currentProfile);
       const nextDigest = computeDigest(nextProfile);
       const diff = diffProfile(currentProfile, nextProfile);
+
+      if (diff.targets.includes('store')) {
+        const syncedIr = await syncStorefrontMoldeFromProfile({
+          user,
+          directory,
+          prevProfile: currentProfile,
+          nextProfile,
+        });
+        if (syncedIr) {
+          nextProfile.storeLayout = {
+            ...(nextProfile.storeLayout || {}),
+            formulasIr: syncedIr,
+            updatedAt: syncedIr.updatedAt || new Date().toISOString(),
+          };
+        }
+      }
+
+      if (nextProfile.publishedStore?.published === true && (prevDigest !== nextDigest || current.revision === 0)) {
+        nextProfile.publishedStore = {
+          ...nextProfile.publishedStore,
+          sourceRevision: current.revision + 1,
+        };
+      }
 
       let nextRevision = current.revision;
       if (prevDigest !== nextDigest || current.revision === 0) {
@@ -740,7 +961,7 @@ export function createWorkspaceApi(options = {}) {
         },
       };
       await atomicWriteJson(metricsFile, nextLocal);
-      if (process.env.CG_PERSISTENCE !== 'local') {
+      if (!isLocalOrShowcaseBearer(user.bearer)) {
         const remoteRes = await cloudFetch('/rest/v1/rpc/cg_increment_store_visit', user.bearer, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -897,7 +1118,12 @@ export function createWorkspaceApi(options = {}) {
           unmatchedItems = calc.unmatchedItems;
           subtotalCents = calc.subtotalCents;
           shippingCents = calc.shippingCents;
-          totalCents = calc.totalCents;
+          const pixDiscPct =
+            String(body.paymentMethod || '').toLowerCase() === 'pix'
+              ? Math.max(0, Math.min(90, Number(profile.payment?.pixDiscountPercent || 0)))
+              : 0;
+          const pixDiscountCents = pixDiscPct > 0 ? Math.round((calc.subtotalCents * pixDiscPct) / 100) : 0;
+          totalCents = Math.max(0, calc.subtotalCents - pixDiscountCents) + calc.shippingCents;
         }
 
         const now = new Date().toISOString();
@@ -965,10 +1191,31 @@ export function createWorkspaceApi(options = {}) {
     const metrics = (remoteMetrics && Number(remoteMetrics.visits_total) >= Number(localMetrics.visits_total)) ? remoteMetrics : localMetrics;
     const conversas = await readJsonFile(path.join(directory, 'conversas.json'), []);
     const config = await readJsonFile(path.join(directory, 'configuracoes.json'), {});
-    const dashboard = buildDashboardProjection(current.data, current.revision, orders, metrics, {
-      conversas,
-      conectado: Boolean(config?.conectado),
-    }, { days });
+    const eventsState = await readJsonFile(path.join(directory, 'whatsapp_events.json'), {});
+    const funnel = computeD1FunnelMetrics({ storeMetrics: metrics, eventsState, orders });
+    const manualOrdersCount = (Array.isArray(orders) ? orders : []).filter(
+      (o) =>
+        o &&
+        o.status !== 'cancelado' &&
+        (o.manual === true ||
+          String(o.order_ref || '').startsWith('PED-') ||
+          (Array.isArray(o.items) && o.items.some((i) => i?.variation === 'Balcão'))),
+    ).length;
+    const dashboard = {
+      ...buildDashboardProjection(current.data, current.revision, orders, metrics, {
+        conversas,
+        conectado: Boolean(config?.conectado),
+      }, { days }),
+      d1StrictConversion: {
+        visits: funnel.visits,
+        productClicks: funnel.productClicks,
+        whatsappPurchaseMessages: funnel.whatsappPurchaseMessages,
+        d1ConfirmedOrders: funnel.d1ConfirmedOrders,
+        d1RevenueCents: funnel.d1RevenueCents,
+        conversionRatePct: funnel.conversionRatePct,
+        manualOrdersCount,
+      },
+    };
     send(res, 200, { dashboard });
   }
 
@@ -979,7 +1226,11 @@ export function createWorkspaceApi(options = {}) {
     if (!allowedMethod) throw new ApiError(404, 'Rota indisponível.');
     if (req.method !== allowedMethod) throw new ApiError(405, 'Método indisponível.');
     const body = req.method === 'POST' ? await readJson(req, 15 * 1024 * 1024) : undefined;
-    if (target === '/api/chat/send' && body.imagemUrl && !/^\/media\/[\w.-]+$/.test(body.imagemUrl)) {
+    if (
+      target === '/api/chat/send' &&
+      body?.imagemUrl &&
+      (String(body.imagemUrl).includes('..') || !/^\/media\/[\w.-]+$/.test(String(body.imagemUrl)))
+    ) {
       throw new ApiError(400, 'Anexe a imagem antes de enviar.');
     }
     const worker = await startWorker(user, directory);
@@ -1012,6 +1263,35 @@ export function createWorkspaceApi(options = {}) {
     if (req.method === 'POST' && upstream.ok) void syncWhatsapp(user, directory, worker, true);
   }
 
+  async function huntFallbackWikimedia(query, maxCount) {
+    try {
+      const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(query)}&gsrlimit=${Math.min(10, maxCount)}&prop=imageinfo&iiprop=url|size|mime&iiurlwidth=800&format=json`;
+      const r = await request(apiUrl, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'CompanyGenPostStudio/1.0' } });
+      if (!r.ok) return [];
+      const data = await r.json().catch(() => null);
+      const pages = Object.values(data?.query?.pages || {});
+      return pages
+        .map((pg) => {
+          const info = Array.isArray(pg?.imageinfo) ? pg.imageinfo[0] : null;
+          const url = info?.thumburl || info?.url || '';
+          if (!url || !/^https?:\/\//i.test(url)) return null;
+          return {
+            rawUrl: url,
+            thumbnailUrl: info?.thumburl || url,
+            titleSnippet: String(pg?.title || query).replace(/^File:/i, ''),
+            sourceDomain: 'commons.wikimedia.org',
+            declaredWidth: Number(info?.width || 800),
+            declaredHeight: Number(info?.height || 600),
+            mediaType: 'image',
+          };
+        })
+        .filter(Boolean)
+        .slice(0, maxCount);
+    } catch {
+      return [];
+    }
+  }
+
   async function hunt(req, res) {
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
     const { query, count, mediaType = 'image' } = await readJson(req, 8192);
@@ -1019,16 +1299,21 @@ export function createWorkspaceApi(options = {}) {
         !['image', 'video', 'all'].includes(mediaType)) throw new ApiError(400, 'Busca inválida.');
     if (activeSearches >= 4) throw new ApiError(429, 'Busca ocupada. Tente novamente em instantes.');
     activeSearches++;
+    const maxCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 5));
     try {
       const { stdout } = await execFileAsync(process.env.CG_HUNT_PYTHON || 'python', [
         path.join(app, 'scripts', 'hunt-product-assets.py'), '--query=' + query.trim(),
-        '--count', String(Math.min(20, Math.max(1, Number.parseInt(count, 10) || 5))), '--media-type', mediaType,
-      ], { timeout: 35000, maxBuffer: 1024 * 1024, windowsHide: true, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+        '--count', String(maxCount), '--media-type', mediaType,
+      ], { timeout: 25000, maxBuffer: 1024 * 1024, windowsHide: true, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
       const items = JSON.parse(stdout);
-      if (!Array.isArray(items)) throw new Error('Invalid result');
-      send(res, 200, { success: true, items });
+      if (Array.isArray(items) && items.length > 0) {
+        return send(res, 200, { success: true, items });
+      }
+      const fallbackItems = await huntFallbackWikimedia(query.trim(), maxCount);
+      return send(res, 200, { success: true, items: fallbackItems, fallback: 'wikimedia' });
     } catch {
-      throw new ApiError(502, 'O pesquisador de imagens está indisponível.');
+      const fallbackItems = await huntFallbackWikimedia(query.trim(), maxCount);
+      return send(res, 200, { success: true, items: fallbackItems, fallback: 'wikimedia' });
     } finally {
       activeSearches--;
     }
@@ -1038,7 +1323,9 @@ export function createWorkspaceApi(options = {}) {
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
     const { handle } = await readJson(req, 4096);
     const cleaned = String(handle || '').trim();
-    if (!cleaned || cleaned.length > 120) throw new ApiError(400, 'Informe um @usuario válido do Instagram.');
+    if (!cleaned || cleaned.length > 120 || cleaned.startsWith('-')) {
+      throw new ApiError(400, 'Informe um @usuario válido do Instagram.');
+    }
     const logoDir = path.join(directory, 'brand-logos');
     await mkdir(logoDir, { recursive: true });
     try {
@@ -1059,6 +1346,11 @@ export function createWorkspaceApi(options = {}) {
         category: String(parsed.category || ''),
         logoUrl,
         source: String(parsed.source || ''),
+        phone: String(parsed.phone || ''),
+        address: String(parsed.address || ''),
+        hours: String(parsed.hours || ''),
+        differentials: Array.isArray(parsed.differentials) ? parsed.differentials.map(String).slice(0, 3) : [],
+        links: Array.isArray(parsed.links) ? parsed.links.map(String).slice(0, 5) : [],
         error: parsed.error ? String(parsed.error) : '',
       });
     } catch {
@@ -1088,8 +1380,127 @@ export function createWorkspaceApi(options = {}) {
     }
   }
 
+  async function serveStoreMoldeAsset(req, res, pathname) {
+    if (!['GET', 'HEAD'].includes(req.method)) throw new ApiError(405, 'Método indisponível.');
+    const match = /^\/api\/store-molde\/([A-Za-z0-9_-]{4,80})(?:\/(.*))?$/i.exec(pathname);
+    if (!match) throw new ApiError(404, 'Arquivo da Pasta Molde não encontrado.');
+    const [, uid, rawRel = 'index.html'] = match;
+    if (['state', 'generate-full', 'create-page', 'edit-block', 'generate-image', 'upload-asset', 'save-ir'].includes(uid.toLowerCase())) {
+      return false;
+    }
+    let decodedRel;
+    try {
+      decodedRel = decodeURIComponent(rawRel || 'index.html').replace(/^\/+/, '') || 'index.html';
+    } catch {
+      throw new ApiError(400, 'Caminho inválido.');
+    }
+    const baseDir = path.resolve(getStorefrontMoldeDir(path.join(root, uid)));
+    const filePath = path.resolve(baseDir, decodedRel);
+    if (!filePath.startsWith(baseDir + path.sep) && filePath !== baseDir) {
+      throw new ApiError(403, 'Acesso negado.');
+    }
+
+    let authorizedOwner = false;
+    if (req.headers.authorization) {
+      try {
+        const caller = await identify(req);
+        authorizedOwner = caller?.id === uid;
+      } catch {}
+    }
+    let isPublished = false;
+    if (!authorizedOwner) {
+      const profSnap = await readJsonFile(path.join(root, uid, 'profile.json'), null);
+      isPublished = profSnap?.data?.publishedStore?.published === true;
+      if (!isPublished && isCloudStorageEnabled()) {
+        isPublished = await fetchCloudPublishedFlag({ userId: uid, fetchImpl: request });
+      }
+    }
+    if (!authorizedOwner && !isPublished) {
+      throw new ApiError(403, 'Acesso negado.');
+    }
+
+    const normalizedRel = path.relative(baseDir, filePath).replace(/\\/g, '/').toLowerCase();
+    if (normalizedRel === 'data/image-jobs.json' || normalizedRel.endsWith('/image-jobs.json')) {
+      if (!authorizedOwner) {
+        throw new ApiError(403, 'Acesso negado.');
+      }
+    }
+    try {
+      let bytes;
+      let targetFile = filePath;
+      try {
+        const realBase = await realpath(baseDir);
+        const st = await stat(targetFile);
+        if (st.isDirectory()) targetFile = path.join(targetFile, 'index.html');
+        const realTarget = await realpath(targetFile);
+        if (!realTarget.startsWith(realBase + path.sep) && realTarget !== realBase) {
+          throw new ApiError(403, 'Acesso negado.');
+        }
+        bytes = await readFile(realTarget);
+      } catch (diskErr) {
+        if (diskErr instanceof ApiError) throw diskErr;
+        if (!isCloudStorageEnabled()) throw diskErr;
+        const storageBytes = await downloadStorefrontFileFromStorage({
+          userId: uid,
+          relativePath: decodedRel,
+          fetchImpl: request,
+        });
+        if (!storageBytes) throw diskErr;
+        bytes = storageBytes;
+        targetFile = filePath;
+        await mkdir(path.dirname(targetFile), { recursive: true }).catch(() => {});
+        await writeFile(targetFile, bytes).catch(() => {});
+      }
+      const ext = path.extname(targetFile).toLowerCase();
+      const mimeMap = {
+        '.html': 'text/html; charset=utf-8',
+        '.css': 'text/css; charset=utf-8',
+        '.js': 'text/javascript; charset=utf-8',
+        '.json': 'application/json; charset=utf-8',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.webp': 'image/webp',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.woff2': 'font/woff2',
+      };
+      const isHtmlOrSvg = ext === '.html' || ext === '.svg';
+      res.writeHead(200, {
+        'Content-Type': mimeMap[ext] || 'application/octet-stream',
+        'Cache-Control': ext === '.html' || ext === '.json' ? 'no-cache' : 'public, max-age=3600',
+        'X-Content-Type-Options': 'nosniff',
+        ...(isHtmlOrSvg
+          ? {
+              'Content-Security-Policy':
+                "default-src 'self' data: blob:; img-src * data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self';",
+            }
+          : {}),
+      });
+      if (req.method === 'HEAD') res.end();
+      else res.end(bytes);
+      return true;
+    } catch {
+      throw new ApiError(404, 'Arquivo da Pasta Molde não encontrado.');
+    }
+  }
+
   async function handler(req, res, next) {
     const pathname = req.url?.split('?')[0] || '';
+    if (pathname.startsWith('/q/')) {
+      try {
+        const handledQr = await handlePublicQrRedirect(req, res, {
+          root,
+          readJsonFile,
+          atomicWriteJson,
+          fetchImpl: request,
+        });
+        if (handledQr) return;
+      } catch {
+        if (!res.headersSent) send(res, 500, { ok: false, error: 'Falha ao redirecionar QR Code.' });
+        return;
+      }
+    }
     if (pathname.startsWith('/api/brand-logo/')) {
       try {
         return await serveBrandLogo(req, res, pathname);
@@ -1098,6 +1509,56 @@ export function createWorkspaceApi(options = {}) {
         return;
       }
     }
+
+    if (
+      pathname.startsWith('/api/store-molde/') &&
+      !pathname.startsWith('/api/store-molde/job/') &&
+      ![
+        '/api/store-molde/state',
+        '/api/store-molde/generate-full',
+        '/api/store-molde/create-page',
+        '/api/store-molde/edit-block',
+        '/api/store-molde/generate-image',
+        '/api/store-molde/upload-asset',
+        '/api/store-molde/save-ir',
+      ].includes(pathname)
+    ) {
+      try {
+        const handled = await serveStoreMoldeAsset(req, res, pathname);
+        if (handled) return;
+      } catch (error) {
+        if (!res.headersSent) send(res, error.status || 404, { ok: false, error: error.message || 'Arquivo não encontrado.' });
+        return;
+      }
+    }
+
+    if (
+      pathname === '/api/access/validate' ||
+      pathname === '/api/access/showcase-status' ||
+      pathname === '/api/access/local-showcase-login' ||
+      pathname === '/api/credits/costs' ||
+      (pathname === '/api/checkout/plans' && !req.headers.authorization)
+    ) {
+      try {
+        const publicCtx = {
+          user: { id: 'public-visitor' },
+          bearer: '',
+          fetchImpl: request,
+          directory: path.join(root, 'public-visitor'),
+          readJson,
+          send,
+          ApiError,
+          loadProfileState,
+          readJsonFile,
+          atomicWriteJson,
+        };
+        if ((await handleAccessAndCheckoutRoutes(req, res, publicCtx)) || res.headersSent) return;
+      } catch (error) {
+        if (!res.headersSent) send(res, error.status || 500, { ok: false, error: error.message || 'Erro de validação.' });
+        return;
+      }
+    }
+
     const owned = [
       '/api/workspace',
       '/api/profile',
@@ -1108,12 +1569,55 @@ export function createWorkspaceApi(options = {}) {
       '/api/hunt',
       '/api/instagram/analyze',
       '/api/images/status',
-      '/api/images/acquire',
-    ].includes(pathname) || pathname.startsWith('/api/whatsapp/');
+      '/api/access/redeem',
+      '/api/checkout/plans',
+      '/api/credits/balance',
+      '/api/credits/costs',
+      '/api/checkout/order',
+      '/api/checkout/confirm',
+      '/api/support/tickets',
+      '/api/store/qr-code',
+    ].includes(pathname) ||
+      pathname.startsWith('/api/whatsapp/') ||
+      pathname.startsWith('/api/ai/') ||
+      pathname.startsWith('/api/store-molde/') ||
+      pathname.startsWith('/api/onboarding/') ||
+      pathname.startsWith('/api/admin/');
     if (!owned) return next();
     try {
       const user = await identify(req);
       const directory = path.join(root, user.id);
+      const touchState = await recordUserTouchAndCheckBan({
+        root,
+        user,
+        readJsonFile,
+        atomicWriteJson,
+      });
+      if (touchState.banned && pathname !== '/api/admin/status') {
+        return send(res, 403, {
+          ok: false,
+          error: 'ACCOUNT_BANNED',
+          message: touchState.reason || 'Sua conta foi suspensa pelo administrador.',
+        });
+      }
+      const aiCtx = {
+        user,
+        bearer: user?.bearer || '',
+        fetchImpl: request,
+        root,
+        directory,
+        isAdmin: Boolean(touchState.isAdmin),
+        isAdminRequest: () => isAdminRequest({ root, user, readJsonFile }),
+        readJson,
+        send,
+        ApiError,
+        loadProfileState,
+        saveProfileState,
+        readJsonFile,
+        atomicWriteJson,
+      };
+      if (await handleAdminRoutes(req, res, aiCtx)) return;
+      if (await handleSupportAndQrClientRoutes(req, res, aiCtx)) return;
       if (pathname === '/api/workspace') return await storage(req, res, user, directory);
       if (pathname === '/api/profile') return await profileHandler(req, res, user, directory);
       if (pathname === '/api/store/public') return await storePublicHandler(req, res, user, directory);
@@ -1125,7 +1629,25 @@ export function createWorkspaceApi(options = {}) {
       if (pathname === '/api/images/status') {
         return send(res, 200, { available: true, provider: 'ddgs', pexels_key_configured: false });
       }
-      if (pathname === '/api/images/acquire') throw new ApiError(410, 'Use a busca de imagens do workspace.');
+      if (pathname === '/api/store-molde/state') {
+        const snap = await loadProfileState(user, directory).catch(() => null);
+        if (snap?.current?.data) {
+          await ensureMoldeFromProfile(directory, snap.current.data).catch(() => false);
+        }
+      }
+      if (await handleStorefrontMoldeRoutes(req, res, aiCtx)) {
+        if (pathname === '/api/store-molde/generate-full' && process.env.CG_PERSISTENCE !== 'local') {
+          void pruneStaleLocalWorkspaces(root, {
+            keepUserId: user.id,
+            activeWorkerUserIds: new Set(workers.keys()),
+          }).catch(() => {});
+        }
+        return;
+      }
+      if (await handleSpreadsheetRoutes(req, res, aiCtx)) return;
+      if (await handleWhatsappAiRoutes(req, res, aiCtx)) return;
+      if ((await handleAccessAndCheckoutRoutes(req, res, aiCtx)) || res.headersSent) return;
+      if (pathname.startsWith('/api/ai/')) throw new ApiError(404, 'Endpoint não encontrado.');
       return await whatsapp(req, res, user, directory, pathname);
     } catch (error) {
       console.error('[CompanyGen API]', req.method, pathname, error instanceof Error ? error.message : error);

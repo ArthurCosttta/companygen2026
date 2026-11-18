@@ -72,7 +72,7 @@ export function DrawerContainer({
         <DialogPrimitive.Overlay
           data-slot="drawer-overlay"
           className={cn(
-            "fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-[4px]",
+            "fixed inset-0 z-50 bg-black/65 will-change-[opacity]",
             "transition-opacity duration-200",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
@@ -100,6 +100,8 @@ export function DrawerContainer({
           className={cn(
             "fixed z-50 flex flex-col bg-white text-[#0F172A] shadow-2xl outline-none",
             "border-slate-200/80",
+            "dark:bg-[#121215] dark:text-[#FFFFFF] dark:border-[#27272A]",
+            "transform-gpu will-change-[transform,opacity]",
             // Mobile <= 768px: Bottom Sheet 95% height
             "max-[768px]:inset-x-0 max-[768px]:bottom-0 max-[768px]:h-[95dvh] max-[768px]:w-full max-[768px]:rounded-t-2xl max-[768px]:border-t",
             "max-[768px]:duration-250 max-[768px]:ease-[cubic-bezier(0.4,0,0.2,1)]",
@@ -116,16 +118,16 @@ export function DrawerContainer({
         >
           {/* Mobile drag handle */}
           <div className="hidden max-[768px]:flex justify-center pt-2.5 pb-1 shrink-0" aria-hidden="true">
-            <span className="h-1 w-10 rounded-full bg-slate-300" />
+            <span className="h-1 w-10 rounded-full bg-slate-300 dark:bg-zinc-700" />
           </div>
 
-          <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 shrink-0">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-[#27272A] px-5 py-4 shrink-0">
             <div className="min-w-0 flex-1 space-y-1">
-              <DialogPrimitive.Title className="text-base font-semibold leading-snug text-[#0F172A]">
+              <DialogPrimitive.Title className="text-base font-semibold leading-snug text-[#0F172A] dark:text-[#FFFFFF]">
                 {title}
               </DialogPrimitive.Title>
               {description ? (
-                <DialogPrimitive.Description className="text-sm leading-relaxed text-slate-600">
+                <DialogPrimitive.Description className="text-sm leading-relaxed text-slate-600 dark:text-[#E4E4E7]">
                   {description}
                 </DialogPrimitive.Description>
               ) : (
@@ -140,7 +142,7 @@ export function DrawerContainer({
                 <button
                   type="button"
                   aria-label="Fechar painel"
-                  className="inline-flex min-h-[44px] min-w-[44px] -mr-2 -mt-2 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
+                  className="inline-flex min-h-[44px] min-w-[44px] -mr-2 -mt-2 shrink-0 items-center justify-center rounded-xl text-slate-500 dark:text-[#F4F4F5] transition-colors hover:bg-slate-100 dark:hover:bg-[#18181B] hover:text-[#0F172A] dark:hover:text-[#FFFFFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
                 >
                   <X className="size-5" aria-hidden="true" />
                 </button>
@@ -159,7 +161,7 @@ export function DrawerContainer({
           </div>
 
           {footer ? (
-            <div className="sticky bottom-0 shrink-0 border-t border-slate-200 bg-white px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(15,23,42,0.05)]">
+            <div className="sticky bottom-0 shrink-0 border-t border-slate-200 dark:border-[#27272A] bg-white dark:bg-[#18181B] dark:text-[#FFFFFF] px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(15,23,42,0.05)] dark:shadow-[0_-4px_16px_rgba(0,0,0,0.45)]">
               {footer}
             </div>
           ) : null}

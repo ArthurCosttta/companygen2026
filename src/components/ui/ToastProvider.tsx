@@ -226,7 +226,7 @@ export function ToastProvider({ children, maxVisible = 4 }: ToastProviderProps) 
       <div
         aria-live="polite"
         aria-atomic="false"
-        className="pointer-events-none fixed right-4 bottom-20 left-4 z-[100] flex flex-col gap-2.5 min-[769px]:bottom-6 min-[769px]:left-auto min-[769px]:w-[400px]"
+        className="pointer-events-none fixed bottom-4 right-4 left-4 z-[90] flex w-auto flex-col gap-2 sm:top-4 sm:right-4 sm:bottom-auto sm:left-auto sm:w-[min(92vw,400px)] sm:translate-x-0"
       >
         {toasts.map((item) => (
           <ToastCard

@@ -18,6 +18,10 @@ export default defineConfig({
     port: 5174,
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
+    env: {
+      ALLOW_LOCAL_SHOWCASE_PROFILES: '1',
+      CG_PERSISTENCE: 'local',
+    },
   },
   projects: [
     {

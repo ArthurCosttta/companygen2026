@@ -15,13 +15,13 @@ function workspaceApi(): Plugin {
     },
     configurePreviewServer(server) {
       server.middlewares.use(api.handler);
-      server.httpServer.once('close', api.close);
+      server.httpServer?.once('close', api.close);
     },
   };
 }
 
 export default defineConfig(({ mode }) => {
-  for (const [name, value] of Object.entries(loadEnv(mode, process.cwd(), ['CG_', 'VITE_SUPABASE_']))) {
+  for (const [name, value] of Object.entries(loadEnv(mode, process.cwd(), ['CG_', 'VITE_SUPABASE_', 'SUPABASE_SERVICE_ROLE_KEY', 'GLM_', 'RUNPOD_', 'AI_', 'IMAGE_', 'ALLOW_LOCAL_']))) {
     process.env[name] ??= value;
   }
   return {

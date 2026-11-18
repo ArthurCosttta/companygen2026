@@ -5,14 +5,20 @@ import {
   Copy,
   CreditCard,
   Eye,
+  FileSpreadsheet,
+  MessageCircle,
+  MousePointerClick,
   PlusCircle,
   RefreshCw,
   RotateCcw,
   Search,
   ShoppingBag,
   TrendingUp,
+  Users,
   X,
 } from 'lucide-react';
+import type { D1FunnelMetrics } from '@/schemas/ai-whatsapp-intent.schema';
+import { authenticatedFetch } from '@/services/supabase-client';
 import {
   formatCurrencyBRL,
   type BusinessOrder,
@@ -36,6 +42,7 @@ import {
 } from '@/components/ui';
 import { ManualSaleModal } from './ManualSaleModal';
 import { OrderDetailsModal } from './OrderDetailsModal';
+import { OrderSpreadsheetCatalogModal } from './OrderSpreadsheetCatalogModal';
 import {
   ORDER_STATUS_LIST,
   extractCustomerPhone,
@@ -49,6 +56,7 @@ export interface OrdersKanbanViewProps {
   profile: BusinessProfile;
   revision?: number;
   dashboard?: DashboardMetricsProjection | null;
+  d1Funnel?: Partial<D1FunnelMetrics> | null;
   owner?: string;
   loading?: boolean;
   storeUrl?: string;
@@ -66,6 +74,7 @@ const PERIOD_OPTIONS: Array<{ value: DashboardPeriodDays; label: string }> = [
 export function OrdersKanbanView({
   profile,
   dashboard,
+  d1Funnel: d1FunnelProp,
   owner,
   loading: externalLoading = false,
   storeUrl,
@@ -87,8 +96,55 @@ export function OrdersKanbanView({
   const [fetchError, setFetchError] = useState('');
 
   const [manualSaleOpen, setManualSaleOpen] = useState(false);
+  const [ordersXlsOpen, setOrdersXlsOpen] = useState(false);
+  const [eventsFunnel, setEventsFunnel] = useState<Partial<D1FunnelMetrics> | null>(null);
   const [selectedOrderRef, setSelectedOrderRef] = useState<string | null>(null);
   const [updatingRefs, setUpdatingRefs] = useState<Record<string, boolean>>({});
+  const [highlightedRefs, setHighlightedRefs] = useState<Record<string, boolean>>({});
+  const knownOrderRefsRef = useRef<Set<string>>(
+    new Set((dashboard?.recentOrders ?? []).map((o) => o.order_ref)),
+  );
+
+  useEffect(() => {
+    const newOnes = orders.filter((o) => o.order_ref && !knownOrderRefsRef.current.has(o.order_ref));
+    if (newOnes.length === 0) return;
+    newOnes.forEach((o) => knownOrderRefsRef.current.add(o.order_ref));
+    const additions: Record<string, boolean> = {};
+    newOnes.forEach((o) => {
+      additions[o.order_ref] = true;
+    });
+    setHighlightedRefs((prev) => ({ ...prev, ...additions }));
+    const timer = window.setTimeout(() => {
+      setHighlightedRefs((prev) => {
+        const next = { ...prev };
+        newOnes.forEach((o) => {
+          delete next[o.order_ref];
+        });
+        return next;
+      });
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [orders]);
+
+  const fetchEventsFunnel = useCallback(async () => {
+    try {
+      const res = await authenticatedFetch('/api/whatsapp/events', undefined, owner);
+      if (!res.ok) return;
+      const json = (await res.json().catch(() => null)) as {
+        d1Funnel?: D1FunnelMetrics;
+      } | null;
+      if (json?.d1Funnel) {
+        setEventsFunnel(json.d1Funnel);
+      }
+    } catch {
+      // Preserve last snapshot on transient failure
+    }
+  }, [owner]);
+
+  useEffect(() => {
+    if (d1FunnelProp !== undefined) return;
+    void fetchEventsFunnel();
+  }, [d1FunnelProp, fetchEventsFunnel, localDashboard?.sourceRevision, orders.length]);
 
   const updatingOrderRefSet = useRef<Set<string>>(new Set());
   const requestSeqRef = useRef(0);
@@ -200,6 +256,71 @@ export function OrdersKanbanView({
     }
     return counts;
   }, [orders]);
+
+  const d1Radar = useMemo(() => {
+    const strictFromDashboard = (
+      localDashboard as
+        | (DashboardMetricsProjection & {
+            d1StrictConversion?: Partial<D1FunnelMetrics> & { manualOrdersCount?: number };
+          })
+        | null
+    )?.d1StrictConversion;
+
+    const strictWhatsappOrders = orders.filter((order) => {
+      if (normalizeOrderStatus(order.status) === 'cancelado') return false;
+      const ext = order as BusinessOrder & {
+        whatsapp_purchase_confirmed?: boolean;
+        source_channel?: string;
+      };
+      return (
+        ext.whatsapp_purchase_confirmed === true ||
+        ext.source_channel === 'whatsapp_purchase_message'
+      );
+    });
+    const strictRevenueFromOrders = strictWhatsappOrders.reduce(
+      (sum, o) => sum + (Number(o.total_cents) || 0),
+      0,
+    );
+
+    const activeFunnel = d1FunnelProp ?? eventsFunnel;
+    const visits = Math.max(
+      0,
+      Number(localDashboard?.visitsTotal) || 0,
+      Number(activeFunnel?.visits) || 0,
+      Number(strictFromDashboard?.visits) || 0,
+    );
+    const productClicks = Math.max(
+      0,
+      Number(activeFunnel?.productClicks) || 0,
+      Number(strictFromDashboard?.productClicks) || 0,
+    );
+    const whatsappPurchaseMessages = Math.max(
+      0,
+      Number(activeFunnel?.whatsappPurchaseMessages) || 0,
+      Number(strictFromDashboard?.whatsappPurchaseMessages) || 0,
+    );
+    const d1ConfirmedOrders = Math.max(
+      strictWhatsappOrders.length,
+      Number(activeFunnel?.d1ConfirmedOrders) || 0,
+      Number(strictFromDashboard?.d1ConfirmedOrders) || 0,
+    );
+    const d1RevenueCents = Math.max(
+      strictRevenueFromOrders,
+      Number(activeFunnel?.d1RevenueCents) || 0,
+      Number(strictFromDashboard?.d1RevenueCents) || 0,
+    );
+    const conversionRatePct =
+      visits > 0 ? Math.min(100, Number(((d1ConfirmedOrders / visits) * 100).toFixed(1))) : 0;
+
+    return {
+      visits,
+      productClicks,
+      whatsappPurchaseMessages,
+      d1ConfirmedOrders,
+      d1RevenueCents,
+      conversionRatePct,
+    };
+  }, [localDashboard, d1FunnelProp, eventsFunnel, orders]);
 
   const filteredOrders = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -383,16 +504,16 @@ export function OrdersKanbanView({
   return (
     <div
       data-testid="orders-kanban-view"
-      className="min-h-full w-full overflow-x-hidden bg-[#F8FAFC] px-4 py-5 pb-28 text-[#0F172A] sm:px-6 min-[769px]:pb-8"
+      className="min-h-full w-full overflow-x-hidden bg-[#F8FAFC] px-4 py-4 pb-10 text-[#0F172A] sm:px-6 min-[769px]:pb-8"
     >
-      <div data-testid="dashboard-t5-view" className="mx-auto max-w-7xl space-y-5">
+      <div data-testid="dashboard-t5-view" className="mx-auto max-w-7xl space-y-3.5 sm:space-y-4">
         {/* Header & Primary Action */}
-        <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1">
             <h1 className="text-xl font-bold tracking-tight text-[#0F172A] sm:text-2xl">
               Pedidos e Vendas
             </h1>
-            <p className="text-sm text-slate-600">
+            <p className="text-xs sm:text-sm text-slate-600">
               Acompanhe vendas da vitrine, WhatsApp e lançamentos do balcão em tempo real.
             </p>
             <span
@@ -403,7 +524,7 @@ export function OrdersKanbanView({
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
             <ActionButton
               variant="secondary"
               size={44}
@@ -411,54 +532,133 @@ export function OrdersKanbanView({
               leftIcon={<RefreshCw className="size-4" />}
               onClick={() => {
                 void fetchMetrics(periodDays);
+                if (d1FunnelProp === undefined) {
+                  void fetchEventsFunnel();
+                }
                 void onRefresh?.();
               }}
               aria-label="Atualizar pedidos"
+              className="flex-1 sm:flex-none"
             >
               Atualizar
             </ActionButton>
 
-            {/* Desktop primary CTA (mobile uses fixed bottom CTA above Bottom Tab Bar) */}
-            <div className="hidden min-[769px]:block">
-              <ActionButton
-                variant="success"
-                size={44}
-                leftIcon={<PlusCircle className="size-[18px]" />}
-                onClick={() => setManualSaleOpen(true)}
-                data-testid="open-manual-sale-btn"
-              >
-                Registrar Venda Manual
-              </ActionButton>
-            </div>
+            <ActionButton
+              variant="secondary"
+              size={44}
+              data-testid="open-tela-27-xls-orders"
+              leftIcon={<FileSpreadsheet className="size-4 text-[#A855F7]" />}
+              onClick={() => setOrdersXlsOpen(true)}
+              className="max-w-full flex-1 whitespace-nowrap sm:flex-none"
+            >
+              Exportar .XLSX (IA)
+            </ActionButton>
+
+            <ActionButton
+              variant="success"
+              size={44}
+              leftIcon={<PlusCircle className="size-[18px]" />}
+              onClick={() => setManualSaleOpen(true)}
+              data-testid="open-manual-sale-btn"
+              className="w-full sm:w-auto"
+            >
+              Registrar Venda Manual
+            </ActionButton>
           </div>
         </header>
 
+        {/* TELA 39 — Radar de Tráfego da Vitrine & Conversão Estrita D1 */}
+        <section
+          data-testid="tela-39-d1-radar"
+          aria-label="Radar de Tráfego da Vitrine e Conversão Estrita D1"
+          className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 shadow-xs dark:border-[#27272A] dark:bg-[#121215]"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2 pb-2">
+            <div className="min-w-0 space-y-0.5">
+              <h2 className="text-sm font-bold text-[#0F172A] dark:text-[#F4F4F5]">
+                Radar de Tráfego da Vitrine &amp; Conversão Estrita D1
+              </h2>
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                Cliques sem envio de mensagem de compra no WhatsApp NÃO inflam a conversão online D1.
+              </p>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+              Taxa D1: {d1Radar.conversionRatePct}% · {formatCurrencyBRL(d1Radar.d1RevenueCents)}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 sm:p-3 dark:border-[#27272A] dark:bg-[#09090B]">
+              <div className="flex items-center justify-between gap-1 text-xs font-semibold text-slate-600 dark:text-[#A1A1AA]">
+                <span className="truncate">1. Visitantes</span>
+                <Users className="size-4 shrink-0 text-[#2563EB]" aria-hidden="true" />
+              </div>
+              <p className="mt-1 text-lg font-extrabold text-[#0F172A] dark:text-white">
+                {d1Radar.visits}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 sm:p-3 dark:border-[#27272A] dark:bg-[#09090B]">
+              <div className="flex items-center justify-between gap-1 text-xs font-semibold text-slate-600 dark:text-[#A1A1AA]">
+                <span className="truncate">2. Cliques Produto</span>
+                <MousePointerClick className="size-4 shrink-0 text-[#F59E0B]" aria-hidden="true" />
+              </div>
+              <p className="mt-1 text-lg font-extrabold text-[#0F172A] dark:text-white">
+                {d1Radar.productClicks}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 sm:p-3 dark:border-[#27272A] dark:bg-[#09090B]">
+              <div className="flex items-center justify-between gap-1 text-xs font-semibold text-slate-600 dark:text-[#A1A1AA]">
+                <span className="truncate">3. Compra WhatsApp</span>
+                <MessageCircle className="size-4 shrink-0 text-[#10B981]" aria-hidden="true" />
+              </div>
+              <p className="mt-1 text-lg font-extrabold text-[#0F172A] dark:text-white">
+                {d1Radar.whatsappPurchaseMessages}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-2.5 sm:p-3 dark:border-emerald-500/30 dark:bg-emerald-950/30">
+              <div className="flex items-center justify-between gap-1 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                <span className="truncate">4. Conversão D1</span>
+                <CheckCircle2 className="size-4 shrink-0 text-[#10B981]" aria-hidden="true" />
+              </div>
+              <p className="mt-1 text-lg font-extrabold text-emerald-900 dark:text-emerald-200">
+                {d1Radar.d1ConfirmedOrders}
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* Period Filter + Network Error Fallback */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div
-            role="group"
-            aria-label="Filtrar faturamento e pedidos por período"
-            className="inline-flex w-full items-center gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5 sm:w-auto"
-          >
-            {PERIOD_OPTIONS.map(option => {
-              const active = periodDays === option.value;
-              return (
-                <button
-                  key={String(option.value)}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setPeriodDays(option.value)}
-                  data-testid={`period-filter-${option.value}`}
-                  className={`min-h-[44px] flex-1 rounded-xl px-4 text-sm font-semibold transition-all duration-[120ms] active:scale-[0.98] sm:flex-none ${
-                    active
-                      ? 'bg-[#2563EB] text-white shadow-xs'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-[#0F172A]'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <span className="text-xs font-bold text-slate-500">Período:</span>
+            <div
+              role="group"
+              aria-label="Filtrar faturamento e pedidos por período"
+              className="inline-flex w-full items-center gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5 sm:w-auto"
+            >
+              {PERIOD_OPTIONS.map(option => {
+                const active = periodDays === option.value;
+                return (
+                  <button
+                    key={String(option.value)}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setPeriodDays(option.value)}
+                    data-testid={`period-filter-${option.value}`}
+                    className={`min-h-[44px] flex-1 rounded-xl px-4 text-sm font-semibold transition-all duration-[120ms] active:scale-[0.98] sm:flex-none ${
+                      active
+                        ? 'bg-[#2563EB] text-white shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-[#0F172A]'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <p className="text-xs font-medium text-slate-500">
@@ -486,94 +686,94 @@ export function OrdersKanbanView({
         {effectiveLoading && orders.length === 0 ? (
           <section
             aria-label="Carregando indicadores financeiros"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+            className="grid grid-cols-2 gap-3 sm:gap-3.5 xl:grid-cols-4"
           >
             {[0, 1, 2, 3].map(idx => (
-              <div key={idx} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-                <SkeletonBlock height={16} width="55%" />
-                <SkeletonBlock height={32} width="70%" />
-                <SkeletonBlock height={14} width="80%" />
+              <div key={idx} className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 space-y-2">
+                <SkeletonBlock height={14} width="55%" />
+                <SkeletonBlock height={28} width="70%" />
+                <SkeletonBlock height={12} width="80%" />
               </div>
             ))}
           </section>
         ) : (
           <section
             aria-label="Indicadores de vendas do período"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+            className="grid grid-cols-2 gap-3 sm:gap-3.5 xl:grid-cols-4"
           >
             {/* KPI 1: Vendas no período (INV-08) */}
-            <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+            <article className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-xs">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-slate-600">Vendas no período</span>
-                <span className="inline-flex size-9 items-center justify-center rounded-xl bg-emerald-50 text-[#16A34A]">
-                  <TrendingUp className="size-5" aria-hidden="true" />
+                <span className="text-xs sm:text-sm font-semibold text-slate-600">Vendas no período</span>
+                <span className="inline-flex size-8 items-center justify-center rounded-xl bg-emerald-50 text-[#16A34A]">
+                  <TrendingUp className="size-4" aria-hidden="true" />
                 </span>
               </div>
               <div
                 data-testid="dashboard-sales-total"
-                className="mt-2 text-2xl font-bold tracking-tight text-[#0F172A]"
+                className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-[#0F172A]"
               >
                 {formatCurrencyBRL(kpis.salesCents)}
               </div>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-slate-500">
                 Faturamento líquido ({kpis.nonCancelledCount}{' '}
                 {kpis.nonCancelledCount === 1 ? 'pedido válido' : 'pedidos válidos'})
               </p>
             </article>
 
             {/* KPI 2: Pedidos pagos */}
-            <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+            <article className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-xs">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-slate-600">Pedidos pagos</span>
-                <span className="inline-flex size-9 items-center justify-center rounded-xl bg-blue-50 text-[#2563EB]">
-                  <CheckCircle2 className="size-5" aria-hidden="true" />
+                <span className="text-xs sm:text-sm font-semibold text-slate-600">Pedidos pagos</span>
+                <span className="inline-flex size-8 items-center justify-center rounded-xl bg-blue-50 text-[#2563EB]">
+                  <CheckCircle2 className="size-4" aria-hidden="true" />
                 </span>
               </div>
               <div
                 data-testid="dashboard-paid-count"
-                className="mt-2 text-2xl font-bold tracking-tight text-[#0F172A]"
+                className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-[#0F172A]"
               >
                 {kpis.paidCount}
               </div>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-slate-500">
                 {formatCurrencyBRL(kpis.paidTotalCents)} confirmados e entregues
               </p>
             </article>
 
             {/* KPI 3: Aguardando pagamento */}
-            <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+            <article className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-xs">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-slate-600">Aguardando pagamento</span>
-                <span className="inline-flex size-9 items-center justify-center rounded-xl bg-amber-50 text-[#F59E0B]">
-                  <Clock className="size-5" aria-hidden="true" />
+                <span className="text-xs sm:text-sm font-semibold text-slate-600">Aguardando pagamento</span>
+                <span className="inline-flex size-8 items-center justify-center rounded-xl bg-amber-50 text-[#F59E0B]">
+                  <Clock className="size-4" aria-hidden="true" />
                 </span>
               </div>
               <div
                 data-testid="dashboard-awaiting-count"
-                className="mt-2 text-2xl font-bold tracking-tight text-[#0F172A]"
+                className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-[#0F172A]"
               >
                 {kpis.awaitingCount}
               </div>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-slate-500">
                 {formatCurrencyBRL(kpis.awaitingTotalCents)} em aberto
               </p>
             </article>
 
             {/* KPI 4: Ticket médio */}
-            <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+            <article className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-xs">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-slate-600">Ticket médio</span>
-                <span className="inline-flex size-9 items-center justify-center rounded-xl bg-slate-100 text-[#0F172A]">
-                  <CreditCard className="size-5" aria-hidden="true" />
+                <span className="text-xs sm:text-sm font-semibold text-slate-600">Ticket médio</span>
+                <span className="inline-flex size-8 items-center justify-center rounded-xl bg-slate-100 text-[#0F172A]">
+                  <CreditCard className="size-4" aria-hidden="true" />
                 </span>
               </div>
               <div
                 data-testid="dashboard-avg-ticket"
-                className="mt-2 text-2xl font-bold tracking-tight text-[#0F172A]"
+                className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-[#0F172A]"
               >
                 {formatCurrencyBRL(kpis.avgTicketCents)}
               </div>
-              <p className="mt-1 text-xs text-slate-500" data-testid="dashboard-orders-count">
+              <p className="mt-0.5 text-xs text-slate-500" data-testid="dashboard-orders-count">
                 {orders.length} {orders.length === 1 ? 'pedido no período' : 'pedidos no período'}
               </p>
             </article>
@@ -583,7 +783,7 @@ export function OrdersKanbanView({
         {/* Search & Status Filters */}
         <section
           aria-label="Filtros da lista de pedidos"
-          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3"
+          className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-3.5 shadow-xs space-y-2.5"
         >
           <div className="relative">
             <Search
@@ -656,7 +856,13 @@ export function OrdersKanbanView({
           <SkeletonTableRows rows={5} columns={5} rowHeight={64} />
         ) : orders.length === 0 ? (
           <EmptyStateCard
-            icon={<ShoppingBag className="size-7" />}
+            icon={
+              <img
+                src="/brand/illustrations/illustration-request-tracking.svg"
+                alt="Acompanhamento de pedidos"
+                className="h-14 w-16 object-contain"
+              />
+            }
             title="Nenhum pedido recebido neste período"
             description="Divulgue o link da sua vitrine no WhatsApp e Instagram ou registre uma venda presencial do balcão."
             ctaLabel="Copiar Link da Loja para Divulgar"
@@ -710,7 +916,11 @@ export function OrdersKanbanView({
                         <tr
                           key={order.order_ref}
                           data-testid={`order-row-${order.order_ref}`}
-                          className="transition-colors hover:bg-slate-50/80"
+                          className={`transition-colors duration-300 ${
+                            highlightedRefs[order.order_ref]
+                              ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-300'
+                              : 'hover:bg-slate-50/80'
+                          }`}
                         >
                           <td className="px-4 py-3.5 align-middle">
                             <div className="flex items-center gap-2">
@@ -850,21 +1060,6 @@ export function OrdersKanbanView({
         )}
       </div>
 
-      {/* Fixed Mobile Primary CTA (above 64px Bottom Tab Bar) */}
-      <div className="fixed right-4 bottom-[76px] left-4 z-30 min-[769px]:hidden">
-        <ActionButton
-          variant="success"
-          size={48}
-          fullWidth
-          leftIcon={<PlusCircle className="size-[18px]" />}
-          onClick={() => setManualSaleOpen(true)}
-          className="shadow-lg shadow-green-600/25"
-          data-testid="open-manual-sale-btn-mobile"
-        >
-          Registrar Venda Manual
-        </ActionButton>
-      </div>
-
       {/* TELA 28: Registrar Venda Manual */}
       <ManualSaleModal
         open={manualSaleOpen}
@@ -888,6 +1083,14 @@ export function OrdersKanbanView({
           void onRefresh?.();
         }}
         onContactWhatsApp={onOpenWhatsApp}
+      />
+
+      {/* TELA 27-XLS: Catalogar & Exportar Pedidos (.XLSX com IA) */}
+      <OrderSpreadsheetCatalogModal
+        open={ordersXlsOpen}
+        onOpenChange={setOrdersXlsOpen}
+        orders={orders}
+        ownerUser={owner}
       />
     </div>
   );

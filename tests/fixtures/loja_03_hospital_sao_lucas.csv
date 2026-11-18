@@ -1,0 +1,7 @@
+"nome";"sku";"preco";"estoque";"categoria";"variante";"descricao"
+"Check-up Executivo Completo (Sangue + Eletro + Raio-X)";"HSL-CHK01";"690,00";"20";"Check-ups e Prevenção";"Presencial com Retorno";"Avaliação clínica preventiva com painel laboratorial completo, eletrocardiograma e consulta de retorno para análise médica"
+"Consulta Especializada em Cardiologia";"HSL-CON01";"320,00";"15";"Consultas Médicas";"Presencial ou Telemedicina";"Atendimento médico cardiológico para avaliação de histórico familiar, pressão arterial e solicitação de exames quando indicados"
+"Consulta Especializada em Ortopedia e Traumatologia";"HSL-CON02";"300,00";"12";"Consultas Médicas";"Presencial";"Avaliação ortopédica de coluna, joelhos, ombros e lesões esportivas com encaminhamento fisioterápico se necessário"
+"Exame de Ressonância Magnética (Laudo em 24h)";"HSL-EXM01";"850,00";"10";"Exames de Imagem";"Equipamento 1.5 Tesla";"Exame de imagem de alta resolução realizado com protocolo de conforto e entrega digital do laudo em até 24 horas"
+"Painel Laboratorial de Vitaminas e Hormônios";"HSL-LAB01";"240,00";"30";"Análises Clínicas";"Coleta Hospitalar ou Domiciliar";"Coleta rápida de perfil tireoidiano, vitamina D, B12, ferritina e glicemia com resultados online"
+"Sessão de Fisioterapia Motora e Reabilitação";"HSL-FIS01";"160,00";"25";"Reabilitação";"Sessão Individual 50min";"Atendimento fisioterapêutico individualizado para recuperação pós-operatória ou alívio de dores musculares"

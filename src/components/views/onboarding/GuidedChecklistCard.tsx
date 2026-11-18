@@ -417,7 +417,7 @@ export function GuidedChecklistCard({
                 variant="primary"
                 size={52}
                 rightIcon={<ArrowRight className="size-4" aria-hidden="true" />}
-                onClick={() => (onOpenProductStep ? onOpenProductStep() : onOpenExpressWizard(2))}
+                onClick={() => (onOpenProductStep ? onOpenProductStep() : onOpenExpressWizard(7))}
                 className="w-full sm:w-auto"
               >
                 Cadastrar Primeiro Produto
@@ -427,7 +427,7 @@ export function GuidedChecklistCard({
                 variant="secondary"
                 size={44}
                 disabled={!step1Done}
-                onClick={() => (onOpenProductStep ? onOpenProductStep() : onOpenExpressWizard(2))}
+                onClick={() => (onOpenProductStep ? onOpenProductStep() : onOpenExpressWizard(7))}
                 className="w-full sm:w-auto"
               >
                 {step2Done ? 'Adicionar produto' : 'Aguardando passo 1'}
@@ -508,7 +508,7 @@ export function GuidedChecklistCard({
                   variant="secondary"
                   size={44}
                   disabled={!step1Done}
-                  onClick={() => (onOpenPixStep ? onOpenPixStep() : onOpenExpressWizard(3))}
+                  onClick={() => (onOpenPixStep ? onOpenPixStep() : onOpenExpressWizard(8))}
                   className="w-full sm:w-auto"
                 >
                   {step1Done ? 'Configurar Pix' : 'Aguardando passos 1 e 2'}
@@ -522,7 +522,7 @@ export function GuidedChecklistCard({
                   variant="secondary"
                   size={44}
                   leftIcon={<CreditCard className="size-4" aria-hidden="true" />}
-                  onClick={() => (onOpenPixStep ? onOpenPixStep() : onOpenExpressWizard(3))}
+                  onClick={() => (onOpenPixStep ? onOpenPixStep() : onOpenExpressWizard(8))}
                 >
                   {profile.payment?.pixKey?.trim() ? 'Alterar Chave Pix' : 'Configurar Chave Pix'}
                 </ActionButton>

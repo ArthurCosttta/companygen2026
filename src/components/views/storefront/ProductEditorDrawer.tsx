@@ -8,7 +8,9 @@ import {
   Upload,
 } from 'lucide-react';
 import {
+  buildDefaultMensagemMolde,
   formatCurrencyBRL,
+  type CatalogItemType,
   type CatalogProduct,
 } from '@/schemas/profile.schema';
 import {
@@ -48,6 +50,9 @@ interface ProductFormState {
   stockText: string;
   description: string;
   imageUrl: string;
+  itemType: CatalogItemType;
+  prazoOuDuracao: string;
+  mensagemMolde: string;
   active: boolean;
 }
 
@@ -61,9 +66,13 @@ function createInitialForm(product: CatalogProduct | null): ProductFormState {
       stockText: '10',
       description: '',
       imageUrl: '',
+      itemType: 'produto_fisico',
+      prazoOuDuracao: '',
+      mensagemMolde: '',
       active: true,
     };
   }
+  const itemType = product.itemType || 'produto_fisico';
   return {
     name: product.name || '',
     priceText: formatCentsForInput(product.priceCents),
@@ -72,6 +81,9 @@ function createInitialForm(product: CatalogProduct | null): ProductFormState {
     stockText: String(Number.isFinite(product.stock) ? product.stock : 0),
     description: product.description || '',
     imageUrl: product.imageUrl || '',
+    itemType,
+    prazoOuDuracao: product.prazoOuDuracao || '',
+    mensagemMolde: product.mensagemMolde || buildDefaultMensagemMolde(product),
     active: product.active !== false,
   };
 }
@@ -125,6 +137,9 @@ export function ProductEditorDrawer({
       form.stockText !== baseline.stockText ||
       form.description !== baseline.description ||
       form.imageUrl !== baseline.imageUrl ||
+      form.itemType !== baseline.itemType ||
+      form.prazoOuDuracao !== baseline.prazoOuDuracao ||
+      form.mensagemMolde !== baseline.mensagemMolde ||
       form.active !== baseline.active,
     [form, baseline],
   );
@@ -254,6 +269,16 @@ export function ProductEditorDrawer({
       ? { id: product.id, sku: product.sku }
       : generateInternalProductCodes(cleanName);
 
+    const resolvedMolde =
+      form.mensagemMolde.trim() ||
+      buildDefaultMensagemMolde({
+        name: cleanName,
+        priceCents: parsedPriceCents,
+        variation: finalVariation,
+        itemType: form.itemType,
+        prazoOuDuracao: form.prazoOuDuracao.trim(),
+      });
+
     const nextProduct: CatalogProduct = {
       id: internalCodes.id,
       sku: internalCodes.sku,
@@ -266,6 +291,10 @@ export function ProductEditorDrawer({
       active: form.active,
       imageUrl: finalImageUrl,
       approvedAsset: true,
+      itemType: form.itemType,
+      prazoOuDuracao: form.prazoOuDuracao.trim(),
+      itensInclusosKit: product?.itensInclusosKit || [],
+      mensagemMolde: resolvedMolde,
       updatedAt: new Date().toISOString(),
     };
 
@@ -589,6 +618,105 @@ export function ProductEditorDrawer({
                 placeholder="Ex: Padrão, P / M / G, 500ml"
                 className="min-h-[48px] w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
               />
+            </div>
+          </div>
+
+          {/* Tipo do Item & Prazo/Duração */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="product-itemtype-select" className="block text-sm font-medium text-[#0F172A]">
+                Tipo do Item
+              </label>
+              <select
+                id="product-itemtype-select"
+                value={form.itemType}
+                onChange={(e) => {
+                  const nextType = e.target.value as CatalogItemType;
+                  setForm((prev) => ({
+                    ...prev,
+                    itemType: nextType,
+                    mensagemMolde: buildDefaultMensagemMolde({
+                      name: prev.name || 'Item',
+                      priceCents: parseBRLInputToCents(prev.priceText),
+                      variation: prev.variation,
+                      itemType: nextType,
+                      prazoOuDuracao: prev.prazoOuDuracao,
+                    }),
+                  }));
+                }}
+                className="min-h-[48px] w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+              >
+                <option value="produto_fisico">Produto Físico</option>
+                <option value="servico_agendado">Serviço Agendado</option>
+                <option value="kit_combo">Kit / Combo</option>
+                <option value="sob_medida">Sob Medida / Orçamento</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="product-prazo-input" className="block text-sm font-medium text-[#0F172A]">
+                Prazo ou Duração (opcional)
+              </label>
+              <input
+                id="product-prazo-input"
+                type="text"
+                value={form.prazoOuDuracao}
+                onChange={(e) => setForm((prev) => ({ ...prev, prazoOuDuracao: e.target.value }))}
+                placeholder="Ex: Entrega 40 min / Sessão 1h / 3 dias"
+                className="min-h-[48px] w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+              />
+            </div>
+          </div>
+
+          {/* Mensagem Molde Pré-carregada do WhatsApp */}
+          <div className="space-y-1.5 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="product-molde-input" className="block text-sm font-semibold text-[#0F172A]">
+                Mensagem Molde do WhatsApp
+              </label>
+              <button
+                type="button"
+                onClick={() =>
+                  setForm((prev) => ({
+                    ...prev,
+                    mensagemMolde: buildDefaultMensagemMolde({
+                      name: prev.name || 'Item',
+                      priceCents: parseBRLInputToCents(prev.priceText),
+                      variation: prev.variation,
+                      itemType: prev.itemType,
+                      prazoOuDuracao: prev.prazoOuDuracao,
+                    }),
+                  }))
+                }
+                className="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 shadow-xs hover:bg-emerald-100"
+              >
+                Gerar Molde Padrão
+              </button>
+            </div>
+            <textarea
+              id="product-molde-input"
+              rows={3}
+              value={form.mensagemMolde}
+              onChange={(e) => setForm((prev) => ({ ...prev, mensagemMolde: e.target.value }))}
+              placeholder="Mensagem automática quando o cliente clicar em Pedir no WhatsApp..."
+              className="w-full rounded-xl border border-emerald-200 bg-white px-3.5 py-2 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#10B981]"
+            />
+            <div className="flex flex-wrap gap-1.5">
+              {['{nomeProduto}', '{preco}', '{variacao}', '{prazo}'].map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      mensagemMolde: `${prev.mensagemMolde}${prev.mensagemMolde ? ' ' : ''}${tag}`,
+                    }))
+                  }
+                  className="rounded-md border border-emerald-300 bg-white px-2 py-0.5 text-[11px] font-mono text-emerald-800 hover:bg-emerald-100"
+                >
+                  +{tag}
+                </button>
+              ))}
             </div>
           </div>
 

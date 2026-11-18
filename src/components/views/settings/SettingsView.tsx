@@ -13,19 +13,17 @@ import {
   LogOut,
   MapPin,
   MessageSquare,
-  Moon,
   RotateCcw,
   Save,
   Search,
   ShieldCheck,
   Sparkles,
   Store,
-  Sun,
   Truck,
   Wifi,
   WifiOff,
 } from 'lucide-react';
-import { ActionButton, ModalContainer, useToast } from '@/components/ui';
+import { ActionButton, ModalContainer, SupportTicketModal, useToast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import {
   useConnectionPhaseInfo,
@@ -59,8 +57,8 @@ export interface SettingsViewProps {
   owner?: string;
   ownerEmail?: string;
   runtimeStatus?: WhatsappRuntimeStatus | null;
-  isDarkMode: boolean;
-  onToggleDarkMode: () => void;
+  isDarkMode?: boolean;
+  onToggleDarkMode?: () => void;
   onProfileUpdated: (snap: ProfileSnapshot) => void;
   onLogout: () => void;
   onOpenExpressWizard?: (step?: OnboardingWizardStep) => void;
@@ -183,8 +181,6 @@ export function SettingsView({
   owner,
   ownerEmail,
   runtimeStatus,
-  isDarkMode,
-  onToggleDarkMode,
   onProfileUpdated,
   onLogout,
   onOpenExpressWizard,
@@ -195,6 +191,7 @@ export function SettingsView({
 }: SettingsViewProps) {
   const { showToast } = useToast();
   const phaseInfo = useConnectionPhaseInfo(profile, runtimeStatus);
+  const [supportModalOpen, setSupportModalOpen] = React.useState(false);
 
   // TELA 30: Dados da Loja & Pix
   const [businessName, setBusinessName] = React.useState(profile.business?.name ?? '');
@@ -529,17 +526,6 @@ export function SettingsView({
             Atualize dados comerciais, entrega, chave Pix, segurança e suporte da sua loja.
           </p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <ActionButton
-            variant="secondary"
-            size={44}
-            leftIcon={isDarkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
-            onClick={onToggleDarkMode}
-          >
-            {isDarkMode ? 'Modo Claro' : 'Modo Escuro'}
-          </ActionButton>
-        </div>
       </header>
 
       {/* ====================================================================
@@ -625,6 +611,9 @@ export function SettingsView({
                 onChange={(e) => setSegment(e.target.value)}
                 className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm text-[#0F172A] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
               >
+                {segment && !SEGMENT_OPTIONS.includes(segment as (typeof SEGMENT_OPTIONS)[number]) ? (
+                  <option value={segment}>{segment}</option>
+                ) : null}
                 {SEGMENT_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
@@ -738,7 +727,7 @@ export function SettingsView({
               </p>
             ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-4">
               <div>
                 <label
                   htmlFor="settings-delivery-fee"
@@ -758,7 +747,7 @@ export function SettingsView({
                 />
               </div>
 
-              <div>
+              <div className="sm:col-span-2">
                 <label
                   htmlFor="settings-delivery-areas"
                   className="mb-1.5 block text-xs font-semibold text-slate-700"
@@ -1098,6 +1087,33 @@ export function SettingsView({
 
         {/* Support Actions */}
         <div className="flex flex-wrap items-center gap-2.5 border-t border-slate-100 pt-4">
+          <ActionButton
+            variant="primary"
+            size={44}
+            data-testid="settings-open-support-ticket-btn"
+            leftIcon={<LifeBuoy className="size-4" />}
+            onClick={() => setSupportModalOpen(true)}
+          >
+            Reportar Problema / Suporte
+          </ActionButton>
+
+          <ActionButton
+            variant="softBlue"
+            size={44}
+            leftIcon={<CreditCard className="size-4" />}
+            onClick={() => {
+              try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('route', 'checkout');
+                url.searchParams.set('tab', 'ledger');
+                window.history.pushState({}, '', url.toString());
+              } catch {}
+              window.dispatchEvent(new CustomEvent('companygen:open-checkout'));
+            }}
+          >
+            Extrato & Consumo de Créditos
+          </ActionButton>
+
           <ActionButton
             variant={copiedDiagnostic ? 'success' : 'secondary'}
             size={44}
@@ -1464,6 +1480,13 @@ export function SettingsView({
           Sua loja online continua no ar recebendo pedidos de clientes normalmente.
         </div>
       </ModalContainer>
+
+      <SupportTicketModal
+        open={supportModalOpen}
+        onOpenChange={setSupportModalOpen}
+        userId={owner}
+        storeName={profile.business?.name}
+      />
     </div>
   );
 }

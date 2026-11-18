@@ -1,17 +1,24 @@
 import * as React from 'react';
 import {
-  AlertTriangle,
   CheckCircle2,
-  MessageSquare,
-  QrCode,
+  ChevronDown,
+  FileText,
+  Paperclip,
   RefreshCw,
-  Smartphone,
+  Save,
+  Trash2,
+  Undo2,
   Unplug,
+  Wifi,
+  WifiOff,
+  FolderClosed,
   Zap,
+  Users,
+  Bot,
+  UserCheck,
 } from 'lucide-react';
 import {
   ActionButton,
-  DrawerContainer,
   SkeletonBlock,
   useToast,
 } from '@/components/ui';
@@ -20,16 +27,15 @@ import {
   useConnectionPhaseInfo,
   type WhatsappRuntimeStatus,
 } from '@/hooks/useConnectionPhase';
+import { useHighSaturationNotifications } from '@/hooks/useHighSaturationNotifications';
+import { getDesktopBridge, useWebviewWhatsappResponder } from '@/hooks/useWebviewWhatsappResponder';
 import {
   sanitizePhoneE164,
   type BusinessProfile,
 } from '@/schemas/profile.schema';
 import { authenticatedFetch } from '@/services/supabase-client';
 import { DisconnectConfirmModal } from './DisconnectConfirmModal';
-import {
-  QuickRepliesSection,
-  type QuickReplyTemplate,
-} from './QuickRepliesSection';
+import { QuickRepliesSection } from './QuickRepliesSection';
 
 export interface WhatsappDadosResponse extends WhatsappRuntimeStatus {
   conectado: boolean;
@@ -41,17 +47,27 @@ export interface WhatsappDadosResponse extends WhatsappRuntimeStatus {
     botAtivo?: boolean;
     enviarFotoAutomatica?: boolean;
   };
-  templates?: QuickReplyTemplate[] | { items?: QuickReplyTemplate[]; molds?: QuickReplyTemplate[] };
+}
+
+interface LocalKnowledgeFile {
+  id: string;
+  title: string;
+  content: string;
+  category?: string;
+  updatedAt?: string;
 }
 
 export interface WhatsAppConnectionViewProps {
   userId: string;
   profile?: BusinessProfile | null;
+  whatsappData?: WhatsappDadosResponse | null;
+  whatsapp?: WhatsappDadosResponse | null;
+  onRefresh?: () => Promise<unknown> | void;
   onStatusChange?: (data: WhatsappDadosResponse) => void;
   onBrowserIdentity?: (identity: { connected: boolean; phoneE164: string }) => void;
+  notificationState?: ReturnType<typeof useHighSaturationNotifications>;
+  onNavigateOrders?: () => void;
 }
-
-const QR_TTL_SECONDS = 45;
 
 function formatPhoneDisplay(raw: string): string {
   const digits = sanitizePhoneE164(raw);
@@ -65,43 +81,193 @@ function formatPhoneDisplay(raw: string): string {
   return `+${digits}`;
 }
 
-function extractTemplates(raw: WhatsappDadosResponse['templates']): QuickReplyTemplate[] {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw.filter(Boolean);
-  if (Array.isArray(raw.items)) return raw.items.filter(Boolean);
-  if (Array.isArray(raw.molds)) return raw.molds.filter(Boolean);
-  return [];
-}
-
 export function WhatsAppConnectionView({
   userId,
   profile,
+  whatsappData,
+  whatsapp: whatsappProp,
+  onRefresh,
   onStatusChange,
   onBrowserIdentity,
+  notificationState,
 }: WhatsAppConnectionViewProps) {
   const { showToast } = useToast();
-  const effectiveUserId = userId?.trim() || 'companygen-whatsapp';
+  const effectiveUserId = userId?.trim() || '';
 
-  const [data, setData] = React.useState<WhatsappDadosResponse | null>(null);
-  const [initialLoading, setInitialLoading] = React.useState(true);
+  const externalWhatsapp = whatsappData !== undefined ? whatsappData : whatsappProp;
+  const hasManagedWhatsapp = externalWhatsapp !== undefined || Boolean(onRefresh);
+
+  const [localData, setLocalData] = React.useState<WhatsappDadosResponse | null>(null);
+  const data = externalWhatsapp !== undefined ? externalWhatsapp : localData;
+  const [initialLoading, setInitialLoading] = React.useState(!hasManagedWhatsapp);
   const [connectionError, setConnectionError] = React.useState('');
-  const [busyAction, setBusyAction] = React.useState(false);
-  const [wasConnected, setWasConnected] = React.useState(false);
   const [embeddedIdentity, setEmbeddedIdentity] = React.useState<{
     connected: boolean;
     phoneE164: string;
   } | null>(null);
-
-  const [activeSubTab, setActiveSubTab] = React.useState<'whatsapp' | 'quickReplies'>('whatsapp');
-  const [quickRepliesDrawerOpen, setQuickRepliesDrawerOpen] = React.useState(false);
   const [disconnectModalOpen, setDisconnectModalOpen] = React.useState(false);
 
-  // 45s QR expiration tracker
-  const [qrSecondsLeft, setQrSecondsLeft] = React.useState<number>(QR_TTL_SECONDS);
-  const lastQrRef = React.useRef<string>('');
+  // IA Local: Instrução única + arquivos locais reais
+  const [aiPrompt, setAiPrompt] = React.useState('');
+  const [aiEnabled, setAiEnabled] = React.useState(true);
+  const [aiFiles, setAiFiles] = React.useState<LocalKnowledgeFile[]>([]);
+  const [ollamaOnline, setOllamaOnline] = React.useState<boolean | null>(null);
+  const [cloudAiAvailable, setCloudAiAvailable] = React.useState(true);
+  const [creditBalance, setCreditBalance] = React.useState<number | null>(null);
+  const [safeTestMode, setSafeTestMode] = React.useState(false);
+  const [availableModels, setAvailableModels] = React.useState<string[]>([]);
+  const [activeModel, setActiveModel] = React.useState('qwen3:4b-instruct');
+  const [loadingAi, setLoadingAi] = React.useState(true);
+  const [savingAi, setSavingAi] = React.useState(false);
+  const [uploadingFile, setUploadingFile] = React.useState(false);
+  const [lastSavedSnapshot, setLastSavedSnapshot] = React.useState<{
+    prompt: string;
+    enabled: boolean;
+    files: LocalKnowledgeFile[];
+  } | null>(null);
+  const [undoVisible, setUndoVisible] = React.useState(false);
+  const undoTimerRef = React.useRef<number | null>(null);
+  const [activeSideDrawer, setActiveSideDrawer] = React.useState<'none' | 'docs' | 'quick_replies' | 'human_queue'>('none');
+  const [aiBrainExpanded, setAiBrainExpanded] = React.useState(true);
+  const toggleSideDrawer = React.useCallback((drawer: 'docs' | 'quick_replies' | 'human_queue') => {
+    setActiveSideDrawer((prev) => {
+      const next = prev === drawer ? 'none' : drawer;
+      setAiBrainExpanded(next === 'none');
+      return next;
+    });
+  }, []);
+  const [resumingPhone, setResumingPhone] = React.useState<string | null>(null);
+  const [assumingKey, setAssumingKey] = React.useState<string | null>(null);
+  const [simMessage, setSimMessage] = React.useState('');
+  const [simSending, setSimSending] = React.useState(false);
+  const [simResult, setSimResult] = React.useState<{
+    replyText: string;
+    modelUsed: string;
+    intent: string;
+    suppressed: boolean;
+  } | null>(null);
+
+  const handleRunLiveSofiaTest = async () => {
+    const clean = simMessage.trim();
+    if (!clean || simSending) return;
+    setSimSending(true);
+    try {
+      const res = await authenticatedFetch(
+        '/api/whatsapp/ai/simulate-or-reply',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerPhone: '5531995551122',
+            customerName: 'Teste Painel',
+            messageText: clean,
+            mode: 'live_whatsapp',
+          }),
+        },
+        effectiveUserId,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        showToast({ type: 'error', message: json?.error || 'Falha ao testar Sofia local.' });
+        return;
+      }
+      setSimResult({
+        replyText: String(json.replyText || '(Sem resposta — thread em pausa humana)'),
+        modelUsed: String(json.modelUsed || 'desconhecido'),
+        intent: String(json.intent || 'GENERAL_QUESTION'),
+        suppressed: Boolean(json.autoReplySuppressed),
+      });
+      void notificationState?.refresh?.(true);
+    } catch (err) {
+      showToast({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Erro ao testar resposta da Sofia.',
+        durationMs: 4000,
+      });
+    } finally {
+      setSimSending(false);
+    }
+  };
+
+  const humanQueueEntries = React.useMemo(() => {
+    type QueueEntry = {
+      key: string;
+      customerName: string;
+      customerPhone: string;
+      customerJid: string;
+      message: string;
+      pausedAt: string;
+      assumedByHuman: boolean;
+      eventId?: string;
+    };
+    const byKey = new Map<string, QueueEntry>();
+    for (const pt of notificationState?.pausedThreadItems || []) {
+      const k = String(pt.customerPhone || pt.customerJid || pt.chatKey).trim();
+      if (!k) continue;
+      byKey.set(k, {
+        key: k,
+        customerName: pt.customerName || pt.customerPhone || 'Cliente',
+        customerPhone: pt.customerPhone || '',
+        customerJid: pt.customerJid || '',
+        message: pt.lastMessage || pt.reason || 'Solicitou atendimento humano.',
+        pausedAt: pt.pausedAt || new Date().toISOString(),
+        assumedByHuman: Boolean(pt.assumedByHuman),
+      });
+    }
+    const allNotifs = notificationState?.allNotifications || notificationState?.notifications || [];
+    for (const n of allNotifs) {
+      if (n.level !== 'HUMAN_ESCALATION' || n.resolved) continue;
+      const k = String(n.customerPhone || n.customerJid || n.id).trim();
+      if (!k) continue;
+      const existing = byKey.get(k);
+      if (existing) {
+        if (!existing.eventId) existing.eventId = n.eventId || n.id;
+        if (!existing.message && n.message) existing.message = n.message;
+      } else {
+        byKey.set(k, {
+          key: k,
+          customerName: n.customerName || n.customerPhone || 'Cliente',
+          customerPhone: n.customerPhone || '',
+          customerJid: n.customerJid || '',
+          message: n.message || 'Aguardando atendimento humano.',
+          pausedAt: n.createdAt || new Date().toISOString(),
+          assumedByHuman: Boolean(n.acknowledged),
+          eventId: n.eventId || n.id,
+        });
+      }
+    }
+    return Array.from(byKey.values()).sort((a, b) => {
+      if (a.assumedByHuman !== b.assumedByHuman) return a.assumedByHuman ? 1 : -1;
+      return new Date(b.pausedAt).getTime() - new Date(a.pausedAt).getTime();
+    });
+  }, [
+    notificationState?.allNotifications,
+    notificationState?.notifications,
+    notificationState?.pausedThreadItems,
+  ]);
+
+  const waitingHumanCount = humanQueueEntries.filter((e) => !e.assumedByHuman).length;
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const lastRequestRef = React.useRef(0);
 
-  const refresh = React.useCallback(async () => {
+  const draftStorageKey = `companygen:wpp_ai_draft:${effectiveUserId}`;
+
+  const refreshStatus = React.useCallback(async () => {
+    if (onRefresh) {
+      try {
+        await onRefresh();
+        setConnectionError('');
+      } catch (error) {
+        setConnectionError(
+          error instanceof Error ? error.message : 'Conexão temporariamente indisponível.',
+        );
+      } finally {
+        setInitialLoading(false);
+      }
+      return;
+    }
+
     const requestId = ++lastRequestRef.current;
     try {
       const res = await authenticatedFetch('/api/whatsapp/api/dados', undefined, effectiveUserId);
@@ -113,12 +279,9 @@ export function WhatsAppConnectionView({
       if (!res.ok) {
         throw new Error(json.erro || json.error || 'Não foi possível verificar o status do WhatsApp.');
       }
-      setData(json);
+      setLocalData(json);
       setConnectionError('');
       onStatusChange?.(json);
-      if (json.conectado) {
-        setWasConnected(true);
-      }
     } catch (error) {
       if (requestId === lastRequestRef.current) {
         setConnectionError(
@@ -130,54 +293,82 @@ export function WhatsAppConnectionView({
         setInitialLoading(false);
       }
     }
-  }, [effectiveUserId, onStatusChange]);
+  }, [effectiveUserId, onRefresh, onStatusChange]);
+
+  const loadAiContext = React.useCallback(async () => {
+    setLoadingAi(true);
+    try {
+      const res = await authenticatedFetch('/api/whatsapp/ai/brain', { method: 'GET' }, effectiveUserId);
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        setOllamaOnline(false);
+        return;
+      }
+      const brain = json.brain || {};
+      const draftPrompt = (() => {
+        try {
+          return window.sessionStorage.getItem(draftStorageKey) || '';
+        } catch {
+          return '';
+        }
+      })();
+      setAiPrompt(String(brain.systemPrompt || draftPrompt || ''));
+      setAiEnabled(brain.enabled !== false);
+      setSafeTestMode(brain.safeTestMode === true);
+      setAiFiles(Array.isArray(brain.ragDocuments) ? brain.ragDocuments : []);
+      setOllamaOnline(Boolean(json.ollamaOnline));
+      setCloudAiAvailable(json.cloudAiAvailable !== false);
+      if (typeof json.creditBalance === 'number') setCreditBalance(json.creditBalance);
+      setAvailableModels(Array.isArray(json.availableModels) ? json.availableModels : []);
+      if (brain.modelName) setActiveModel(String(brain.modelName));
+    } catch {
+      setOllamaOnline(false);
+    } finally {
+      setLoadingAi(false);
+    }
+  }, [draftStorageKey, effectiveUserId]);
 
   React.useEffect(() => {
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      await refresh();
-      if (active) {
-        timer = setTimeout(poll, 3000);
-      }
+    const onCreditsUpdate = () => {
+      void loadAiContext();
+    };
+    window.addEventListener('companygen:credits-updated', onCreditsUpdate);
+    return () => window.removeEventListener('companygen:credits-updated', onCreditsUpdate);
+  }, [loadAiContext]);
+
+  React.useEffect(() => {
+    if (!hasManagedWhatsapp) {
+      void refreshStatus();
+    } else {
+      setInitialLoading(false);
     }
-    void poll();
+    void loadAiContext();
     return () => {
-      active = false;
-      clearTimeout(timer);
       lastRequestRef.current++;
     };
-  }, [refresh]);
+  }, [hasManagedWhatsapp, loadAiContext, refreshStatus]);
 
   React.useEffect(() => {
-    const currentQr = data?.qr || '';
-    if (!currentQr) {
-      lastQrRef.current = '';
-      setQrSecondsLeft(QR_TTL_SECONDS);
-      return;
-    }
-    if (currentQr !== lastQrRef.current) {
-      lastQrRef.current = currentQr;
-      setQrSecondsLeft(QR_TTL_SECONDS);
-    }
-  }, [data?.qr]);
+    try {
+      window.sessionStorage.setItem(draftStorageKey, aiPrompt);
+    } catch {}
+  }, [aiPrompt, draftStorageKey]);
 
   React.useEffect(() => {
-    if (!data?.qr || data?.conectado) return;
-    if (qrSecondsLeft <= 0) return;
-    const interval = setInterval(() => {
-      setQrSecondsLeft(prev => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [data?.conectado, data?.qr, qrSecondsLeft]);
+    return () => {
+      if (undoTimerRef.current !== null) {
+        window.clearTimeout(undoTimerRef.current);
+      }
+    };
+  }, []);
 
   const runtimeStatus = React.useMemo<WhatsappRuntimeStatus | null>(() => {
     if (!data && !embeddedIdentity) return null;
     return {
       connected: Boolean(data?.conectado || embeddedIdentity?.connected),
       conectado: Boolean(data?.conectado || embeddedIdentity?.connected),
-      qrPending: Boolean(data?.qr),
-      qrCode: data?.qr || null,
+      qrPending: false,
+      qrCode: null,
       status: data?.status,
       numeroBot: data?.numeroBot || embeddedIdentity?.phoneE164 || '',
       phoneE164: embeddedIdentity?.phoneE164 || data?.numeroBot || '',
@@ -185,106 +376,313 @@ export function WhatsAppConnectionView({
   }, [data, embeddedIdentity]);
 
   const phaseInfo = useConnectionPhaseInfo(profile, runtimeStatus);
+  const desktopBridge = getDesktopBridge();
+  const responderStatus = useWebviewWhatsappResponder({
+    userId: effectiveUserId,
+    enabled: aiEnabled,
+    connected: Boolean(embeddedIdentity?.connected || (embeddedIdentity as { loggedIn?: boolean } | null | undefined)?.loggedIn),
+    phoneE164: embeddedIdentity?.phoneE164 || data?.numeroBot || profile?.whatsapp?.phoneE164,
+    onActivity: () => {
+      void notificationState?.refresh?.(true);
+    },
+  });
 
   const handleBrowserIdentity = React.useCallback(
     (identity: { connected: boolean; phoneE164: string }) => {
       setEmbeddedIdentity(identity);
-      if (identity.connected) {
-        setWasConnected(true);
-      }
       onBrowserIdentity?.(identity);
     },
     [onBrowserIdentity],
   );
 
-  const handleRequestQr = async (resetFirst = false) => {
-    if (busyAction) return;
-    setBusyAction(true);
+  const persistAiState = async (
+    nextPrompt: string,
+    nextEnabled: boolean,
+    nextFiles: LocalKnowledgeFile[],
+    successMsg: string,
+    nextSafeTestMode: boolean = safeTestMode,
+  ) => {
+    if (savingAi) return;
+    setLastSavedSnapshot({ prompt: aiPrompt, enabled: aiEnabled, files: aiFiles });
+    setSavingAi(true);
     try {
-      if (resetFirst) {
-        await authenticatedFetch(
-          '/api/whatsapp/api/sessao/reset',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: '{}',
-          },
-          effectiveUserId,
-        );
-      }
+      const modelToSave = availableModels.includes(activeModel)
+        ? activeModel
+        : availableModels[0] || activeModel;
       const res = await authenticatedFetch(
-        '/api/whatsapp/api/sessao/connect',
+        '/api/whatsapp/ai/brain',
         {
-          method: 'POST',
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: '{}',
+          body: JSON.stringify({
+            enabled: nextEnabled,
+            autoReplyWhenConnected: true,
+            modelName: modelToSave,
+            systemPrompt: nextPrompt,
+            ragDocuments: nextFiles,
+            safeTestMode: nextSafeTestMode,
+            safeTestPhone: sanitizePhoneE164(embeddedIdentity?.phoneE164 || data?.numeroBot || profile?.whatsapp?.phoneE164 || ''),
+          }),
         },
         effectiveUserId,
       );
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || json.ok === false) {
-        throw new Error(json.erro || json.error || 'Não foi possível gerar o QR Code.');
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || 'Falha ao salvar instruções da IA.');
       }
-      setQrSecondsLeft(QR_TTL_SECONDS);
-      await refresh();
+      setAiPrompt(nextPrompt);
+      setAiEnabled(nextEnabled);
+      setSafeTestMode(nextSafeTestMode);
+      setAiFiles(nextFiles);
+      setUndoVisible(true);
+      if (undoTimerRef.current !== null) {
+        window.clearTimeout(undoTimerRef.current);
+      }
+      undoTimerRef.current = window.setTimeout(() => {
+        setUndoVisible(false);
+        undoTimerRef.current = null;
+      }, 5000);
+      showToast({
+        type: 'success',
+        message: successMsg,
+        durationMs: 3500,
+      });
     } catch (error) {
       showToast({
         type: 'error',
-        message: error instanceof Error ? error.message : 'Erro ao solicitar novo QR Code.',
-        durationMs: 3000,
+        message: error instanceof Error ? error.message : 'Erro ao salvar configuração da IA.',
+        durationMs: 4000,
       });
     } finally {
-      setBusyAction(false);
+      setSavingAi(false);
+    }
+  };
+
+  const handleUploadKnowledgeFiles = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0 || uploadingFile) return;
+    setUploadingFile(true);
+    try {
+      const added: LocalKnowledgeFile[] = [];
+      for (const file of Array.from(fileList)) {
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error(`Arquivo "${file.name}" excede 5MB.`);
+        }
+        const text = await file.text();
+        const trimmed = text.replace(/\u0000/g, '').trim();
+        if (!trimmed) {
+          throw new Error(`Arquivo "${file.name}" está vazio ou em formato binário ilegível.`);
+        }
+        const docItem: LocalKnowledgeFile = {
+          id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          title: file.name,
+          content: trimmed.slice(0, 50000),
+          category: 'Arquivo Local',
+          updatedAt: new Date().toISOString(),
+        };
+        added.push(docItem);
+        const saveRes = await authenticatedFetch(
+          '/api/whatsapp/api/documentos/save',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ titulo: file.name, conteudo: trimmed.slice(0, 50000) }),
+          },
+          effectiveUserId,
+        );
+        if (!saveRes.ok) {
+          const saveErr = await saveRes.json().catch(() => null);
+          throw new Error(saveErr?.error || `Falha ao salvar documento "${file.name}" (${saveRes.status}).`);
+        }
+      }
+      const nextFiles = [...aiFiles, ...added];
+      await persistAiState(aiPrompt, aiEnabled, nextFiles, `${added.length} arquivo(s) adicionado(s) à IA`);
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Erro ao ler arquivo local.',
+        durationMs: 4000,
+      });
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveFile = async (docId: string) => {
+    const nextFiles = aiFiles.filter((d) => d.id !== docId);
+    await persistAiState(aiPrompt, aiEnabled, nextFiles, 'Arquivo removido da IA');
+  };
+
+  const handleUndo = async () => {
+    if (!lastSavedSnapshot) return;
+    if (undoTimerRef.current !== null) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    setUndoVisible(false);
+    await persistAiState(
+      lastSavedSnapshot.prompt,
+      lastSavedSnapshot.enabled,
+      lastSavedSnapshot.files,
+      'Alteração desfeita',
+    );
+  };
+
+  const handleAssumeHuman = async (entry: {
+    key: string;
+    customerPhone: string;
+    customerJid: string;
+    eventId?: string;
+  }) => {
+    if (assumingKey) return;
+    setAssumingKey(entry.key);
+    try {
+      const res = await authenticatedFetch(
+        '/api/whatsapp/events/ack',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'assume_human',
+            eventId: entry.eventId,
+            customerPhone: entry.customerPhone,
+            customerJid: entry.customerJid,
+          }),
+        },
+        effectiveUserId,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || 'Não foi possível assumir este atendimento.');
+      }
+      showToast({
+        type: 'success',
+        message: 'Atendimento assumido. A IA segue pausada até você devolvê-lo.',
+        durationMs: 3200,
+      });
+      void notificationState?.refresh?.(true);
+    } catch (err) {
+      showToast({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Erro ao assumir atendimento.',
+        durationMs: 3500,
+      });
+    } finally {
+      setAssumingKey(null);
+    }
+  };
+
+  const handleResumeAi = async (phone: string, jid?: string, eventId?: string) => {
+    if (resumingPhone) return;
+    const lockKey = phone || jid || 'thread';
+    setResumingPhone(lockKey);
+    try {
+      const res = await authenticatedFetch(
+        '/api/whatsapp/ai/notifications/action',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'resume_ai',
+            eventId,
+            customerPhone: phone,
+            customerJid: jid,
+          }),
+        },
+        effectiveUserId,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || 'Não foi possível reativar a IA neste chat.');
+      }
+      showToast({
+        type: 'success',
+        message: 'Cliente devolvido para a IA! Ela responderá as próximas mensagens.',
+        durationMs: 3500,
+      });
+      void notificationState?.refresh?.(true);
+    } catch (err) {
+      showToast({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Falha ao reativar IA.',
+        durationMs: 4000,
+      });
+    } finally {
+      setResumingPhone(null);
     }
   };
 
   const formattedPhone = formatPhoneDisplay(
     embeddedIdentity?.phoneE164 || data?.numeroBot || profile?.whatsapp?.phoneE164 || '',
   );
-  const templates = React.useMemo(() => extractTemplates(data?.templates), [data?.templates]);
-  const qrExpired = Boolean(data?.qr && qrSecondsLeft === 0);
-  const showDisconnectedAlert =
-    (wasConnected || Boolean(profile?.whatsapp?.connected)) && !phaseInfo.isLiveReady;
+  const isLive = phaseInfo.isLiveReady || Boolean(data?.conectado);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#F8FAFC]">
-      {/* Top Status & Quick Action Bar */}
+      {/* Cabeçalho único e objetivo — sem barra preta, sem simulador, sem sub-abas duplicadas */}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden="true"
             className="size-3 shrink-0 rounded-full ring-4 ring-slate-100"
-            style={{ backgroundColor: phaseInfo.colorHex }}
+            style={{ backgroundColor: isLive ? '#10B981' : '#F59E0B' }}
           />
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-[#0F172A]">
-              {phaseInfo.isLiveReady
+              {isLive
                 ? formattedPhone
-                  ? `Conectado: ${formattedPhone} | Atendimento Oficial da Loja`
-                  : phaseInfo.labelPT
-                : phaseInfo.labelPT}
+                  ? `WhatsApp Conectado: ${formattedPhone}`
+                  : 'WhatsApp Oficial Conectado'
+                : 'WhatsApp Web Oficial — Aguardando Conexão'}
             </p>
             <p className="truncate text-xs text-slate-500">
-              {phaseInfo.isLiveReady
-                ? 'Atendimento sincronizado e pronto para responder clientes.'
-                : phaseInfo.phase === 'STORE_NUMBER_ONLY'
-                  ? 'Sua vitrine já vende com link direto para o seu número enquanto o aparelho não está pareado.'
-                  : 'Conecte o WhatsApp da loja pelo QR Code para atender e enviar mensagens por aqui.'}
+              {cloudAiAvailable || ollamaOnline
+                ? responderStatus.pauseReason === 'credit_exhausted'
+                  ? 'Atendimento pausado por falta de créditos — recarregue na Kiwify para retomar.'
+                  : responderStatus.active
+                    ? `IA Nuvem Ativa — respondendo ao vivo direto no WhatsApp Web Oficial${responderStatus.repliedCount > 0 ? ` (${responderStatus.repliedCount} enviada${responderStatus.repliedCount > 1 ? 's' : ''})` : ''}.`
+                    : desktopBridge?.isDesktop && !embeddedIdentity?.connected
+                      ? 'IA Nuvem pronta — escaneie o QR oficial abaixo para ativar a resposta automática.'
+                      : 'IA Nuvem pronta — responde clientes automaticamente com baixo consumo e chama você quando precisar.'
+                : 'IA desconectada — clique em Testar Conexão IA ao lado.'}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <ActionButton
-            variant="softBlue"
-            size={44}
-            leftIcon={<Zap className="size-4 text-[#F59E0B]" aria-hidden="true" />}
-            onClick={() => setQuickRepliesDrawerOpen(true)}
-          >
-            Ver Respostas Rápidas da Loja
-          </ActionButton>
+          {(() => {
+            const hasCloudCredits = cloudAiAvailable && (creditBalance === null || creditBalance >= 2);
+            const hasAnyAi = hasCloudCredits || Boolean(ollamaOnline);
+            const msgsLeft = creditBalance !== null ? Math.max(0, Math.floor(creditBalance / 2)) : null;
+            const label = !aiEnabled
+              ? 'IA Pausada'
+              : responderStatus.pauseReason === 'credit_exhausted' || (cloudAiAvailable && creditBalance !== null && creditBalance < 2 && !ollamaOnline)
+                ? 'Sem Créditos (0 msgs)'
+                : hasCloudCredits
+                  ? msgsLeft !== null
+                    ? `IA Nuvem Ativa · ~${msgsLeft} msgs`
+                    : 'IA Nuvem Ativa'
+                  : ollamaOnline
+                    ? 'IA Local Ativa'
+                    : 'IA Offline';
+            return (
+              <span
+                data-testid="wpp-ai-connection-pill"
+                className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold ${
+                  hasAnyAi && aiEnabled && responderStatus.pauseReason !== 'credit_exhausted'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : !aiEnabled || responderStatus.pauseReason === 'credit_exhausted' || (cloudAiAvailable && creditBalance !== null && creditBalance < 2)
+                      ? 'border-amber-200 bg-amber-50 text-amber-800'
+                      : 'border-red-200 bg-red-50 text-red-700'
+                }`}
+              >
+                {hasAnyAi ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5" />}
+                {label}
+              </span>
+            );
+          })()}
 
-          {(phaseInfo.isLiveReady || data?.conectado) && (
+          {isLive && (
             <ActionButton
               variant="secondary"
               size={44}
@@ -297,263 +695,558 @@ export function WhatsAppConnectionView({
         </div>
       </header>
 
-      {/* Clean Sub-navigation (mobile-friendly >= 44px) */}
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
-        <button
-          type="button"
-          aria-current={activeSubTab === 'whatsapp' ? 'page' : undefined}
-          onClick={() => setActiveSubTab('whatsapp')}
-          className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-all duration-[120ms] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
-            activeSubTab === 'whatsapp'
-              ? 'bg-[#EFF6FF] text-[#1D4ED8]'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <MessageSquare className="size-4" aria-hidden="true" />
-          <span>WhatsApp da Loja</span>
-        </button>
-
-        <button
-          type="button"
-          aria-current={activeSubTab === 'quickReplies' ? 'page' : undefined}
-          onClick={() => setActiveSubTab('quickReplies')}
-          className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-all duration-[120ms] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
-            activeSubTab === 'quickReplies'
-              ? 'bg-[#EFF6FF] text-[#1D4ED8]'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Zap className="size-4 text-[#F59E0B]" aria-hidden="true" />
-          <span>Respostas Rápidas</span>
-        </button>
-      </div>
-
-      {/* Reconnection Banner when phone disconnected */}
-      {showDisconnectedAlert && (
+      {(connectionError || responderStatus.lastError) && (
         <div
           role="alert"
-          className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:mx-6"
+          className="mx-4 mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-medium text-red-700 sm:mx-6"
         >
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle className="size-5 shrink-0 text-[#F59E0B]" aria-hidden="true" />
-            <span className="font-medium">
-              WhatsApp desconectou do seu celular. Leia o QR Code para voltar a atender por aqui.
-            </span>
-          </div>
-          <ActionButton
-            variant="primary"
-            size={44}
-            isLoading={busyAction}
-            loadingText="Gerando QR..."
-            leftIcon={<QrCode className="size-4" aria-hidden="true" />}
-            onClick={() => {
-              setActiveSubTab('whatsapp');
-              void handleRequestQr(true);
-            }}
-          >
-            Clique para Reconectar QR
-          </ActionButton>
+          {connectionError || responderStatus.lastError}
         </div>
       )}
 
-      {connectionError && (
-        <div
-          role="alert"
-          className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-medium text-red-700 sm:mx-6"
+      {/* Área Principal: WhatsApp Web Oficial + Local Único de Instruções & Arquivos da IA */}
+      <div className="grid flex-1 min-h-0 gap-4 overflow-y-auto p-4 sm:p-6 lg:grid-cols-[1.35fr_0.9fr]">
+        {/* WhatsApp Web Oficial (único QR oficial quando desconectado) */}
+        <section
+          aria-label="WhatsApp Web Oficial"
+          className="flex min-h-[320px] lg:min-h-[440px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
         >
-          {connectionError}
-        </div>
-      )}
-
-      {/* Main Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
-        {activeSubTab === 'quickReplies' ? (
-          <div className="mx-auto max-w-4xl">
-            <QuickRepliesSection
-              templates={templates}
-              profile={profile}
-              owner={effectiveUserId}
-              loading={initialLoading && !data}
-              onTemplateSaved={refresh}
-            />
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#0F172A]">
+              <CheckCircle2
+                className={`size-4 ${isLive ? 'text-[#16A34A]' : 'text-slate-400'}`}
+                aria-hidden="true"
+              />
+              <span>WhatsApp Web Oficial</span>
+            </div>
+            <span className="text-xs text-slate-500">Sessão isolada da loja</span>
           </div>
-        ) : (
-          <div className="flex h-full min-h-0 flex-col gap-4">
-            {/* QR Code / Connection Panel when not yet live */}
-            {!phaseInfo.isLiveReady && (
-              <section
-                aria-label="Conexão do WhatsApp"
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <div className="grid items-center gap-6 md:grid-cols-[260px_1fr]">
-                  <div className="relative mx-auto flex size-[240px] items-center justify-center overflow-hidden rounded-2xl border-2 border-slate-200 bg-slate-50 p-3">
-                    {initialLoading && !data ? (
-                      <SkeletonBlock width="100%" height="100%" rounded="xl" />
-                    ) : data?.qr ? (
-                      <>
-                        <img
-                          src={data.qr}
-                          alt="QR Code para conectar o WhatsApp"
-                          className={`size-full rounded-xl bg-white object-contain p-1 transition-opacity duration-200 ${
-                            qrExpired ? 'opacity-35' : 'opacity-100'
-                          }`}
-                        />
-                        {qrExpired && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/75 p-4 text-center backdrop-blur-[2px]">
-                            <p className="text-xs font-bold text-[#0F172A]">
-                              QR Code expirado
-                            </p>
-                            <ActionButton
-                              variant="primary"
-                              size={44}
-                              isLoading={busyAction}
-                              loadingText="Renovando..."
-                              leftIcon={<RefreshCw className="size-4" aria-hidden="true" />}
-                              onClick={() => void handleRequestQr(true)}
-                            >
-                              QR Expirado. Clique para renovar
-                            </ActionButton>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center gap-3 px-4 text-center">
-                        <QrCode className="size-10 text-[#2563EB]" aria-hidden="true" />
-                        <p className="text-xs leading-relaxed text-slate-600">
-                          Gere o QR Code para parear o WhatsApp da sua loja.
-                        </p>
-                        <ActionButton
-                          variant="success"
-                          size={44}
-                          isLoading={busyAction}
-                          loadingText="Gerando..."
-                          leftIcon={<QrCode className="size-4" aria-hidden="true" />}
-                          onClick={() => void handleRequestQr(false)}
+          <div className="flex-1 min-h-0 overflow-auto">
+            {initialLoading && !data && !desktopBridge?.isDesktop ? (
+              <div className="p-5">
+                <SkeletonBlock width="100%" height="380px" rounded="xl" />
+              </div>
+            ) : (
+              <RealWhatsAppWeb
+                userId={effectiveUserId}
+                connected={isLive}
+                onOpenConnection={() => void refreshStatus()}
+                onIdentity={handleBrowserIdentity}
+              />
+            )}
+          </div>
+        </section>
+
+        {/* Bloco Único de Instruções da IA + Arquivos Locais */}
+        <section
+          aria-label="Instruções e Arquivos Locais da IA"
+          className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          {/* Barra de Ferramentas / Atalhos Rápidos da IA */}
+          <div className="flex flex-wrap gap-2 border-b border-slate-100 pb-3">
+            <button
+              type="button"
+              data-testid="wpp-drawer-docs-btn"
+              onClick={() => toggleSideDrawer('docs')}
+              className={`flex min-h-[44px] flex-1 min-w-[110px] items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold transition-all ${
+                activeSideDrawer === 'docs'
+                  ? 'border-blue-300 bg-blue-50 text-[#2563EB]'
+                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <FolderClosed className="size-4 shrink-0 text-[#2563EB]" />
+              <span className="truncate">Biblioteca ({aiFiles.length})</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="wpp-drawer-quick-replies-btn"
+              onClick={() => toggleSideDrawer('quick_replies')}
+              className={`flex min-h-[44px] flex-1 min-w-[110px] items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold transition-all ${
+                activeSideDrawer === 'quick_replies'
+                  ? 'border-amber-300 bg-amber-50 text-amber-800'
+                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <Zap className="size-4 shrink-0 text-amber-500" />
+              <span className="truncate">Rápidas</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="wpp-drawer-human-queue-btn"
+              onClick={() => toggleSideDrawer('human_queue')}
+              className={`relative flex min-h-[44px] flex-1 min-w-[110px] items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold transition-all ${
+                waitingHumanCount > 0
+                  ? 'animate-pulse border-[#FF2E54] bg-red-50 text-[#B91C1C] ring-2 ring-[#FF2E54]/40'
+                  : activeSideDrawer === 'human_queue'
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <Users className={`size-4 shrink-0 ${waitingHumanCount > 0 ? 'text-[#FF2E54]' : 'text-slate-600'}`} />
+              <span className="truncate">
+                {waitingHumanCount > 0 ? 'Fila Humana (!)' : 'Fila Humana'}
+              </span>
+              {humanQueueEntries.length > 0 && (
+                <span
+                  className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${
+                    waitingHumanCount > 0 ? 'bg-[#FF2E54]' : 'bg-amber-500'
+                  }`}
+                >
+                  {humanQueueEntries.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Painel Expansível Lateral para Biblioteca de Documentos */}
+          {activeSideDrawer === 'docs' && (
+            <div
+              data-testid="wpp-docs-drawer-panel"
+              className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-[#0F172A] flex items-center gap-2">
+                  <FolderClosed className="size-4 text-[#2563EB]" />
+                  <span>{aiFiles.length} documento(s) de apoio da loja</span>
+                </h3>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".txt,.md,.csv,.json,.log"
+                    className="sr-only"
+                    onChange={(e) => void handleUploadKnowledgeFiles(e.target.files)}
+                  />
+                  <button
+                    type="button"
+                    data-testid="upload-wpp-ai-file-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFile}
+                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-[#2563EB] px-3 py-1 text-[11px] font-bold text-white hover:bg-[#1D4ED8] transition disabled:opacity-60"
+                  >
+                    <Paperclip className="size-3.5" aria-hidden="true" />
+                    {uploadingFile ? 'Enviando...' : '+ Subir Arquivo'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleSideDrawer('docs')}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+              {aiFiles.length === 0 ? (
+                <p className="text-xs text-slate-600">
+                  Nenhum arquivo anexado no momento. Suba tabelas de preço, prazos ou políticas (.txt, .md, .csv, .json) para a Sofia consultar automaticamente.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {aiFiles.map((f) => (
+                    <li
+                      key={f.id}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs"
+                    >
+                      <span className="flex items-center gap-2 font-medium text-slate-800 truncate">
+                        <FileText className="size-3.5 shrink-0 text-[#2563EB]" />
+                        <span className="truncate">{f.title}</span>
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] font-mono text-slate-500">
+                          {Math.max(1, Math.round(f.content.length / 1024))} KB
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveFile(f.id)}
+                          aria-label={`Remover documento ${f.title}`}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
                         >
-                          Gerar QR Code
-                        </ActionButton>
+                          <Trash2 className="size-3.5" />
+                        </button>
                       </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Painel Expansível Lateral para Fila Humana & Despausa */}
+          {activeSideDrawer === 'human_queue' && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-[#0F172A] flex items-center gap-2">
+                  <UserCheck className="size-4 text-[#10B981]" />
+                  Clientes em Atendimento Humano
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveSideDrawer('none')}
+                  className="text-xs text-slate-400 hover:text-slate-600"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              {humanQueueEntries.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center text-xs text-slate-500">
+                  <CheckCircle2 className="size-5 mx-auto mb-1 text-emerald-500" />
+                  Nenhum cliente aguardando atendimento humano no momento. A Sofia está respondendo 100% dos chats.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                  {humanQueueEntries.map((entry) => {
+                    const lockKey = entry.customerPhone || entry.customerJid || entry.key;
+                    const isResuming = resumingPhone === lockKey;
+                    const isAssuming = assumingKey === entry.key;
+                    return (
+                      <div
+                        key={entry.key}
+                        data-testid={`human-queue-card-${entry.key}`}
+                        className={`flex flex-col gap-2 rounded-xl border bg-white p-3 shadow-2xs ${
+                          !entry.assumedByHuman
+                            ? 'border-[#FF2E54] ring-1 ring-[#FF2E54]/40'
+                            : 'border-amber-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-bold text-[#0F172A]">{entry.customerName}</p>
+                            {entry.customerPhone ? (
+                              <p className="text-[11px] text-slate-500">{entry.customerPhone}</p>
+                            ) : null}
+                          </div>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              !entry.assumedByHuman
+                                ? 'animate-pulse bg-red-100 text-red-700'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {!entry.assumedByHuman ? 'Aguardando humano' : 'Em atendimento humano'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 line-clamp-2">{entry.message}</p>
+                        <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                          {!entry.assumedByHuman && (
+                            <ActionButton
+                              variant="secondary"
+                              size={44}
+                              isLoading={isAssuming}
+                              loadingText="Assumindo..."
+                              onClick={() => void handleAssumeHuman(entry)}
+                            >
+                              Assumir atendimento
+                            </ActionButton>
+                          )}
+                          <ActionButton
+                            variant="success"
+                            size={44}
+                            isLoading={isResuming}
+                            loadingText="Reativando..."
+                            leftIcon={<Bot className="size-4" />}
+                            onClick={() =>
+                              void handleResumeAi(entry.customerPhone, entry.customerJid, entry.eventId)
+                            }
+                          >
+                            Devolver para a IA
+                          </ActionButton>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Painel Expansível Lateral para Mensagens Rápidas */}
+          {activeSideDrawer === 'quick_replies' && (
+            <div data-testid="wpp-quick-replies-drawer-panel" className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-[#0F172A] flex items-center gap-2">
+                  <Zap className="size-4 text-amber-500" />
+                  Mensagens Rápidas (0 cr por gatilho)
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveSideDrawer('none')}
+                  className="text-xs text-slate-400 hover:text-slate-600"
+                >
+                  Fechar
+                </button>
+              </div>
+              <QuickRepliesSection profile={profile} owner={effectiveUserId} compact />
+            </div>
+          )}
+          {/* Bloco Colapsável de Instruções & Teste da Sofia (recolhe quando um painel acima abre) */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                data-testid="wpp-ai-brain-collapse-btn"
+                aria-expanded={aiBrainExpanded}
+                onClick={() => setAiBrainExpanded((prev) => !prev)}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <ChevronDown
+                  className={`size-4 shrink-0 text-slate-500 transition-transform ${aiBrainExpanded ? 'rotate-180' : ''}`}
+                />
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-[#0F172A]">Instruções da IA & Teste ao Vivo</h2>
+                  <p className="truncate text-[11px] text-slate-500">
+                    {aiBrainExpanded
+                      ? 'A Sofia lê suas instruções, biblioteca e catálogo real.'
+                      : 'Painel recolhido para dar foco acima — clique para editar ou testar.'}
+                  </p>
+                </div>
+              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  role="switch"
+                  data-testid="wpp-safe-test-mode-toggle"
+                  aria-checked={safeTestMode}
+                  onClick={() =>
+                    void persistAiState(
+                      aiPrompt,
+                      aiEnabled,
+                      aiFiles,
+                      !safeTestMode
+                        ? 'Modo Teste Seguro ativado (só seu número responde).'
+                        : 'Modo Teste Seguro desativado (clientes reais liberados).',
+                      !safeTestMode,
+                    )
+                  }
+                  className={`inline-flex min-h-[40px] shrink-0 items-center rounded-xl border px-3 text-xs font-semibold transition-colors ${
+                    safeTestMode
+                      ? 'border-blue-300 bg-blue-50 text-blue-800'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {safeTestMode ? 'Teste Seguro: Só meu número' : 'Modo Teste Seguro'}
+                </button>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={aiEnabled}
+                  onClick={() => void persistAiState(aiPrompt, !aiEnabled, aiFiles, !aiEnabled ? 'IA ativada' : 'IA pausada')}
+                  className={`inline-flex min-h-[40px] shrink-0 items-center rounded-xl border px-3 text-xs font-bold transition-transform active:scale-[0.98] ${
+                    aiEnabled
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-300 bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  {aiEnabled ? 'IA Ativa' : 'IA Pausada'}
+                </button>
+              </div>
+            </div>
+
+            {aiBrainExpanded && (
+              loadingAi ? (
+                <SkeletonBlock width="100%" height="160px" rounded="xl" />
+              ) : (
+                <div className="space-y-3 border-t border-slate-200/70 pt-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="wpp-ai-single-prompt" className="text-xs font-semibold text-slate-700">
+                      O que você quer que a IA responda e faça no WhatsApp?
+                    </label>
+                    <textarea
+                      id="wpp-ai-single-prompt"
+                      data-testid="wpp-ai-single-prompt"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      rows={5}
+                      placeholder="Ex.: Atenda com cordialidade, informe valores do catálogo, confirme prazo de entrega e transfira imediatamente para um humano se o cliente pedir desconto ou reclamação."
+                      className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm text-[#0F172A] focus:border-[#10B981] focus:outline-none focus:ring-2 focus:ring-[#10B981]/25"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ActionButton
+                      variant="success"
+                      size={44}
+                      data-testid="save-wpp-ai-instructions"
+                      isLoading={savingAi}
+                      loadingText="Salvando..."
+                      leftIcon={<Save className="size-4" aria-hidden="true" />}
+                      onClick={() => void persistAiState(aiPrompt, aiEnabled, aiFiles, 'Instruções da IA salvas com sucesso!')}
+                    >
+                      Salvar Instruções da IA
+                    </ActionButton>
+
+                    <ActionButton
+                      variant="secondary"
+                      size={44}
+                      data-testid="recheck-wpp-ai-connection"
+                      leftIcon={<RefreshCw className="size-4" aria-hidden="true" />}
+                      onClick={() => void loadAiContext()}
+                    >
+                      Testar Conexão IA
+                    </ActionButton>
+
+                    {undoVisible && lastSavedSnapshot && (
+                      <button
+                        type="button"
+                        onClick={() => void handleUndo()}
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                      >
+                        <Undo2 className="size-3.5" />
+                        Desfazer
+                      </button>
                     )}
                   </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EFF6FF] px-3 py-1 text-xs font-semibold text-[#1D4ED8]">
-                        <Smartphone className="size-3.5" aria-hidden="true" />
-                        Pareamento com seu celular
-                      </span>
-                      <h2 className="mt-2 text-lg font-bold text-[#0F172A]">
-                        Conecte o WhatsApp da sua empresa
-                      </h2>
-                      {data?.qr && !qrExpired && (
-                        <p className="mt-1 text-xs font-medium text-amber-700">
-                          Este código expira em {qrSecondsLeft}s e renova quando solicitado.
-                        </p>
+                  {desktopBridge?.isDesktop && (
+                    <div
+                      data-testid="wpp-desktop-live-responder-status"
+                      className={`flex flex-col gap-2 rounded-xl border px-3 py-2.5 text-xs ${
+                        responderStatus.liveTypingPreview?.phase === 'typing'
+                          ? 'border-blue-300 bg-blue-50/80 text-blue-950'
+                          : responderStatus.active
+                            ? 'border-emerald-200 bg-emerald-50/70 text-emerald-900'
+                            : 'border-slate-200 bg-white text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium flex items-center gap-2">
+                          {responderStatus.liveTypingPreview?.phase === 'typing' ? (
+                            <>
+                              <span className="inline-flex gap-0.5">
+                                <span className="size-1.5 rounded-full bg-blue-600 animate-bounce" />
+                                <span className="size-1.5 rounded-full bg-blue-600 animate-bounce [animation-delay:120ms]" />
+                                <span className="size-1.5 rounded-full bg-blue-600 animate-bounce [animation-delay:240ms]" />
+                              </span>
+                              <span>
+                                Digitando resposta no WhatsApp ({responderStatus.liveTypingPreview.etaSeconds}s)...
+                              </span>
+                            </>
+                          ) : responderStatus.processing ? (
+                            'IA gerando resposta rápida (~12s)...'
+                          ) : responderStatus.active ? (
+                            `Atendente Desktop ativo no WhatsApp Web (${responderStatus.repliedCount} resposta${responderStatus.repliedCount === 1 ? '' : 's'} enviada${responderStatus.repliedCount === 1 ? '' : 's'})`
+                          ) : (
+                            'Conecte o WhatsApp Web ao lado para iniciar as respostas automáticas reais.'
+                          )}
+                        </span>
+                        {responderStatus.lastChatTitle ? (
+                          <span className="truncate text-[11px] font-semibold text-emerald-700">
+                            Último chat: {responderStatus.lastChatTitle}
+                          </span>
+                        ) : null}
+                      </div>
+                      {responderStatus.liveTypingPreview?.phase === 'paused_human' ? (
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
+                          <span>
+                            <strong>{responderStatus.liveTypingPreview.chatTitle}:</strong>{' '}
+                            {responderStatus.liveTypingPreview.draftText}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleSideDrawer('human_queue')}
+                            className="shrink-0 font-bold text-amber-800 underline"
+                          >
+                            Abrir Fila Humana
+                          </button>
+                        </div>
+                      ) : null}
+                      {responderStatus.liveTypingPreview?.phase === 'typing' &&
+                      responderStatus.liveTypingPreview.draftText ? (
+                        <div className="rounded-lg border border-blue-200/80 bg-white/90 px-2.5 py-1.5 text-[11px] text-slate-700">
+                          <span className="font-semibold text-blue-700">
+                            {responderStatus.liveTypingPreview.chatTitle}:{' '}
+                          </span>
+                          <span>
+                            {responderStatus.liveTypingPreview.draftText.slice(
+                              0,
+                              responderStatus.liveTypingPreview.visibleChars,
+                            )}
+                          </span>
+                          <span className="inline-block w-1.5 h-3 ml-0.5 align-middle bg-blue-500 animate-pulse" />
+                        </div>
+                      ) : null}
+                      {Array.isArray(responderStatus.recentEvents) && responderStatus.recentEvents.length > 0 && (
+                        <div data-testid="wpp-recent-bubbles-feed" className="space-y-1.5 border-t border-emerald-200/60 pt-2">
+                          {responderStatus.recentEvents.slice(0, 3).map((ev) => (
+                            <div key={ev.id} className="rounded-lg border border-white/80 bg-white/90 px-2.5 py-1.5 text-[11px] text-slate-700">
+                              <span className="font-bold text-[#0F172A]">{ev.chatTitle}: </span>
+                              <span className="text-slate-600">{ev.summary}</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
+                  )}
 
-                    <ol className="space-y-2.5 text-sm text-slate-700">
-                      <li className="flex items-start gap-2.5">
-                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-xs font-bold text-[#1D4ED8]">
-                          1
+                  {/* Teste Ao Vivo da Sofia direto na UI */}
+                  <div
+                    data-testid="wpp-sofia-live-tester"
+                    className="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-[#0F172A]">
+                        <Bot className="size-3.5 text-[#10B981]" />
+                        Testar Resposta da Sofia Ao Vivo
+                      </span>
+                      {simResult ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                          {simResult.modelUsed} · {simResult.intent}
                         </span>
-                        <span>Abra o WhatsApp no celular da loja.</span>
-                      </li>
-                      <li className="flex items-start gap-2.5">
-                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-xs font-bold text-[#1D4ED8]">
-                          2
-                        </span>
-                        <span>
-                          Toque em <strong>Aparelhos conectados</strong> e depois em{' '}
-                          <strong>Conectar aparelho</strong>.
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2.5">
-                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-xs font-bold text-[#1D4ED8]">
-                          3
-                        </span>
-                        <span>Aponte a câmera para o QR Code ao lado.</span>
-                      </li>
-                    </ol>
-
-                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      ) : null}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        data-testid="wpp-sofia-test-input"
+                        value={simMessage}
+                        onChange={(e) => setSimMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') void handleRunLiveSofiaTest();
+                        }}
+                        placeholder="Ex: Qual o valor ou prazo?"
+                        className="min-h-[44px] min-w-0 flex-1 rounded-xl border border-slate-300 bg-slate-50 px-3 text-xs text-[#0F172A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#10B981]/30"
+                      />
                       <ActionButton
                         variant="secondary"
                         size={44}
-                        isLoading={busyAction}
-                        loadingText="Atualizando..."
-                        leftIcon={<RefreshCw className="size-4" aria-hidden="true" />}
-                        onClick={() => void handleRequestQr(true)}
+                        data-testid="wpp-sofia-test-send"
+                        isLoading={simSending}
+                        loadingText="Gerando..."
+                        onClick={() => void handleRunLiveSofiaTest()}
                       >
-                        Gerar novo QR Code
+                        Simular
                       </ActionButton>
                     </div>
+                    {simResult ? (
+                      <div
+                        data-testid="wpp-sofia-test-output"
+                        className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-2.5 text-xs text-[#0F172A]"
+                      >
+                        <p className="font-semibold text-emerald-700 mb-0.5">
+                          Resposta gerada {simResult.suppressed ? '(Suprimida)' : '(Ativa)'}:
+                        </p>
+                        <p className="leading-relaxed">{simResult.replyText}</p>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
-              </section>
+              )
             )}
-
-            {/* Embedded Official WhatsApp Web Container */}
-            <section
-              aria-label="WhatsApp Web Oficial"
-              title="WhatsApp Web Oficial"
-              className="flex min-h-[460px] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#0F172A]">
-                  <CheckCircle2
-                    className={`size-4 ${
-                      phaseInfo.isLiveReady ? 'text-[#16A34A]' : 'text-slate-400'
-                    }`}
-                    aria-hidden="true"
-                  />
-                  <span>WhatsApp Web Oficial</span>
-                </div>
-                <span className="text-xs text-slate-500">
-                  Sessão isolada da loja
-                </span>
-              </div>
-              <div className="flex-1 min-h-0 overflow-auto">
-                <RealWhatsAppWeb
-                  userId={effectiveUserId}
-                  connected={phaseInfo.isLiveReady}
-                  onOpenConnection={() => void handleRequestQr(false)}
-                  onIdentity={handleBrowserIdentity}
-                />
-              </div>
-            </section>
           </div>
-        )}
+        </section>
       </div>
 
-      {/* TELA 25: Quick Replies Lateral Drawer */}
-      <DrawerContainer
-        open={quickRepliesDrawerOpen}
-        onOpenChange={setQuickRepliesDrawerOpen}
-        title="Respostas Rápidas da Loja"
-        description="Copie mensagens prontas para responder clientes em segundos."
-        size="default"
-      >
-        <QuickRepliesSection
-          compact
-          templates={templates}
-          profile={profile}
-          owner={effectiveUserId}
-          loading={initialLoading && !data}
-          onTemplateSaved={refresh}
-        />
-      </DrawerContainer>
-
-      {/* TELA 26: Disconnect Confirmation AlertDialog */}
       <DisconnectConfirmModal
         open={disconnectModalOpen}
         onOpenChange={setDisconnectModalOpen}
         owner={effectiveUserId}
         phoneLabel={formattedPhone}
         onDisconnected={() => {
-          setWasConnected(false);
           setEmbeddedIdentity(null);
-          void refresh();
+          void refreshStatus();
         }}
       />
     </div>

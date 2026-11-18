@@ -1,0 +1,90 @@
+name: CompanyGen CI & Cloud Deploy
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+concurrency:
+  group: companygen-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, Build & Automated Suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Production Vite build
+        run: npm run build
+
+      - name: Run Node unit & security contract suites
+        run: |
+          node --test \
+            tests/kiwify-webhook-contract.test.mjs \
+            tests/credits-and-storefront-molde.test.mjs \
+            tests/formula-v9-composer.test.mjs \
+            tests/xlsx-universal.test.mjs \
+            tests/contract-features-verification.test.mjs \
+            tests/whatsapp-notifications.test.mjs \
+            tests/fase4-admin-support-qr.test.mjs \
+            tests/security-api.test.mjs
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install chromium
+
+      - name: Run Playwright UI & WebView DOM specs (Chromium)
+        run: |
+          npx playwright test --project=chromium \
+            tests/webview-responder-dom.spec.ts \
+            tests/animejs-ficha-modal-layout.spec.ts \
+            tests/whatsapp-bot-integration.spec.ts \
+            tests/whatsapp-onboarding-visual.spec.ts
+
+  deploy-cloud:
+    name: Deploy Cloud App & Supabase Edge Function
+    needs: verify
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Trigger Cloud Provider Deploy Hook (when configured)
+        env:
+          DEPLOY_WEBHOOK_URL: ${{ secrets.CLOUD_DEPLOY_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DEPLOY_WEBHOOK_URL" ]; then
+            curl -fsSL -X POST "$DEPLOY_WEBHOOK_URL"
+            echo "Deploy webhook triggered cleanly."
+          else
+            echo "CLOUD_DEPLOY_WEBHOOK_URL secret not set yet — skipping automated deploy hook."
+          fi
+
+      - name: Deploy Kiwify Webhook Edge Function (when SUPABASE_ACCESS_TOKEN is set)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: irahjajgudbdkgggffum
+        run: |
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ]; then
+            npx --yes supabase functions deploy kiwify-webhook --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          else
+            echo "SUPABASE_ACCESS_TOKEN secret not set yet — skipping Edge Function deploy."
+          fi

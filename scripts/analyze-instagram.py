@@ -13,6 +13,11 @@ from pathlib import Path
 
 from ddgs import DDGS
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -206,6 +211,25 @@ def fetch_ddgs_fallback(handle: str) -> dict | None:
     }
 
 
+def extract_business_hints(bio):
+    """Extract conservative, reviewable hints from a public bio without inventing data."""
+    text = str(bio or "").strip()
+    lines = [re.sub(r"\s+", " ", line).strip(" •|-\t") for line in text.splitlines() if line.strip()]
+    phone_match = re.search(r"(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?9?\d{4}[-.\s]?\d{4}", text)
+    url_matches = re.findall(r"https?://[^\s|]+|(?:wa\.me|linktr\.ee|bio\.site)/[^\s|]+", text, re.I)
+    hours = next((line for line in lines if re.search(r"\b(?:seg|ter|qua|qui|sex|sab|sáb|dom|hor[aá]rio|h\s*(?:às|as|-)\s*\d)", line, re.I)), "")
+    address = next((line for line in lines if re.search(r"\b(?:rua|av\.?|avenida|alameda|rodovia|bairro|centro|shopping)\b", line, re.I)), "")
+    ignored = {hours, address}
+    differentials = [line for line in lines if line not in ignored and not re.search(r"https?://|@|\d{4}[-.\s]?\d{4}", line, re.I)][:3]
+    return {
+        "phone": phone_match.group(0).strip() if phone_match else "",
+        "address": address,
+        "hours": hours,
+        "differentials": differentials,
+        "links": url_matches[:5],
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--handle", required=True)
@@ -249,6 +273,7 @@ def main():
         }, ensure_ascii=False))
         return
 
+    hints = extract_business_hints((meta or {}).get("bio", ""))
     print(json.dumps({
         "ok": bool(photo_file or (meta or {}).get("fullName") or (meta or {}).get("bio")),
         "handle": f"@{handle}",
@@ -257,6 +282,7 @@ def main():
         "category": (meta or {}).get("category", ""),
         "photoFile": photo_file or "",
         "source": (meta or {}).get("source", "unknown"),
+        **hints,
     }, ensure_ascii=False))
 
 

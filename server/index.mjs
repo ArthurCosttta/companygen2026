@@ -33,6 +33,8 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {
       'Content-Type': mime[path.extname(file)] || 'application/octet-stream',
       'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Content-Security-Policy': "frame-ancestors 'none'",
       'Referrer-Policy': 'same-origin',
       'Cache-Control': file.endsWith('.html') ? 'no-cache' : 'public, max-age=3600',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',

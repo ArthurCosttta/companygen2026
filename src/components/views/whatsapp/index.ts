@@ -18,3 +18,8 @@ export {
   DisconnectConfirmModal,
   type DisconnectConfirmModalProps,
 } from './DisconnectConfirmModal';
+
+export {
+  WhatsappPersistentVisualizer,
+  type WhatsappPersistentVisualizerProps,
+} from './WhatsappPersistentVisualizer';

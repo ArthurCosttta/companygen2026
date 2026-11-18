@@ -1,12 +1,14 @@
 import JSZip from 'jszip';
 import { authenticatedFetch } from './supabase-client';
 import { workspaceUser } from './local-storage';
+import { normalizeSpreadsheetItemType } from '@/schemas/formula-v9.schema';
 import {
   BusinessProfileSchema,
   createEmptyProfile,
   sanitizePhoneE164,
   type BusinessOrder,
   type BusinessProfile,
+  type CatalogItemType,
   type CatalogProduct,
   type DashboardMetricsProjection,
 } from '@/schemas/profile.schema';
@@ -275,6 +277,11 @@ export async function analyzeInstagramProfile(
   category: string;
   logoUrl: string;
   source: string;
+  phone: string;
+  address: string;
+  hours: string;
+  differentials: string[];
+  links: string[];
   error?: string;
 }> {
   const response = await authenticatedFetch('/api/instagram/analyze', {
@@ -334,8 +341,9 @@ function columnLettersToIndex(ref: string): number {
 }
 
 function mapSpreadsheetRows(rows: string[][]): CatalogProduct[] {
-  if (rows.length === 0) return [];
-  const header = rows[0].map(h =>
+  const nonEmptyRows = rows.filter(r => Array.isArray(r) && r.some(cell => String(cell || '').trim()));
+  if (nonEmptyRows.length === 0) return [];
+  const header = nonEmptyRows[0].map(h =>
     String(h || '')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -348,7 +356,9 @@ function mapSpreadsheetRows(rows: string[][]): CatalogProduct[] {
   const iPrice = colIdx('preco', 'valor', 'price');
   const iStock = colIdx('estoque', 'stock', 'qtd', 'quantidade');
   const iCat = colIdx('categoria', 'category', 'grupo');
-  const iVar = colIdx('variacao', 'tamanho', 'modelo', 'variant');
+  const iTypeExact = colIdx('tipo', 'type');
+  const iType = iTypeExact >= 0 ? iTypeExact : colIdx('modelo');
+  const iVar = colIdx('variante', 'variacao', 'tamanho', 'modelo', 'variant');
   const iDesc = colIdx('descricao', 'description', 'detalhes', 'obs');
   const iImg = colIdx('imagem', 'foto', 'image', 'url');
 
@@ -356,19 +366,45 @@ function mapSpreadsheetRows(rows: string[][]): CatalogProduct[] {
   const startRow = hasHeader ? 1 : 0;
 
   const products: CatalogProduct[] = [];
-  for (let r = startRow; r < rows.length; r++) {
-    const row = rows[r];
+  for (let r = startRow; r < nonEmptyRows.length; r++) {
+    const row = nonEmptyRows[r];
     if (!row || row.every(cell => !String(cell || '').trim())) continue;
     const name = String(iName >= 0 ? row[iName] : row[0] || '').trim();
     if (!name) continue;
-    const skuRaw = String(iSku >= 0 ? row[iSku] : row[1] || `SKU-${products.length + 1}`).trim();
-    const sku = skuRaw.toUpperCase().replace(/[^A-Z0-9_-]/g, '-') || `SKU-${products.length + 1}`;
-    const priceCents = parsePriceToCents(String(iPrice >= 0 ? row[iPrice] : row[2] || '0'));
-    const stockNum = Number.parseInt(String(iStock >= 0 ? row[iStock] : row[3] || '10').replace(/\D/g, ''), 10);
-    const category = String(iCat >= 0 ? row[iCat] : row[4] || 'Geral').trim() || 'Geral';
-    const variation = String(iVar >= 0 ? row[iVar] : row[5] || 'Padrão').trim() || 'Padrão';
+    const skuRaw = String(
+      iSku >= 0 ? row[iSku] : (!hasHeader ? row[1] : '') || `ITEM-${String(products.length + 1).padStart(3, '0')}`,
+    ).trim();
+    const sku = skuRaw.toUpperCase().replace(/[^A-Z0-9_-]/g, '-') || `ITEM-${String(products.length + 1).padStart(3, '0')}`;
+    const priceCents = parsePriceToCents(String(iPrice >= 0 ? row[iPrice] : (!hasHeader ? row[2] : '0') || '0'));
+    const stockNum = Number.parseInt(
+      String(iStock >= 0 ? row[iStock] : (!hasHeader ? row[3] : '20') || '20').replace(/\D/g, ''),
+      10,
+    );
+    const category = String(iCat >= 0 ? row[iCat] : (!hasHeader ? row[4] : 'Geral') || 'Geral').trim() || 'Geral';
+    const variation = String(iVar >= 0 ? row[iVar] : (!hasHeader ? row[5] : 'Padrão') || 'Padrão').trim() || 'Padrão';
     const description = String(iDesc >= 0 ? row[iDesc] : '').trim();
     const imageUrl = String(iImg >= 0 ? row[iImg] : '').trim();
+    const rawType = String(iType >= 0 ? row[iType] : '').trim();
+    const normalizedRawType = (() => {
+      const clean = rawType.toLowerCase();
+      if (!clean) return '';
+      if (/^(service|services)$/i.test(clean)) return 'servico_agendado';
+      if (/^(product|products)$/i.test(clean)) return 'produto_fisico';
+      return rawType;
+    })();
+    const explicitTypeMatch =
+      normalizedRawType &&
+      /servico_agendado|servi[cç]o|agend|sess[aã]o|consulta|kit_combo|kit|combo|cesta|pacote|sob_medida|medida|encomenda|personaliz|planejad|produto_fisico|produto/i.test(
+        normalizedRawType,
+      );
+    const itemType: CatalogItemType | undefined = explicitTypeMatch
+      ? (normalizeSpreadsheetItemType({
+          rawType: normalizedRawType,
+          name,
+          category,
+          description,
+        }) as CatalogItemType)
+      : undefined;
 
     products.push({
       id: `${sku.toLowerCase()}-${products.length + 1}`,
@@ -378,10 +414,11 @@ function mapSpreadsheetRows(rows: string[][]): CatalogProduct[] {
       description,
       priceCents,
       variation,
-      stock: Number.isFinite(stockNum) ? Math.max(0, stockNum) : 10,
+      stock: Number.isFinite(stockNum) ? Math.max(0, stockNum) : 20,
       active: true,
+      ...(itemType ? { itemType } : {}),
       imageUrl,
-      approvedAsset: Boolean(imageUrl),
+      approvedAsset: true,
       updatedAt: new Date().toISOString(),
     });
   }
