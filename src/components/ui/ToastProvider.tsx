@@ -14,6 +14,10 @@ export interface ToastOptions {
   actionLabel?: string;
   onUndo?: () => void | Promise<void>;
   onExpire?: () => void | Promise<void>;
+  action?: {
+    label: string;
+    onClick: () => void | Promise<void>;
+  };
 }
 
 export interface ToastItem {
@@ -161,7 +165,9 @@ export function ToastProvider({ children, maxVisible = 4 }: ToastProviderProps) 
 
       clearTimer(id);
 
-      const hasUndo = Boolean(options.onUndo);
+      const resolvedUndo = options.onUndo ?? options.action?.onClick;
+      const resolvedActionLabel = options.actionLabel ?? options.action?.label;
+      const hasUndo = Boolean(resolvedUndo);
       const durationMs =
         options.durationMs && options.durationMs > 0
           ? options.durationMs
@@ -182,14 +188,14 @@ export function ToastProvider({ children, maxVisible = 4 }: ToastProviderProps) 
         title: resolvedTitle,
         message: resolvedMessage,
         durationMs,
-        actionLabel: options.actionLabel ?? (hasUndo ? "Desfazer" : undefined),
-        onUndo: options.onUndo,
+        actionLabel: resolvedActionLabel ?? (hasUndo ? "Desfazer" : undefined),
+        onUndo: resolvedUndo,
         onExpire: options.onExpire,
         createdAt: Date.now(),
       };
 
       callbacksRef.current.set(id, {
-        onUndo: options.onUndo,
+        onUndo: resolvedUndo,
         onExpire: options.onExpire,
         settled: false,
       });
@@ -208,6 +214,18 @@ export function ToastProvider({ children, maxVisible = 4 }: ToastProviderProps) 
     },
     [clearTimer, maxVisible, removeToast]
   );
+
+  React.useEffect(() => {
+    if (toasts.length === 0) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        const latest = toasts[toasts.length - 1];
+        if (latest) dismissToast(latest.id);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [toasts, dismissToast]);
 
   const contextValue = React.useMemo<ToastContextValue>(
     () => ({

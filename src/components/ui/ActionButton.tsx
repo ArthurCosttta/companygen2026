@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ActionButtonVariant =
@@ -32,6 +33,10 @@ export interface ActionButtonProps
   isLoading?: boolean;
   isSubmitting?: boolean;
   loadingText?: string;
+  keepWidthOnLoading?: boolean;
+  copyText?: string;
+  copySuccessLabel?: string;
+  costHint?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   fullWidth?: boolean;
@@ -76,6 +81,33 @@ function triggerHapticFeedback(): void {
   }
 }
 
+async function writeClipboardText(value: string): Promise<void> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+  } catch {
+    // Fallback below
+  }
+  if (typeof document !== "undefined") {
+    const el = document.createElement("textarea");
+    el.value = value;
+    el.setAttribute("readonly", "true");
+    el.style.position = "fixed";
+    el.style.opacity = "0";
+    document.body.appendChild(el);
+    el.select();
+    try {
+      document.execCommand("copy");
+    } catch {
+      // Ignore clipboard failures
+    } finally {
+      document.body.removeChild(el);
+    }
+  }
+}
+
 export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
   (
     {
@@ -84,12 +116,17 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
       isLoading = false,
       isSubmitting = false,
       loadingText,
+      keepWidthOnLoading = true,
+      copyText,
+      copySuccessLabel = "✓ Copiado",
+      costHint,
       leftIcon,
       rightIcon,
       fullWidth = false,
       haptic = true,
       disabled = false,
       className,
+      style,
       children,
       onClick,
       type = "button",
@@ -101,6 +138,40 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
     const isDisabled = Boolean(disabled || busy);
     const sizeKey = String(size);
 
+    const internalRef = React.useRef<HTMLButtonElement | null>(null);
+    const [lockedWidth, setLockedWidth] = React.useState<number | null>(null);
+    const [copied, setCopied] = React.useState(false);
+    const copyTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const setMergedRef = React.useCallback(
+      (node: HTMLButtonElement | null) => {
+        internalRef.current = node;
+        if (typeof ref === "function") {
+          ref(node);
+        } else if (ref) {
+          ref.current = node;
+        }
+      },
+      [ref]
+    );
+
+    React.useLayoutEffect(() => {
+      if (!keepWidthOnLoading || busy || copied) return;
+      const el = internalRef.current;
+      if (el) {
+        const w = el.getBoundingClientRect().width;
+        if (w > 0) setLockedWidth(Math.ceil(w));
+      }
+    }, [keepWidthOnLoading, busy, copied, children]);
+
+    React.useEffect(() => {
+      return () => {
+        if (copyTimerRef.current !== null) {
+          clearTimeout(copyTimerRef.current);
+        }
+      };
+    }, []);
+
     const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
       if (isDisabled) {
         event.preventDefault();
@@ -109,17 +180,35 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
       if (haptic) {
         triggerHapticFeedback();
       }
+      if (typeof copyText === "string") {
+        void writeClipboardText(copyText);
+        setCopied(true);
+        if (copyTimerRef.current !== null) {
+          clearTimeout(copyTimerRef.current);
+        }
+        copyTimerRef.current = setTimeout(() => {
+          setCopied(false);
+          copyTimerRef.current = null;
+        }, 2000);
+      }
       onClick?.(event);
     };
 
+    const computedStyle: React.CSSProperties =
+      keepWidthOnLoading && (busy || copied) && lockedWidth
+        ? { minWidth: `${lockedWidth}px`, ...style }
+        : { ...style };
+
     return (
       <button
-        ref={ref}
+        ref={setMergedRef}
         type={type}
         disabled={isDisabled}
         aria-busy={busy || undefined}
         data-variant={variant}
         data-size={sizeKey}
+        data-copied={copied ? "true" : undefined}
+        style={computedStyle}
         onClick={handleClick}
         className={cn(
           "inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-xl font-semibold select-none",
@@ -127,7 +216,9 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
           "active:scale-[0.98] disabled:active:scale-100 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2",
           "[&_svg]:pointer-events-none [&_svg]:shrink-0",
-          VARIANT_CLASSES[variant],
+          copied
+            ? "bg-[#16A34A] text-white shadow-md shadow-emerald-600/20"
+            : VARIANT_CLASSES[variant],
           SIZE_CLASSES[sizeKey] ?? SIZE_CLASSES["44"],
           fullWidth && "w-full",
           className
@@ -158,10 +249,20 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
             </svg>
             <span>{loadingText ?? children}</span>
           </>
+        ) : copied ? (
+          <>
+            <Check className="size-4" aria-hidden="true" />
+            <span>{copySuccessLabel}</span>
+          </>
         ) : (
           <>
             {leftIcon ? <span className="inline-flex shrink-0">{leftIcon}</span> : null}
             <span>{children}</span>
+            {costHint ? (
+              <span className="cg-tabular ml-0.5 rounded-md bg-black/15 px-1.5 py-0.5 text-[11px] font-semibold opacity-95">
+                {costHint}
+              </span>
+            ) : null}
             {rightIcon ? <span className="inline-flex shrink-0">{rightIcon}</span> : null}
           </>
         )}

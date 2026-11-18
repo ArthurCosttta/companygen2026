@@ -1,5 +1,9 @@
+import { useEffect, useState } from 'react';
 import {
+  Activity,
   MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   ShieldCheck,
   ShoppingBag,
@@ -8,6 +12,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ConnectionPhaseInfo } from '@/hooks/useConnectionPhase';
+import {
+  getBrandHorizontalLogo,
+  getBrandSymbolLogo,
+  useDocumentDarkMode,
+} from '@/utils/themeLogos';
 
 export type SidebarTab = 'store' | 'whatsapp' | 'dashboard' | 'settings' | 'admin';
 
@@ -40,6 +49,13 @@ export const SIDEBAR_TITLES: Record<SidebarTab, string> = {
   admin: 'Admin',
 };
 
+export interface ElectronHealthInfo {
+  isDesktop?: boolean;
+  trayActive?: boolean;
+  soundEnabled?: boolean;
+  lastPollMs?: number;
+}
+
 export interface SidebarProps {
   storeName: string;
   activeTab: SidebarTab;
@@ -48,6 +64,20 @@ export interface SidebarProps {
   pendingOrdersCount?: number;
   waitingHumanCount?: number;
   isAdmin?: boolean;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  electronHealth?: ElectronHealthInfo;
+}
+
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'cg_sidebar_collapsed';
+
+function readInitialSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 export function Sidebar({
@@ -58,7 +88,44 @@ export function Sidebar({
   pendingOrdersCount = 0,
   waitingHumanCount = 0,
   isAdmin = false,
+  collapsed: controlledCollapsed,
+  onToggleCollapse,
+  electronHealth,
 }: SidebarProps) {
+  const isDark = useDocumentDarkMode();
+  const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() =>
+    readInitialSidebarCollapsed(),
+  );
+  const collapsed = controlledCollapsed ?? internalCollapsed;
+
+  useEffect(() => {
+    if (controlledCollapsed === undefined) return;
+    try {
+      window.localStorage.setItem(
+        SIDEBAR_COLLAPSED_STORAGE_KEY,
+        controlledCollapsed ? '1' : '0',
+      );
+    } catch {
+      // Ignore storage access errors
+    }
+  }, [controlledCollapsed]);
+
+  const handleToggleCollapse = () => {
+    if (onToggleCollapse) {
+      onToggleCollapse();
+      return;
+    }
+    setInternalCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, next ? '1' : '0');
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
+
   const cleanStoreName = storeName.trim() || 'Minha Loja';
   const visibleTabs = isAdmin ? [...SIDEBAR_TABS, ADMIN_SIDEBAR_TAB] : SIDEBAR_TABS;
 
@@ -114,33 +181,82 @@ export function Sidebar({
 
   return (
     <>
-      {/* Desktop Left Sidebar (240px) */}
+      {/* Desktop Left Sidebar (240px <-> 64px retrátil) */}
       <aside
         aria-label="Menu principal"
-        className="cg-sidebar hidden min-[769px]:flex w-[240px]! shrink-0 flex-col justify-between border-r border-slate-200 bg-white px-3 py-5 select-none"
+        data-testid="desktop-sidebar"
+        data-collapsed={collapsed ? 'true' : 'false'}
+        className={cn(
+          'cg-sidebar hidden min-[769px]:flex shrink-0 flex-col justify-between border-r select-none transition-[width] duration-200 ease-out',
+          collapsed ? 'w-[64px] px-2 py-4' : 'w-[240px] px-3 py-5',
+          isDark
+            ? 'border-slate-800 bg-[#111726]'
+            : 'border-[var(--cg-border)] bg-[var(--cg-surface)]',
+        )}
       >
         <div className="space-y-6">
-          {/* Brand / Store Identity */}
-          <div className="flex items-center gap-3 px-2">
-            <img
-              src="/brand/simbolo-colorido.webp"
-              alt="CompanyGen"
-              className="size-10 shrink-0 object-contain drop-shadow-xs"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold tracking-tight text-[#0F172A]">
-                CompanyGen
-              </p>
+          {/* Brand / Store Identity + Collapse Toggle */}
+          <div
+            className={cn(
+              'flex items-center gap-2',
+              collapsed ? 'flex-col justify-center gap-2.5' : 'justify-between px-1.5',
+            )}
+          >
+            <div
+              className={cn(
+                'flex items-center gap-2.5 min-w-0',
+                collapsed && 'justify-center',
+              )}
+              title={collapsed ? `CompanyGen · ${cleanStoreName}` : cleanStoreName}
+            >
+              <img
+                src={collapsed ? getBrandSymbolLogo(isDark) : getBrandHorizontalLogo(isDark)}
+                alt="CompanyGen"
+                data-testid="sidebar-brand-logo"
+                className={cn(
+                  'shrink-0 object-contain bg-transparent',
+                  collapsed ? 'size-8' : 'h-7 w-auto max-w-[144px]',
+                )}
+              />
+            </div>
+
+            <button
+              type="button"
+              data-testid="sidebar-collapse-toggle"
+              onClick={handleToggleCollapse}
+              aria-label={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+              aria-expanded={!collapsed}
+              title={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+              className={cn(
+                'inline-flex size-9 shrink-0 items-center justify-center rounded-xl border transition-colors',
+                isDark
+                  ? 'border-slate-700/80 bg-[#182034] text-slate-300 hover:bg-slate-800 hover:text-white'
+                  : 'border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] text-slate-600 hover:bg-[var(--cg-hover)] hover:text-[#0B1D52]',
+              )}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="size-4" aria-hidden="true" />
+              ) : (
+                <PanelLeftClose className="size-4" aria-hidden="true" />
+              )}
+            </button>
+          </div>
+
+          {!collapsed ? (
+            <div className="px-2 -mt-3">
               <small
-                className="block truncate text-xs font-medium text-slate-500"
+                className={cn(
+                  'block truncate text-xs font-medium',
+                  isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]',
+                )}
                 title={cleanStoreName}
               >
                 {cleanStoreName}
               </small>
             </div>
-          </div>
+          ) : null}
 
-          {/* Strictly 4 Clean Navigation Tabs */}
+          {/* Strictly 4 Clean Navigation Tabs (+ Admin condicional) */}
           <nav aria-label="Navegação principal" className="space-y-1.5">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
@@ -150,6 +266,7 @@ export function Sidebar({
                   key={tab.id}
                   type="button"
                   data-testid={tab.testId}
+                  title={collapsed ? tab.label : undefined}
                   aria-label={
                     tab.id === 'dashboard'
                       ? 'Pedidos · Dashboard'
@@ -160,34 +277,90 @@ export function Sidebar({
                   aria-current={isActive ? 'page' : undefined}
                   onClick={() => onSelectTab(tab.id)}
                   className={cn(
-                    'flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm transition-all duration-[120ms]',
+                    'relative flex w-full min-h-[44px] items-center rounded-xl transition-all duration-[120ms]',
+                    collapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3.5 py-2.5 text-sm',
                     'active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-1',
                     isActive
-                      ? 'border border-[#BFDBFE] bg-[#EFF6FF] font-bold text-[#1D4ED8] shadow-xs'
-                      : 'border border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-[#0F172A]',
+                      ? isDark
+                        ? 'border border-blue-500/40 bg-[#182034] font-bold text-white shadow-xs'
+                        : 'border border-[#BFDBFE] bg-[#EFF6FF] font-bold text-[#1D4ED8] shadow-xs'
+                      : isDark
+                        ? 'border border-transparent font-medium text-slate-300 hover:bg-[#182034] hover:text-white'
+                        : 'border border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-[#0F172A]',
                   )}
                 >
                   <Icon
                     className={cn(
-                      'size-[18px] shrink-0',
-                      isActive ? 'text-[#2563EB]' : 'text-slate-500',
+                      'shrink-0',
+                      collapsed ? 'size-5' : 'size-[18px]',
+                      isActive
+                        ? isDark
+                          ? 'text-[#3B82F6]'
+                          : 'text-[#2563EB]'
+                        : isDark
+                          ? 'text-slate-400'
+                          : 'text-slate-500',
                     )}
                     aria-hidden="true"
                   />
-                  <span className="truncate">{tab.label}</span>
-                  {renderTabBadge(tab.id, false)}
+                  {collapsed ? (
+                    <span className="sr-only">{tab.label}</span>
+                  ) : (
+                    <span className="truncate">{tab.label}</span>
+                  )}
+                  {renderTabBadge(tab.id, collapsed)}
                 </button>
               );
             })}
           </nav>
         </div>
+
+        {/* Desktop .exe Health Footer (only when running inside Electron) */}
+        {electronHealth?.isDesktop ? (
+          <div
+            data-testid="sidebar-exe-health"
+            title={`App Desktop · Bandeja ${electronHealth.trayActive !== false ? 'Ativa' : 'Inativa'}${typeof electronHealth.lastPollMs === 'number' ? ` · Sync ${electronHealth.lastPollMs}ms` : ''}`}
+            className={cn(
+              'mt-4 rounded-xl border p-2.5 text-[11px]',
+              collapsed ? 'flex justify-center p-2' : 'space-y-1',
+              isDark
+                ? 'border-emerald-500/25 bg-emerald-950/20 text-emerald-200'
+                : 'border-emerald-200 bg-emerald-50/80 text-emerald-900',
+            )}
+          >
+            {collapsed ? (
+              <Activity className="size-4 text-emerald-500" aria-hidden="true" />
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-2 font-bold">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                    App Desktop
+                  </span>
+                  <span className="cg-tabular opacity-80">
+                    {typeof electronHealth.lastPollMs === 'number'
+                      ? `${electronHealth.lastPollMs}ms`
+                      : 'Ativo'}
+                  </span>
+                </div>
+                <p className="truncate text-[10px] opacity-80">
+                  Bandeja {electronHealth.trayActive !== false ? 'ativa' : 'pausada'} · Som{' '}
+                  {electronHealth.soundEnabled !== false ? 'ligado' : 'mudo'}
+                </p>
+              </>
+            )}
+          </div>
+        ) : null}
       </aside>
 
       {/* Mobile Fixed Bottom Bar (<= 768px, 64px height) */}
       <nav
         aria-label="Navegação inferior"
         className={cn(
-          'fixed inset-x-0 bottom-0 z-40 grid h-16 items-center gap-1 border-t border-slate-200 bg-white/95 px-2 backdrop-blur-md min-[769px]:hidden',
+          'cg-sidebar fixed inset-x-0 bottom-0 z-40 grid h-16 items-center gap-1 border-t px-2 backdrop-blur-md min-[769px]:hidden',
+          isDark
+            ? 'border-slate-800 bg-[#111726]/95'
+            : 'border-[var(--cg-border)] bg-white/95',
           isAdmin ? 'grid-cols-5' : 'grid-cols-4',
         )}
       >

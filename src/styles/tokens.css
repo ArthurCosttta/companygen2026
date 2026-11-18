@@ -1,18 +1,22 @@
 /* CompanyGen design tokens */
 :root {
-  --cg-background: #f7faff;
-  --cg-surface: #ffffff;
-  --cg-surface-elevated: #f8fafc;
-  --cg-primary: #0867e8;
-  --cg-primary-dark: #064bb8;
-  --cg-text: #0b1d52;
-  --cg-text-secondary: #64748b;
-  --cg-text-muted: #64748b;
-  --cg-border: #e6effb;
-  --cg-hover: #edf4ff;
-  --cg-success: #24a677;
-  --cg-warning: #e8a23f;
-  --cg-error: #d94c4c;
+  --cg-background: #F7FAFF;
+  --cg-surface: #FFFFFF;
+  --cg-surface-elevated: #F8FAFC;
+  --cg-surface-subtle: #F1F5F9;
+  --cg-primary: #0867E8;
+  --cg-primary-dark: #064BB8;
+  --cg-text: #0B1D52;
+  --cg-text-secondary: #475569;
+  --cg-text-muted: #64748B;
+  --cg-border: #E6EFFB;
+  --cg-border-strong: #CBD5E1;
+  --cg-hover: #EDF4FF;
+  --cg-success: #24A677;
+  --cg-warning: #E8A23F;
+  --cg-error: #D94C4C;
+  --cg-urgent-human: #FF2E54;
+  --cg-focus-ring: rgba(8, 103, 232, 0.35);
 
   --cg-sidebar-w: 248px;
   --cg-inspector-w: 440px;
@@ -25,19 +29,23 @@
 }
 
 .dark {
-  --cg-background: #09090b;
-  --cg-surface: #121215;
-  --cg-surface-elevated: #18181b;
-  --cg-primary: #3b82f6;
-  --cg-primary-dark: #2563eb;
-  --cg-text: #ffffff;
-  --cg-text-secondary: #f4f4f5;
-  --cg-text-muted: #e4e4e7;
-  --cg-border: #27272a;
-  --cg-hover: #18181b;
-  --cg-success: #10b981;
-  --cg-warning: #f59e0b;
-  --cg-error: #ef4444;
+  --cg-background: #090D16;
+  --cg-surface: #111726;
+  --cg-surface-elevated: #182034;
+  --cg-surface-subtle: #1E293B;
+  --cg-primary: #3B82F6;
+  --cg-primary-dark: #2563EB;
+  --cg-text: #FFFFFF;
+  --cg-text-secondary: #CBD5E1;
+  --cg-text-muted: #94A3B8;
+  --cg-border: #1E293B;
+  --cg-border-strong: #334155;
+  --cg-hover: #1E293B;
+  --cg-success: #34D399;
+  --cg-warning: #FBBF24;
+  --cg-error: #F87171;
+  --cg-urgent-human: #FF2E54;
+  --cg-focus-ring: rgba(59, 130, 246, 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {

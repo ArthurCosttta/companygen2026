@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ActionButton, ModalContainer, useToast } from '@/components/ui';
 import { saveLocalShowcaseSession, supabase } from '@/services/supabase-client';
+import { getBrandHorizontalLogo, useDocumentDarkMode } from '@/utils/themeLogos';
 
 const SIGNUP_DRAFT_KEY = 'cg_signup_draft_v1';
 
@@ -38,6 +39,7 @@ function readSignupDraft(): SignupDraft {
 
 export function AuthFlowView() {
   const { showToast } = useToast();
+  const isDark = useDocumentDarkMode();
   const initialDraft = readSignupDraft();
   const [validatedInvite] = useState<{ code: string; credits: number } | null>(() => {
     try {
@@ -328,6 +330,12 @@ export function AuthFlowView() {
           ) : null}
 
           <div className="space-y-2">
+            <img
+              src={getBrandHorizontalLogo(isDark)}
+              alt="CompanyGen"
+              data-testid="auth-brand-logo"
+              className="mb-3 h-7 w-auto object-contain bg-transparent"
+            />
             <p className="text-xs font-bold uppercase tracking-wider text-[#2563EB]">
               {mode === 'signup' ? 'Nova loja' : 'Acesso do lojista'}
             </p>

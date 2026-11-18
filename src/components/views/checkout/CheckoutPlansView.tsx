@@ -12,6 +12,7 @@ import {
 import { ActionButton } from '@/components/ui/ActionButton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { authenticatedFetch } from '@/services/supabase-client';
+import { getBrandHorizontalLogo, useDocumentDarkMode } from '@/utils/themeLogos';
 
 export interface CreditLedgerEntry {
   id: string;
@@ -75,6 +76,7 @@ function sanitizePlanPriceLabel(raw: string): string {
 
 export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp }: CheckoutPlansViewProps) {
   const { showToast } = useToast();
+  const isDark = useDocumentDarkMode();
   const [activeSubTab, setActiveSubTab] = useState<'plans' | 'ledger'>(initialSubTab);
   const [plans, setPlans] = useState<CreditPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string>('plan_100_brl');
@@ -280,10 +282,20 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
   }, [ledgerEntries]);
 
   return (
-    <div className="min-h-screen w-full bg-[#090D16] text-slate-100 font-sans p-4 sm:p-6 md:p-8">
+    <div
+      className={`min-h-screen w-full font-sans p-4 sm:p-6 md:p-8 transition-colors ${
+        isDark
+          ? 'bg-[#090D16] text-slate-100'
+          : 'bg-[var(--cg-background)] text-[var(--cg-text)]'
+      }`}
+    >
       <div className="mx-auto max-w-6xl">
         {/* Barra Superior */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-800">
+        <div
+          className={`flex flex-wrap items-center justify-between gap-4 pb-6 border-b ${
+            isDark ? 'border-slate-800' : 'border-[var(--cg-border)]'
+          }`}
+        >
           <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
             <button
               onClick={() => {
@@ -296,7 +308,11 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                   window.location.href = url.toString();
                 }
               }}
-              className="inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 hover:text-white transition"
+              className={`inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                isDark
+                  ? 'border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white'
+                  : 'border-[var(--cg-border-strong)] bg-[var(--cg-surface)] text-[var(--cg-text-secondary)] hover:bg-[var(--cg-hover)] hover:text-[var(--cg-text)]'
+              }`}
             >
               <ArrowLeft className="size-4 shrink-0" />
               Voltar ao Aplicativo
@@ -304,28 +320,52 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
             <div>
               <div className="mb-1 flex flex-wrap items-center gap-3">
                 <img
-                  src="/brand/logo-horizontal-escura.webp"
+                  src={getBrandHorizontalLogo(isDark)}
                   alt="CompanyGen"
-                  className="h-7 w-auto object-contain"
+                  data-testid="checkout-brand-logo"
+                  className="h-7 w-auto object-contain bg-transparent"
                 />
-                <span className="text-xs font-mono font-bold tracking-widest text-[#38BDF8] uppercase">
+                <span
+                  className={`text-xs font-mono font-bold tracking-widest uppercase ${
+                    isDark ? 'text-[#38BDF8]' : 'text-[var(--cg-primary)]'
+                  }`}
+                >
                   ◈ CRÉDITOS, PAGAMENTOS & CONSUMO
                 </span>
               </div>
-              <h1 className="text-2xl font-black text-white sm:text-3xl">
+              <h1
+                className={`text-2xl font-black sm:text-3xl ${
+                  isDark ? 'text-white' : 'text-[var(--cg-text)]'
+                }`}
+              >
                 Planos & Telemetria da Conta
               </h1>
             </div>
           </div>
 
           {/* Saldo Atual */}
-          <div className="flex items-center gap-3 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-2.5">
-            <Zap className="size-5 text-[#38BDF8]" />
+          <div
+            className={`flex items-center gap-3 rounded-2xl border px-4 py-2.5 ${
+              isDark
+                ? 'border-blue-500/30 bg-blue-500/10'
+                : 'border-blue-200 bg-blue-50/90'
+            }`}
+          >
+            <Zap className={`size-5 ${isDark ? 'text-[#38BDF8]' : 'text-[var(--cg-primary)]'}`} />
             <div>
-              <span className="text-[10px] font-semibold text-blue-300 block uppercase">
+              <span
+                className={`text-[10px] font-semibold block uppercase ${
+                  isDark ? 'text-blue-300' : 'text-blue-700'
+                }`}
+              >
                 Saldo Atual
               </span>
-              <span className="text-lg font-black text-white" data-testid="checkout-current-balance">
+              <span
+                className={`cg-tabular text-lg font-black ${
+                  isDark ? 'text-white' : 'text-[var(--cg-text)]'
+                }`}
+                data-testid="checkout-current-balance"
+              >
                 {currentBalance.toLocaleString('pt-BR')} créditos
               </span>
             </div>
@@ -341,7 +381,9 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
             className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-xs font-bold transition ${
               activeSubTab === 'plans'
                 ? 'bg-[#2563EB] text-white shadow-lg shadow-blue-600/20'
-                : 'border border-slate-800 bg-[#0F172A] text-slate-300 hover:bg-slate-800'
+                : isDark
+                  ? 'border border-slate-800 bg-[#111726] text-slate-300 hover:bg-slate-800'
+                  : 'border border-[var(--cg-border)] bg-[var(--cg-surface)] text-[var(--cg-text-secondary)] hover:bg-[var(--cg-hover)]'
             }`}
           >
             <Sparkles className="size-4" />
@@ -351,10 +393,12 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
             type="button"
             data-testid="checkout-tab-ledger"
             onClick={() => setActiveSubTab('ledger')}
-            className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-xs font-bold transition ${
+            className={`cg-tabular inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-xs font-bold transition ${
               activeSubTab === 'ledger'
                 ? 'bg-[#2563EB] text-white shadow-lg shadow-blue-600/20'
-                : 'border border-slate-800 bg-[#0F172A] text-slate-300 hover:bg-slate-800'
+                : isDark
+                  ? 'border border-slate-800 bg-[#111726] text-slate-300 hover:bg-slate-800'
+                  : 'border border-[var(--cg-border)] bg-[var(--cg-surface)] text-[var(--cg-text-secondary)] hover:bg-[var(--cg-hover)]'
             }`}
           >
             <BarChart3 className="size-4" />
@@ -365,24 +409,46 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
         {activeSubTab === 'ledger' ? (
           <div className="mt-6 grid gap-6 lg:grid-cols-2" data-testid="checkout-ledger-panel">
             {/* Gráfico de Consumo de Créditos/Tokens */}
-            <section className="rounded-3xl border border-slate-800 bg-[#0F172A] p-6 space-y-4">
+            <section
+              className={`rounded-3xl border p-6 space-y-4 ${
+                isDark
+                  ? 'border-slate-800 bg-[#111726]'
+                  : 'border-[var(--cg-border)] bg-[var(--cg-surface)] shadow-sm'
+              }`}
+            >
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <h2
+                    className={`text-sm font-bold flex items-center gap-2 ${
+                      isDark ? 'text-white' : 'text-[var(--cg-text)]'
+                    }`}
+                  >
                     <BarChart3 className="size-4 text-[#38BDF8]" />
                     Gráfico de Consumo de Créditos
                   </h2>
-                  <p className="text-xs text-slate-400">
+                  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
                     Onde seus créditos foram investidos até agora.
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-200">
+                <span
+                  className={`cg-tabular rounded-full px-3 py-1 text-xs font-bold ${
+                    isDark
+                      ? 'bg-slate-800 text-slate-200'
+                      : 'bg-[var(--cg-surface-subtle)] text-[var(--cg-text)]'
+                  }`}
+                >
                   Total gasto: {telemetry.totalSpent.toLocaleString('pt-BR')} cr
                 </span>
               </div>
 
               {telemetry.bars.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-6 text-center text-xs text-slate-400 space-y-3">
+                <div
+                  className={`rounded-2xl border border-dashed p-6 text-center text-xs space-y-3 ${
+                    isDark
+                      ? 'border-slate-700 bg-slate-900/50 text-slate-400'
+                      : 'border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-muted)]'
+                  }`}
+                >
                   <img
                     src="/brand/illustrations/illustration-opportunity-consultoria-financeira.png"
                     alt="Consumo financeiro"
@@ -397,12 +463,14 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                     return (
                       <div key={bar.label} className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-slate-200">{bar.label}</span>
-                          <span className="font-mono text-[#38BDF8]">
+                          <span className={`font-semibold ${isDark ? 'text-slate-200' : 'text-[var(--cg-text)]'}`}>
+                            {bar.label}
+                          </span>
+                          <span className="cg-tabular font-mono text-[#38BDF8]">
                             -{bar.total.toLocaleString('pt-BR')} cr ({bar.count}x)
                           </span>
                         </div>
-                        <div className="h-3 w-full overflow-hidden rounded-full bg-slate-800">
+                        <div className={`h-3 w-full overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-[#2563EB] to-[#38BDF8]"
                             style={{ width: `${pct}%` }}
@@ -416,24 +484,40 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
             </section>
 
             {/* Histórico de Pagamentos, Recargas & Movimentações */}
-            <section className="rounded-3xl border border-slate-800 bg-[#0F172A] p-6 space-y-4">
+            <section
+              className={`rounded-3xl border p-6 space-y-4 ${
+                isDark
+                  ? 'border-slate-800 bg-[#111726]'
+                  : 'border-[var(--cg-border)] bg-[var(--cg-surface)] shadow-sm'
+              }`}
+            >
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                    <ReceiptText className="size-4 text-emerald-400" />
+                  <h2
+                    className={`text-sm font-bold flex items-center gap-2 ${
+                      isDark ? 'text-white' : 'text-[var(--cg-text)]'
+                    }`}
+                  >
+                    <ReceiptText className="size-4 text-emerald-500" />
                     Histórico de Pagamentos & Movimentações
                   </h2>
-                  <p className="text-xs text-slate-400">
+                  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
                     Recargas Kiwify, códigos resgatados, estornos e lançamentos recentes.
                   </p>
                 </div>
-                <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300">
+                <span className="cg-tabular rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-300">
                   Recargas: +{telemetry.totalLoaded.toLocaleString('pt-BR')} cr
                 </span>
               </div>
 
               {ledgerEntries.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-6 text-center text-xs text-slate-400">
+                <div
+                  className={`rounded-2xl border border-dashed p-6 text-center text-xs ${
+                    isDark
+                      ? 'border-slate-700 bg-slate-900/50 text-slate-400'
+                      : 'border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-muted)]'
+                  }`}
+                >
                   Nenhuma movimentação registrada ainda nesta conta.
                 </div>
               ) : (
@@ -448,22 +532,32 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                     return (
                       <li
                         key={entry.id}
-                        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-3.5 py-2.5 text-xs"
+                        className={`flex items-center justify-between gap-3 rounded-2xl border px-3.5 py-2.5 text-xs ${
+                          isDark
+                            ? 'border-slate-800 bg-slate-900/60'
+                            : 'border-[var(--cg-border)] bg-[var(--cg-surface-elevated)]'
+                        }`}
                       >
                         <div className="min-w-0">
-                          <p className="truncate font-semibold text-white">{meta.label}</p>
-                          <p className="text-[11px] text-slate-400">
+                          <p className={`truncate font-semibold ${isDark ? 'text-white' : 'text-[var(--cg-text)]'}`}>
+                            {meta.label}
+                          </p>
+                          <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
                             {new Date(entry.created_at).toLocaleString('pt-BR')} · Saldo após:{' '}
-                            <strong className="text-slate-200">{Number(entry.balance_after || 0).toLocaleString('pt-BR')} cr</strong>
+                            <strong className={`cg-tabular ${isDark ? 'text-slate-200' : 'text-[var(--cg-text)]'}`}>
+                              {Number(entry.balance_after || 0).toLocaleString('pt-BR')} cr
+                            </strong>
                           </p>
                         </div>
                         <span
-                          className={`shrink-0 rounded-full px-2.5 py-1 font-mono font-bold ${
+                          className={`cg-tabular shrink-0 rounded-full px-2.5 py-1 font-mono font-bold ${
                             isRefund
-                              ? 'bg-rose-500/20 text-rose-300'
+                              ? 'bg-rose-500/20 text-rose-500 dark:text-rose-300'
                               : isPositive
-                                ? 'bg-emerald-500/20 text-emerald-300'
-                                : 'bg-slate-800 text-slate-300'
+                                ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                                : isDark
+                                  ? 'bg-slate-800 text-slate-300'
+                                  : 'bg-slate-200 text-slate-700'
                           }`}
                         >
                           {isPositive ? `+${entry.delta}` : entry.delta} cr
@@ -480,7 +574,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
         <div className="mt-6 grid gap-8 lg:grid-cols-3">
           {/* Coluna 1 & 2: Seleção de Planos */}
           <div className="lg:col-span-2 space-y-4">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+            <h2 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
               Escolha seu Pacote de Créditos (Sem Validade)
             </h2>
 
@@ -496,8 +590,12 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                     }}
                     className={`relative flex flex-col justify-between rounded-3xl border p-5 cursor-pointer transition-all ${
                       isSelected
-                        ? 'border-[#2563EB] bg-[#1E293B] shadow-xl ring-2 ring-[#2563EB]/40'
-                        : 'border-slate-800 bg-[#0F172A]/80 hover:border-slate-700 hover:bg-[#0F172A]'
+                        ? isDark
+                          ? 'border-[#3B82F6] bg-[#182034] shadow-xl ring-2 ring-[#3B82F6]/40'
+                          : 'border-[var(--cg-primary)] bg-[var(--cg-hover)] shadow-md ring-2 ring-[#0867E8]/20'
+                        : isDark
+                          ? 'border-slate-800 bg-[#111726]/90 hover:border-slate-700 hover:bg-[#182034]'
+                          : 'border-[var(--cg-border)] bg-[var(--cg-surface)] hover:border-[var(--cg-border-strong)] hover:bg-[var(--cg-surface-elevated)] shadow-xs'
                     } ${plan.popular ? 'sm:-translate-y-1' : ''}`}
                   >
                     {/* Tag de Destaque */}
@@ -508,28 +606,34 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                     )}
 
                     <div>
-                      <h3 className="text-sm font-bold text-white">{plan.name}</h3>
+                      <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-[var(--cg-text)]'}`}>
+                        {plan.name}
+                      </h3>
                       <div className="mt-3 flex items-baseline gap-1.5">
-                        <span className="text-2xl font-black text-white">
+                        <span className={`cg-tabular text-2xl font-black ${isDark ? 'text-white' : 'text-[var(--cg-text)]'}`}>
                           {cleanPrice}
                         </span>
-                        <span className="text-[11px] font-medium text-slate-400">única</span>
+                        <span className={`text-[11px] font-medium ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
+                          única
+                        </span>
                       </div>
 
-                      <div className="mt-2 inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2 py-1 text-xs font-bold text-[#38BDF8]">
+                      <div className="cg-tabular mt-2 inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2 py-1 text-xs font-bold text-[#0867E8] dark:text-[#38BDF8]">
                         <Sparkles className="size-3.5" />
                         {plan.credits.toLocaleString('pt-BR')} Créditos
                       </div>
 
-                      <p className="mt-3 text-xs text-slate-400 leading-relaxed">
+                      <p className={`mt-3 text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-secondary)]'}`}>
                         {plan.description}
                       </p>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-800 space-y-2">
-                      <div className="text-[11px] text-slate-400 flex items-center justify-between">
+                    <div className={`mt-4 pt-3 border-t space-y-2 ${isDark ? 'border-slate-800' : 'border-[var(--cg-border)]'}`}>
+                      <div className={`text-[11px] flex items-center justify-between ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
                         <span>Custo/msg:</span>
-                        <span className="font-bold text-slate-200">{plan.pricePerCredit}</span>
+                        <span className={`cg-tabular font-bold ${isDark ? 'text-slate-200' : 'text-[var(--cg-text)]'}`}>
+                          {plan.pricePerCredit}
+                        </span>
                       </div>
                       <button
                         type="button"
@@ -539,7 +643,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                           setSelectedPlanId(plan.id);
                           handleOpenKiwifyCheckout(plan);
                         }}
-                        className="w-full inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 px-3 text-xs font-bold text-emerald-300 hover:bg-emerald-500 hover:text-slate-950 transition"
+                        className="w-full inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-emerald-600/15 border border-emerald-600/35 px-3 text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600 hover:text-white transition"
                       >
                         <ExternalLink className="size-3.5" />
                         Comprar na Kiwify
@@ -551,9 +655,15 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
             </div>
 
             {/* Informações de Margem e Segurança */}
-            <div className="mt-6 rounded-2xl border border-slate-800 bg-[#0F172A]/40 p-4 text-xs text-slate-400 space-y-2">
-              <div className="flex items-center gap-2 text-slate-300 font-semibold">
-                <ShieldCheck className="size-4 text-emerald-400" />
+            <div
+              className={`mt-6 rounded-2xl border p-4 text-xs space-y-2 ${
+                isDark
+                  ? 'border-slate-800 bg-[#111726]/60 text-slate-400'
+                  : 'border-[var(--cg-border)] bg-[var(--cg-surface)] text-[var(--cg-text-secondary)]'
+              }`}
+            >
+              <div className={`flex items-center gap-2 font-semibold ${isDark ? 'text-slate-300' : 'text-[var(--cg-text)]'}`}>
+                <ShieldCheck className="size-4 text-emerald-500" />
                 Créditos Sem Validade
               </div>
               <p>
@@ -563,54 +673,74 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
           </div>
 
           {/* Coluna 3: Resumo do Pedido & Pagamento */}
-          <div className="rounded-3xl border border-slate-800 bg-[#0F172A] p-6 shadow-xl flex flex-col justify-between">
+          <div
+            className={`rounded-3xl border p-6 shadow-xl flex flex-col justify-between ${
+              isDark
+                ? 'border-slate-800 bg-[#111726]'
+                : 'border-[var(--cg-border)] bg-[var(--cg-surface)]'
+            }`}
+          >
             <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">
+              <h2 className={`text-sm font-bold uppercase tracking-wider mb-4 ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
                 Resumo da Compra
               </h2>
 
               {selectedPlan && (
-                <div className="space-y-3 pb-4 border-b border-slate-800 text-sm">
-                  <div className="flex justify-between text-slate-300">
+                <div className={`space-y-3 pb-4 border-b text-sm ${isDark ? 'border-slate-800' : 'border-[var(--cg-border)]'}`}>
+                  <div className={`flex justify-between ${isDark ? 'text-slate-300' : 'text-[var(--cg-text-secondary)]'}`}>
                     <span>Pacote Selecionado:</span>
-                    <span className="font-bold text-white">{selectedPlan.name}</span>
+                    <span className={`font-bold ${isDark ? 'text-white' : 'text-[var(--cg-text)]'}`}>
+                      {selectedPlan.name}
+                    </span>
                   </div>
-                  <div className="flex justify-between text-slate-300">
+                  <div className={`flex justify-between ${isDark ? 'text-slate-300' : 'text-[var(--cg-text-secondary)]'}`}>
                     <span>Créditos a Adicionar:</span>
-                    <span className="font-bold text-[#38BDF8]">
+                    <span className="cg-tabular font-bold text-[#0867E8] dark:text-[#38BDF8]">
                       +{selectedPlan.credits.toLocaleString('pt-BR')}
                     </span>
                   </div>
-                  <div className="flex justify-between text-slate-300">
+                  <div className={`flex justify-between ${isDark ? 'text-slate-300' : 'text-[var(--cg-text-secondary)]'}`}>
                     <span>Novo Saldo Estimado:</span>
-                    <span className="font-bold text-emerald-400">
+                    <span className="cg-tabular font-bold text-emerald-600 dark:text-emerald-400">
                       {projectedBalance.toLocaleString('pt-BR')} créditos
                     </span>
                   </div>
-                  <div className="flex justify-between text-base font-black text-white pt-2 border-t border-slate-800/80">
+                  <div
+                    className={`flex justify-between text-base font-black pt-2 border-t ${
+                      isDark ? 'text-white border-slate-800/80' : 'text-[var(--cg-text)] border-[var(--cg-border)]'
+                    }`}
+                  >
                     <span>Total a Pagar:</span>
-                    <span className="text-emerald-400">{sanitizePlanPriceLabel(selectedPlan.priceFormatted)}</span>
+                    <span className="cg-tabular text-emerald-600 dark:text-emerald-400">
+                      {sanitizePlanPriceLabel(selectedPlan.priceFormatted)}
+                    </span>
                   </div>
                 </div>
               )}
 
-              <div className="mt-5 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 space-y-2 text-xs text-emerald-100">
-                <div className="flex items-center gap-2 font-bold text-emerald-400">
+              <div
+                className={`mt-5 rounded-2xl border p-4 space-y-2 text-xs ${
+                  isDark
+                    ? 'border-emerald-500/30 bg-emerald-950/20 text-emerald-100'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold text-emerald-600 dark:text-emerald-400">
                   <CheckCircle2 className="size-4" />
                   Pagamento Seguro via Kiwify
                 </div>
-                <p className="text-slate-300 leading-relaxed">
+                <p className={`leading-relaxed ${isDark ? 'text-slate-300' : 'text-emerald-900'}`}>
                   Ao confirmar abaixo, você será redirecionado com segurança para o checkout oficial da Kiwify (PIX instantâneo ou Cartão de Crédito).
                 </p>
               </div>
             </div>
 
             {/* Ação Primária Kiwify */}
-            <div className="mt-6 pt-4 border-t border-slate-800 space-y-3">
+            <div className={`mt-6 pt-4 border-t space-y-3 ${isDark ? 'border-slate-800' : 'border-[var(--cg-border)]'}`}>
               {awaitingKiwifyPlan ? (
                 <div
                   data-testid="kiwify-awaiting-confirmation"
-                  className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-xs font-semibold text-amber-200"
+                  className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-xs font-semibold text-amber-700 dark:text-amber-200"
                 >
                   Aguardando confirmação automática da Kiwify para <strong>{awaitingKiwifyPlan}</strong>... Assim que o pagamento aprovar, o saldo atualiza sozinho aqui.
                 </div>
@@ -618,7 +748,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
               {confirmedCreditsDelta !== null ? (
                 <div
                   data-testid="kiwify-credits-confirmed"
-                  className="rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3.5 py-2.5 text-xs font-bold text-emerald-300"
+                  className="rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3.5 py-2.5 text-xs font-bold text-emerald-700 dark:text-emerald-300"
                 >
                   Pagamento confirmado! +{confirmedCreditsDelta.toLocaleString('pt-BR')} créditos adicionados à sua conta.
                 </div>

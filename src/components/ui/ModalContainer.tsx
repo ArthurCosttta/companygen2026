@@ -164,7 +164,7 @@ export function ModalContainer({
           className={cn(
             "fixed z-50 flex flex-col bg-white text-[#0F172A] shadow-2xl outline-none",
             "border border-slate-200/80",
-            "dark:bg-[#121215] dark:text-[#FFFFFF] dark:border-[#27272A]",
+            "dark:bg-[#111726] dark:text-[#FFFFFF] dark:border-[#1E293B]",
             "transform-gpu will-change-[transform,opacity]",
             // Mobile <= 768px: Bottom Sheet 85%-95%
             "max-[768px]:inset-x-0 max-[768px]:bottom-0 max-[768px]:w-full max-[768px]:rounded-t-2xl max-[768px]:rounded-b-none",

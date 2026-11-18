@@ -2,14 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   AlertTriangle,
-  Eye,
   LogOut,
-  Moon,
   RefreshCw,
   ShieldAlert,
   ShoppingBag,
   Sparkles,
-  Sun,
+  WifiOff,
 } from 'lucide-react';
 import {
   BusinessProfileSchema,
@@ -28,6 +26,7 @@ import {
   type WhatsappRuntimeStatus,
 } from '@/hooks/useConnectionPhase';
 import { useHighSaturationNotifications } from '@/hooks/useHighSaturationNotifications';
+import { useNetworkAndDraftGuard } from '@/hooks/useNetworkAndDraftGuard';
 import { setWorkspaceUser } from '@/services/local-storage';
 import {
   loadBusinessProfile,
@@ -46,8 +45,9 @@ import {
 import { syncConnectedWhatsappProfile } from '@/services/whatsapp-profile-sync';
 import { AuthFlowView } from '@/components/auth/AuthFlowView';
 import {
+  CommandPaletteModal,
   Sidebar,
-  SIDEBAR_TITLES,
+  Topbar,
   type SidebarTab,
 } from '@/components/shell';
 import { HighSaturationNotificationBar } from '@/components/shell/HighSaturationNotificationBar';
@@ -57,6 +57,7 @@ import {
   EmptyStateCard,
   SkeletonBlock,
   SkeletonTableRows,
+  SupportTicketModal,
   ToastProvider,
   useToast,
 } from '@/components/ui';
@@ -79,7 +80,6 @@ import {
 } from '@/components/views/storefront';
 import {
   WhatsAppConnectionView,
-  WhatsappPersistentVisualizer,
   type WhatsappDadosResponse,
 } from '@/components/views/whatsapp';
 import { OrdersKanbanView } from '@/components/views/orders';
@@ -308,6 +308,19 @@ export function App() {
   const [publicStoreRoute, setPublicStoreRoute] = useState<PublicStoreRouteTarget>(() =>
     readPublicStoreRouteTarget(),
   );
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('cg_theme');
+      const shouldDark =
+        saved === 'dark' ||
+        (!saved && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', Boolean(shouldDark));
+      window.dispatchEvent(new CustomEvent('companygen:theme-change'));
+    } catch {
+      // Ignore storage access failures
+    }
+  }, []);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -563,6 +576,9 @@ function StudioApp({ user }: { user: User }) {
   const initialWelcomeCheckedRef = useRef(false);
   const visitRecordedRef = useRef(false);
 
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
+
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('cg_theme');
@@ -577,6 +593,7 @@ function StudioApp({ user }: { user: User }) {
     try {
       document.documentElement.classList.toggle('dark', isDarkMode);
       localStorage.setItem('cg_theme', isDarkMode ? 'dark' : 'light');
+      window.dispatchEvent(new CustomEvent('companygen:theme-change'));
     } catch {
       // Ignore storage access failures
     }
@@ -1081,6 +1098,16 @@ function StudioApp({ user }: { user: User }) {
   );
 
   const hasDraft = useMemo(() => Boolean(readExpressFichaDraft(user.id)), [user.id, wizardOpen]);
+  const { isOffline } = useNetworkAndDraftGuard({
+    isDirty: hasDraft,
+    onSaveDraft: () => {
+      showToast({
+        type: 'neutral',
+        message: 'Rascunho salvo localmente com segurança (Ctrl+S).',
+        durationMs: 2500,
+      });
+    },
+  });
 
   const pendingOrdersCount = useMemo(() => {
     const list = dashboard?.recentOrders ?? [];
@@ -1285,6 +1312,11 @@ function StudioApp({ user }: { user: User }) {
           pendingOrdersCount={pendingOrdersCount}
           waitingHumanCount={notificationsState.waitingHumanCount}
           isAdmin={isAdmin}
+          electronHealth={{
+            isDesktop,
+            trayActive: isDesktop,
+            soundEnabled: !notificationsState.isMuted,
+          }}
         />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -1299,77 +1331,41 @@ function StudioApp({ user }: { user: User }) {
           fixed
         />
 
-        {/* Clean Topbar */}
-        <header className="flex h-16 shrink-0 items-center justify-between gap-1.5 sm:gap-3 border-b border-slate-200 bg-white px-3 sm:px-6">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <h1 className="truncate text-base sm:text-lg font-bold tracking-tight text-[#0F172A]">
-              {SIDEBAR_TITLES[activeTab]}
-            </h1>
+        {/* Topbar 3 Zonas: Breadcrumb, Ctrl+K, Saldo Tabular, Ver Vitrine, Tema e Menu Ajuda (?) */}
+        <Topbar
+          storeName={storeName}
+          activeTab={activeTab}
+          creditBalance={creditBalance}
+          isCatalogEmpty={isCatalogEmpty}
+          isDarkMode={isDarkMode}
+          onToggleDarkMode={() => setIsDarkMode((v) => !v)}
+          onOpenCheckout={() => {
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.set('route', 'checkout');
+              window.history.pushState({}, '', url.toString());
+            } catch {}
+            window.dispatchEvent(new CustomEvent('companygen:open-checkout'));
+          }}
+          onOpenPreview={() => enterPreview('preview')}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          onOpenSupport={() => setSupportModalOpen(true)}
+          onOpenTour={() => setWelcomeOpen(true)}
+        />
 
-            <span
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
-              title={connectionPhaseInfo.labelPT}
-            >
-              <span
-                aria-hidden="true"
-                className="size-2 rounded-full"
-                style={{ backgroundColor: connectionPhaseInfo.colorHex }}
-              />
-              <span className="truncate max-w-[230px]">{connectionPhaseInfo.labelPT}</span>
+        {/* Banner Offline não-destrutivo (36px) */}
+        {isOffline ? (
+          <div
+            role="status"
+            data-testid="network-offline-banner"
+            className="flex min-h-[36px] shrink-0 items-center justify-center gap-2 border-b border-amber-300/70 bg-amber-50 px-4 py-1.5 text-xs font-semibold text-amber-950 dark:border-amber-500/35 dark:bg-amber-950/40 dark:text-amber-200"
+          >
+            <WifiOff className="size-3.5 shrink-0 text-amber-600 dark:text-amber-300" aria-hidden="true" />
+            <span>
+              Sem conexão com a internet — suas edições estão salvas como rascunho local e serão sincronizadas quando a rede voltar.
             </span>
           </div>
-
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <div className="hidden sm:inline-flex">
-              <WhatsappPersistentVisualizer
-                userId={user.id}
-                connected={connectionPhaseInfo.isLiveReady}
-                onOpenWhatsApp={() => setActiveTab('whatsapp')}
-              />
-            </div>
-            <button
-              type="button"
-              data-testid="topbar-open-checkout-btn"
-              onClick={() => {
-                try {
-                  const url = new URL(window.location.href);
-                  url.searchParams.set('route', 'checkout');
-                  window.history.pushState({}, '', url.toString());
-                } catch {}
-                window.dispatchEvent(new CustomEvent('companygen:open-checkout'));
-              }}
-              className="flex shrink-0 whitespace-nowrap items-center gap-1 sm:gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-50 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition shadow-xs"
-              title="Abrir Central de Planos e Créditos de IA (Plano de R$ 100,00)"
-            >
-              <Sparkles className="size-3.5 shrink-0 text-emerald-600" />
-              <span className="sm:hidden">{creditBalance} cr</span>
-              <span className="hidden sm:inline">Planos IA · {creditBalance} cr</span>
-            </button>
-            {!isCatalogEmpty ? (
-              <ActionButton
-                variant="softBlue"
-                size={44}
-                leftIcon={<Eye className="size-4" />}
-                onClick={() => enterPreview('preview')}
-                data-testid="topbar-preview-vitrine"
-                className="shrink-0 whitespace-nowrap px-2.5 sm:px-4"
-              >
-                <span className="hidden sm:inline">Ver Vitrine</span>
-                <span className="sm:hidden">Vitrine</span>
-              </ActionButton>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={() => setIsDarkMode((v) => !v)}
-              aria-label={isDarkMode ? 'Ativar modo claro' : 'Ativar modo escuro'}
-              title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
-              className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
-            >
-              {isDarkMode ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
-            </button>
-          </div>
-        </header>
+        ) : null}
 
         {/* Main Workspace Stage (extra bottom padding on mobile for 64px fixed bar) */}
         <main className="flex-1 min-h-0 overflow-y-auto pb-20 min-[769px]:pb-0">
@@ -1610,6 +1606,39 @@ function StudioApp({ user }: { user: User }) {
           setSuccessModalState((prev) => ({ ...prev, open: false }));
           setActiveTab('store');
         }}
+      />
+
+      <CommandPaletteModal
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        isAdmin={isAdmin}
+        isDarkMode={isDarkMode}
+        isCatalogEmpty={isCatalogEmpty}
+        products={(profile.catalog?.products ?? []).map((p) => ({
+          id: p.id,
+          name: p.name,
+          priceCents: p.priceCents,
+        }))}
+        onSelectTab={handleSelectTab}
+        onOpenCheckout={() => {
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('route', 'checkout');
+            window.history.pushState({}, '', url.toString());
+          } catch {}
+          window.dispatchEvent(new CustomEvent('companygen:open-checkout'));
+        }}
+        onOpenPreview={() => enterPreview('preview')}
+        onOpenSupport={() => setSupportModalOpen(true)}
+        onToggleDarkMode={() => setIsDarkMode((v) => !v)}
+        onOpenTour={() => setWelcomeOpen(true)}
+      />
+
+      <SupportTicketModal
+        open={supportModalOpen}
+        onOpenChange={setSupportModalOpen}
+        userId={user.id}
+        storeName={storeName}
       />
     </div>
   );

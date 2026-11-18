@@ -3,6 +3,7 @@ import { CheckCircle2, AlertCircle, Clock, Lock } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { saveLocalShowcaseSession } from '@/services/supabase-client';
+import { getBrandHorizontalLogo, useDocumentDarkMode } from '@/utils/themeLogos';
 
 export interface AccessCodeViewProps {
   onSuccess?: (codeData: { code: string; credits: number }) => void;
@@ -36,6 +37,7 @@ export function formatAccessCodeInput(raw: string): string {
 
 export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) {
   const { showToast } = useToast();
+  const isDark = useDocumentDarkMode();
   const [code, setCode] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -193,26 +195,39 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
 
   return (
     <main
-      className="flex min-h-screen w-full items-center justify-center bg-[#090D16] p-4 text-slate-100 font-sans"
+      className={`flex min-h-screen w-full items-center justify-center p-4 font-sans transition-colors ${
+        isDark ? 'bg-[#090D16] text-slate-100' : 'bg-[var(--cg-background)] text-[var(--cg-text)]'
+      }`}
       role="region"
       aria-label="Página de Código de Acesso"
     >
-      <div className="relative w-full max-w-[460px] overflow-hidden rounded-3xl border border-slate-800 bg-[#0F172A]/90 p-8 shadow-2xl backdrop-blur-xl">
+      <div
+        className={`relative w-full max-w-[460px] overflow-hidden rounded-3xl border p-8 shadow-2xl backdrop-blur-xl ${
+          isDark
+            ? 'border-slate-800 bg-[#111726]/95'
+            : 'border-[var(--cg-border)] bg-[var(--cg-surface)] shadow-[0_20px_50px_rgba(11,29,82,0.08)]'
+        }`}
+      >
         {/* Glow de fundo */}
         <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 size-56 rounded-full bg-blue-500/15 blur-3xl" />
 
         {/* Header CompanyGen Studio */}
         <div className="relative flex flex-col items-center text-center">
           <img
-            src="/brand/logo-vertical-escura.webp"
+            src={getBrandHorizontalLogo(isDark)}
             alt="CompanyGen Studio"
-            className="mb-3 h-24 w-auto object-contain drop-shadow-[0_6px_18px_rgba(37,99,235,0.28)]"
+            data-testid="access-brand-logo"
+            className="mx-auto mb-3 h-9 w-auto object-contain bg-transparent"
           />
 
-          <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">
+          <h1
+            className={`text-xl font-black tracking-tight sm:text-2xl ${
+              isDark ? 'text-white' : 'text-[var(--cg-text)]'
+            }`}
+          >
             BEM-VINDO À PLATAFORMA
           </h1>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className={`mt-1 text-xs ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
             Seu ambiente de criação com IA
           </p>
         </div>
@@ -222,7 +237,9 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
           <div className="space-y-1.5">
             <label
               htmlFor="access-code-input"
-              className="text-xs font-semibold text-slate-300 block text-center"
+              className={`block text-center text-xs font-semibold ${
+                isDark ? 'text-slate-300' : 'text-[var(--cg-text-secondary)]'
+              }`}
             >
               Insira seu código de acesso
             </label>
@@ -238,14 +255,20 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
                 onChange={handleInputChange}
                 disabled={state === 'loading' || state === 'activated'}
                 placeholder="AI10-XXXX-XXXX"
-                className={`w-full rounded-2xl border bg-slate-900/90 px-4 py-3.5 text-center font-mono text-xl font-bold tracking-widest text-white placeholder-slate-600 transition-all focus:outline-none focus:ring-2 ${
+                className={`w-full rounded-2xl border px-4 py-3.5 text-center font-mono text-xl font-bold tracking-widest transition-all focus:outline-none focus:ring-2 ${
+                  isDark
+                    ? 'bg-slate-900/90 text-white placeholder-slate-500'
+                    : 'bg-[var(--cg-surface-elevated)] text-[var(--cg-text)] placeholder-slate-400'
+                } ${
                   state === 'invalid'
-                    ? 'border-red-500/80 focus:border-red-500 focus:ring-red-500/20 text-red-200'
+                    ? 'border-red-500/80 focus:border-red-500 focus:ring-red-500/20 text-red-500'
                     : state === 'expired' || state === 'already_redeemed'
-                      ? 'border-amber-500/80 focus:border-amber-500 focus:ring-amber-500/20 text-amber-200'
+                      ? 'border-amber-500/80 focus:border-amber-500 focus:ring-amber-500/20 text-amber-500'
                       : state === 'activated'
-                        ? 'border-emerald-500/80 focus:border-emerald-500 focus:ring-emerald-500/20 text-emerald-200'
-                        : 'border-slate-700/80 focus:border-blue-500 focus:ring-blue-500/20'
+                        ? 'border-emerald-500/80 focus:border-emerald-500 focus:ring-emerald-500/20 text-emerald-500'
+                        : isDark
+                          ? 'border-slate-700/80 focus:border-blue-500 focus:ring-blue-500/20'
+                          : 'border-[var(--cg-border-strong)] focus:border-[var(--cg-primary)] focus:ring-blue-500/20'
                 }`}
               />
             </div>
@@ -257,10 +280,10 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
                   <div
                     className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium ${
                       state === 'expired'
-                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300'
                         : state === 'already_redeemed'
-                          ? 'border-orange-500/30 bg-orange-500/10 text-orange-300'
-                          : 'border-red-500/30 bg-red-500/10 text-red-300'
+                          ? 'border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-300'
+                          : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300'
                     }`}
                   >
                     {state === 'expired' ? (
@@ -275,7 +298,7 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
                 )}
 
                 {state === 'activated' && (
-                  <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-300">
+                  <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
                     <CheckCircle2 className="size-4 shrink-0" />
                     <span>
                       +{creditsAwarded} cr liberados (~{Math.max(1, Math.floor(creditsAwarded / 30))} Página + ~{Math.round(creditsAwarded * 2.5)} msgs Sofia).
@@ -301,23 +324,29 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
         </form>
 
         {/* Checklist de Benefícios */}
-        <div className="mt-6 space-y-2 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-4 text-xs text-slate-300">
+        <div
+          className={`mt-6 space-y-2 rounded-2xl border p-4 text-xs ${
+            isDark
+              ? 'border-slate-800/80 bg-slate-900/40 text-slate-300'
+              : 'border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-secondary)]'
+          }`}
+        >
           <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold">✓</span>
+            <span className="text-emerald-500 font-bold">✓</span>
             <span>Convites individuais e exclusivos</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold">✓</span>
+            <span className="text-emerald-500 font-bold">✓</span>
             <span>Créditos gratuitos de boas-vindas</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold">✓</span>
+            <span className="text-emerald-500 font-bold">✓</span>
             <span>Acesso completo aos recursos de loja e Sofia IA</span>
           </div>
         </div>
 
         {/* Rodapé / Link para Login */}
-        <div className="mt-6 text-center text-xs text-slate-400">
+        <div className={`mt-6 text-center text-xs ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
           <span>Já possui conta? </span>
           <button
             type="button"
@@ -332,7 +361,11 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
                 window.location.href = url.toString();
               }
             }}
-            className="font-bold text-[#38BDF8] hover:text-white underline underline-offset-4 transition"
+            className={`font-bold underline underline-offset-4 transition ${
+              isDark
+                ? 'text-[#38BDF8] hover:text-white'
+                : 'text-[var(--cg-primary)] hover:text-[var(--cg-primary-dark)]'
+            }`}
           >
             [ Entrar ]
           </button>

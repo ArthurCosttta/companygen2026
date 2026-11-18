@@ -44,3 +44,14 @@ export {
   type SupportTicketModalProps,
   type SupportTicketItem,
 } from "./SupportTicketModal";
+
+export {
+  HumanErrorCard,
+  type HumanErrorCardProps,
+} from "./HumanErrorCard";
+
+export {
+  resolveHumanError,
+  type HumanErrorInfo,
+  type HumanErrorVariant,
+} from "@/utils/humanErrors";

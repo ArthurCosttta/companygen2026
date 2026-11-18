@@ -377,13 +377,24 @@ export async function handleSupportAndQrClientRoutes(req, res, ctx) {
     }
 
     if (req.method === 'POST') {
-      const body = await readJson(req, 32 * 1024);
+      const body = await readJson(req, 3 * 1024 * 1024);
       const category = VALID_CATEGORIES.has(body?.category) ? body.category : 'outro';
       const subject = String(body?.subject || '').trim().slice(0, 120);
       const description = String(body?.description || '').trim().slice(0, 2000);
       const storeName = String(body?.storeName || '').trim().slice(0, 120);
       const userEmail = String(user?.email || body?.email || '').trim().slice(0, 120);
       const contextMeta = redactContext(body?.contextMeta);
+
+      let validAttachmentDataUrl = null;
+      if (body?.attachmentDataUrl !== undefined && body?.attachmentDataUrl !== null && String(body.attachmentDataUrl).trim() !== '') {
+        const rawAttachment = String(body.attachmentDataUrl).trim();
+        const isAllowedImageDataUrl = /^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/=\s]+$/i.test(rawAttachment);
+        if (!isAllowedImageDataUrl || rawAttachment.length > 2_200_000) {
+          throw new ApiError(400, 'Anexo inválido. Envie uma imagem PNG, JPEG ou WebP de até 1,5 MB.');
+        }
+        validAttachmentDataUrl = rawAttachment;
+        contextMeta.has_attachment = true;
+      }
 
       if (subject.length < 3 || description.length < 6) {
         throw new ApiError(400, 'Descreva brevemente o título e o que aconteceu.');
@@ -404,6 +415,7 @@ export async function handleSupportAndQrClientRoutes(req, res, ctx) {
               subject,
               description,
               context_meta: contextMeta,
+              attachment_url: validAttachmentDataUrl,
               status: 'open',
             }),
             signal: AbortSignal.timeout(5000),
@@ -429,6 +441,7 @@ export async function handleSupportAndQrClientRoutes(req, res, ctx) {
           category,
           subject,
           description,
+          attachment_url: validAttachmentDataUrl,
           context_meta: contextMeta,
           status: 'open',
           admin_note: '',

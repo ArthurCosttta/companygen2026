@@ -65,7 +65,25 @@ test('Fase 4: Admin arthurpolarbuy@gmail.com, Suporte Tickets, QR Code /q/:slug 
     });
     assert.equal(userOverviewRes.status, 403);
 
-    // 2. Cliente envia chamado de suporte e lista somente os seus
+    // 2. Cliente envia chamado de suporte com print anexado e servidor valida MIME inválido
+    const invalidAttachmentRes = await fetch(`${baseUrl}/api/support/tickets`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${userToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        category: 'whatsapp',
+        subject: 'Teste MIME invalido',
+        description: 'Nao deve aceitar HTML disfarçado de imagem.',
+        attachmentDataUrl: 'data:text/html;base64,PGgxPk9pPC9oMT4=',
+      }),
+    });
+    assert.equal(invalidAttachmentRes.status, 400);
+
+    const samplePngDataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
     const createTicketRes = await fetch(`${baseUrl}/api/support/tickets`, {
       method: 'POST',
       headers: {
@@ -77,12 +95,14 @@ test('Fase 4: Admin arthurpolarbuy@gmail.com, Suporte Tickets, QR Code /q/:slug 
         subject: 'Dúvida na conexão do número',
         description: 'Preciso confirmar se o modo seguro está ativo.',
         storeName: 'Loja Bela Flor',
+        attachmentDataUrl: samplePngDataUrl,
       }),
     });
     const ticketJson = await createTicketRes.json();
     assert.equal(createTicketRes.status, 200);
     assert.equal(ticketJson.ok, true);
     assert.equal(ticketJson.ticket.status, 'open');
+    assert.equal(ticketJson.ticket.attachment_url, samplePngDataUrl);
 
     // 3. Admin visualiza chamado e resolve
     const resolveRes = await fetch(`${baseUrl}/api/admin/tickets/resolve`, {
