@@ -18,6 +18,7 @@ export interface QuickReplyTemplate {
   gatilhos?: string[];
   resposta?: string;
   body?: string;
+  mediaUrl?: string;
 }
 
 export interface NormalizedQuickReply {
@@ -25,7 +26,9 @@ export interface NormalizedQuickReply {
   title: string;
   category: string;
   body: string;
+  rawDisplayBody: string;
   triggers: string[];
+  mediaUrl?: string;
   isFallback?: boolean;
 }
 
@@ -87,15 +90,29 @@ const FRIENDLY_TOKEN_DISPLAY: Record<string, string> = {
   '{LISTA_DE_PRODUTOS}': 'Produtos do pedido',
 };
 
-function cleanTemplateBody(rawText: string, profile?: Partial<BusinessProfile> | null): string {
+function normalizeQuickSearch(rawText: string): string {
+  return String(rawText || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function cleanTemplateBody(
+  rawText: string,
+  profile?: Partial<BusinessProfile> | null,
+  keepBoldMarkers = false,
+): string {
   const storeName = profile?.business?.name?.trim();
   const pixKey = profile?.payment?.pixKey?.trim();
   let text = String(rawText || '')
-    .replace(/\*\*/g, '')
-    .replace(/\*/g, '')
+    .replace(/\*\*/g, '*')
     .replace(/\(\s*SKU[^)]*\)/gi, '')
     .replace(/\bSKU[:\s#-]*[A-Za-z0-9_.-]+\b/gi, '')
     .trim();
+  if (!keepBoldMarkers) {
+    text = text.replace(/\*/g, '');
+  }
 
   if (storeName) {
     text = text.replace(/\{nome_loja\}/gi, storeName);
@@ -104,6 +121,48 @@ function cleanTemplateBody(rawText: string, profile?: Partial<BusinessProfile> |
     text = text.replace(/\{chave_pix\}/gi, pixKey);
   }
   return text;
+}
+
+/**
+ * BUG-F05-07: Parser AST seguro em React para *negrito* de WhatsApp e /atalhos em --cg-primary
+ * Sem dangerouslySetInnerHTML e sem executar HTML/XSS do usuário.
+ */
+function renderSafeBoldWhatsappText(text: string): React.ReactNode[] {
+  const tokenRegex = /(\*[^*\n]{1,120}\*|(?:^|\s)\/[a-z0-9_-]{2,28})/gi;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let keyIdx = 0;
+  while ((match = tokenRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith('*') && token.endsWith('*') && token.length > 2) {
+      parts.push(
+        <strong key={`qr-b-${keyIdx++}`} className="font-bold text-[#0F172A] dark:text-[#F8FAFC]">
+          {token.slice(1, -1)}
+        </strong>,
+      );
+    } else {
+      const leadingSpace = token.startsWith(' ') ? ' ' : '';
+      const slashCmd = token.trimStart();
+      if (leadingSpace) parts.push(leadingSpace);
+      parts.push(
+        <span
+          key={`qr-cmd-${keyIdx++}`}
+          className="inline-flex items-center rounded bg-[#2563EB]/10 px-1 font-semibold text-[#2563EB] dark:bg-blue-500/20 dark:text-blue-400"
+        >
+          {slashCmd}
+        </span>,
+      );
+    }
+    lastIndex = tokenRegex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts;
 }
 
 function extractFriendlyChipsFromBody(body: string): string[] {
@@ -213,25 +272,31 @@ export function QuickRepliesSection({
   const sourceList = hasCustomTemplates ? effectiveTemplates! : DEFAULT_QUICK_REPLIES;
 
   const normalizedList = React.useMemo<NormalizedQuickReply[]>(() => {
-    return sourceList.map((item, idx) => ({
-      id: item.id || `modelo-${idx + 1}`,
-      title: (item.title || item.titulo || `Modelo ${idx + 1}`).trim(),
-      category: (item.category || 'Atendimento rápido').trim(),
-      body: cleanTemplateBody(item.body || item.resposta || '', profile),
-      triggers: Array.isArray(item.gatilhos) ? item.gatilhos : [],
-      isFallback: !hasCustomTemplates,
-    }));
+    return sourceList.map((item, idx) => {
+      const sourceBody = item.body || item.resposta || '';
+      return {
+        id: item.id || `modelo-${idx + 1}`,
+        title: (item.title || item.titulo || `Modelo ${idx + 1}`).trim(),
+        category: (item.category || 'Atendimento rápido').trim(),
+        body: cleanTemplateBody(sourceBody, profile, false),
+        rawDisplayBody: cleanTemplateBody(sourceBody, profile, true),
+        triggers: Array.isArray(item.gatilhos) ? item.gatilhos : [],
+        mediaUrl: typeof item.mediaUrl === 'string' && item.mediaUrl.trim() ? item.mediaUrl.trim() : undefined,
+        isFallback: !hasCustomTemplates,
+      };
+    });
   }, [hasCustomTemplates, profile, sourceList]);
 
-  const query = searchQuery.trim().toLowerCase();
+  const query = normalizeQuickSearch(searchQuery);
   const filteredList = React.useMemo(() => {
     if (!query) return normalizedList;
-    return normalizedList.filter(
-      item =>
-        item.title.toLowerCase().includes(query) ||
-        item.category.toLowerCase().includes(query) ||
-        item.body.toLowerCase().includes(query),
-    );
+    const tokens = query.split(/\s+/).filter(Boolean);
+    return normalizedList.filter(item => {
+      const haystack = normalizeQuickSearch(
+        `${item.title} ${item.category} ${item.rawDisplayBody} ${item.triggers.join(' ')}`,
+      );
+      return tokens.every(tok => haystack.includes(tok));
+    });
   }, [normalizedList, query]);
 
   const handleCopy = async (item: NormalizedQuickReply) => {
@@ -417,9 +482,9 @@ export function QuickRepliesSection({
             type="search"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Buscar resposta rápida..."
+            placeholder="Buscar resposta rápida ou /atalho..."
             aria-label="Buscar resposta rápida"
-            className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pr-3.5 pl-10 text-sm text-[#0F172A] placeholder:text-slate-400 focus:border-[#2563EB] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+            className="min-h-[44px] w-full rounded-xl border border-slate-200 dark:border-[#334155] bg-slate-50/70 dark:bg-[#090D16] pr-3.5 pl-10 text-sm text-[#0F172A] dark:text-[#F8FAFC] placeholder:text-slate-400 focus:border-[#2563EB] focus:bg-white dark:focus:bg-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
           />
         </div>
 
@@ -435,7 +500,7 @@ export function QuickRepliesSection({
       </div>
 
       {!hasCustomTemplates && !loading && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-3.5 py-2.5 text-xs text-[#1D4ED8]">
+        <div className="flex items-start gap-2.5 rounded-xl border border-[#BFDBFE] dark:border-blue-500/30 bg-[#EFF6FF] dark:bg-blue-500/10 px-3.5 py-2.5 text-xs text-[#1D4ED8] dark:text-blue-300">
           <Sparkles className="mt-0.5 size-4 shrink-0 text-[#F59E0B]" aria-hidden="true" />
           <span>
             Exibindo 3 modelos prontos da loja (Boas-vindas, Chave Pix e Rastreio). Copie em um
@@ -476,15 +541,17 @@ export function QuickRepliesSection({
               <article
                 key={item.id}
                 data-testid={`quick-reply-${item.id}`}
-                className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-slate-300"
+                className="flex min-w-0 flex-col justify-between gap-3 rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4 shadow-sm transition-colors hover:border-slate-300 dark:hover:border-slate-700"
               >
-                <div className="space-y-2">
-                  <div className={compact ? 'flex flex-col gap-2' : 'flex items-start justify-between gap-2'}>
-                    <div className="min-w-0">
-                      <span className="inline-block whitespace-nowrap rounded-full bg-[#EFF6FF] px-2.5 py-0.5 text-[11px] font-semibold text-[#1D4ED8]">
+                <div className="space-y-2 min-w-0">
+                  <div className={compact ? 'flex flex-col gap-2 min-w-0' : 'flex items-start justify-between gap-2 min-w-0'}>
+                    <div className="min-w-0 flex-1">
+                      <span className="inline-block whitespace-nowrap rounded-full bg-[#EFF6FF] dark:bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#1D4ED8] dark:text-blue-300">
                         {item.category}
                       </span>
-                      <h3 className="mt-1.5 text-sm font-bold text-[#0F172A]">{item.title}</h3>
+                      <h3 className="mt-1.5 break-words text-sm font-bold text-[#0F172A] dark:text-[#F8FAFC]">
+                        {renderSafeBoldWhatsappText(item.title)}
+                      </h3>
                     </div>
 
                     <div className={compact ? 'flex flex-wrap items-center gap-1.5' : 'flex shrink-0 items-center gap-1.5'}>
@@ -495,7 +562,7 @@ export function QuickRepliesSection({
                             onClick={() => handleOpenEdit(item)}
                             aria-label={`Editar ${item.title}`}
                             data-testid={`quick-reply-edit-${item.id}`}
-                            className="inline-flex min-h-[44px] w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-[#2563EB]"
+                            className="inline-flex min-h-[44px] w-10 items-center justify-center rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0F172A] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#1E293B] hover:text-[#2563EB]"
                           >
                             <Pencil className="size-3.5" aria-hidden="true" />
                           </button>
@@ -505,7 +572,7 @@ export function QuickRepliesSection({
                             onClick={() => void handleDeleteTemplate(item)}
                             aria-label={`Excluir ${item.title}`}
                             data-testid={`quick-reply-delete-${item.id}`}
-                            className="inline-flex min-h-[44px] w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                            className="inline-flex min-h-[44px] w-10 items-center justify-center rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0F172A] text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 disabled:opacity-50"
                           >
                             <Trash2 className="size-3.5" aria-hidden="true" />
                           </button>
@@ -516,8 +583,8 @@ export function QuickRepliesSection({
                         onClick={() => void handleCopy(item)}
                         className={`inline-flex min-h-[44px] min-w-[104px] shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-all duration-[100ms] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
                           isCopied
-                            ? 'border border-[#86EFAC] bg-[#DCFCE7] text-[#15803D]'
-                            : 'bg-[#F1F5F9] text-[#0F172A] hover:bg-[#E2E8F0]'
+                            ? 'border border-[#86EFAC] bg-[#DCFCE7] text-[#15803D] dark:bg-emerald-500/20 dark:border-emerald-500/40 dark:text-emerald-300'
+                            : 'bg-[#F1F5F9] dark:bg-[#1E293B] text-[#0F172A] dark:text-[#F8FAFC] hover:bg-[#E2E8F0] dark:hover:bg-[#334155]'
                         }`}
                       >
                         {isCopied ? (
@@ -535,17 +602,42 @@ export function QuickRepliesSection({
                     </div>
                   </div>
 
-                  <p className="whitespace-pre-wrap rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-700">
-                    {item.body}
+                  {item.mediaUrl && (
+                    <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-[#334155] bg-slate-100 dark:bg-[#090D16]">
+                      <img
+                        src={item.mediaUrl}
+                        alt={item.title}
+                        loading="lazy"
+                        className="aspect-[4/3] w-full max-h-40 object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <p className="whitespace-pre-wrap break-words rounded-xl border border-slate-100 dark:border-[#1E293B] bg-slate-50 dark:bg-[#090D16] px-3 py-2.5 text-xs leading-relaxed text-slate-700 dark:text-[#CBD5E1]">
+                    {renderSafeBoldWhatsappText(item.rawDisplayBody)}
                   </p>
+
+                  {item.triggers.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[11px] font-medium text-slate-500 dark:text-[#94A3B8]">Atalhos:</span>
+                      {item.triggers.map(tr => (
+                        <span
+                          key={tr}
+                          className="inline-flex items-center rounded-full bg-[#2563EB]/10 dark:bg-blue-500/20 px-2 py-0.5 text-[11px] font-semibold text-[#2563EB] dark:text-blue-400"
+                        >
+                          /{tr.replace(/^\/+/, '')}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {variableLabels.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      <span className="text-[11px] font-medium text-slate-500">Campos:</span>
+                      <span className="text-[11px] font-medium text-slate-500 dark:text-[#94A3B8]">Campos:</span>
                       {variableLabels.map(label => (
                         <span
                           key={label}
-                          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600"
+                          className="inline-flex items-center rounded-full border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#0F172A] px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300"
                         >
                           {label}
                         </span>
@@ -595,7 +687,7 @@ export function QuickRepliesSection({
       >
         <form id="quick-reply-create-form" onSubmit={handleSaveNewTemplate} className="space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="qr-title" className="block text-sm font-semibold text-[#0F172A]">
+            <label htmlFor="qr-title" className="block text-sm font-semibold text-[#0F172A] dark:text-[#F8FAFC]">
               Título do Modelo (Ex: Chave Pix com Desconto)
             </label>
             <input
@@ -609,12 +701,12 @@ export function QuickRepliesSection({
                 if (formError) setFormError('');
               }}
               placeholder="Ex: Chave Pix com Desconto"
-              className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-[#0F172A] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+              className="min-h-[44px] w-full rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#090D16] px-3.5 text-sm text-[#0F172A] dark:text-[#F8FAFC] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="qr-triggers" className="block text-sm font-semibold text-[#0F172A]">
+            <label htmlFor="qr-triggers" className="block text-sm font-semibold text-[#0F172A] dark:text-[#F8FAFC]">
               Palavras que ativam esta resposta (opcional)
             </label>
             <input
@@ -624,26 +716,26 @@ export function QuickRepliesSection({
               value={newTriggers}
               onChange={e => setNewTriggers(e.target.value)}
               placeholder="Ex: pix, desconto, pagamento"
-              className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-[#0F172A] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+              className="min-h-[44px] w-full rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#090D16] px-3.5 text-sm text-[#0F172A] dark:text-[#F8FAFC] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
             />
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <label htmlFor="qr-body" className="block text-sm font-semibold text-[#0F172A]">
+              <label htmlFor="qr-body" className="block text-sm font-semibold text-[#0F172A] dark:text-[#F8FAFC]">
                 Texto Completo da Mensagem
               </label>
-              <span className="text-xs text-slate-500">{newBody.length} caracteres</span>
+              <span className="cg-tabular text-xs text-slate-500 dark:text-[#94A3B8]">{newBody.length} caracteres</span>
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-medium text-slate-500">Inserir campo:</span>
+              <span className="text-xs font-medium text-slate-500 dark:text-[#94A3B8]">Inserir campo:</span>
               {FRIENDLY_VARIABLE_CHIPS.map(chip => (
                 <button
                   key={chip.token}
                   type="button"
                   onClick={() => insertVariableChip(chip.token)}
-                  className="inline-flex min-h-[36px] items-center rounded-full border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-1 text-xs font-semibold text-[#1D4ED8] transition-all active:scale-[0.97] hover:bg-[#DBEAFE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
+                  className="inline-flex min-h-[36px] items-center rounded-full border border-[#BFDBFE] dark:border-blue-500/30 bg-[#EFF6FF] dark:bg-blue-500/15 px-3 py-1 text-xs font-semibold text-[#1D4ED8] dark:text-blue-300 transition-all active:scale-[0.97] hover:bg-[#DBEAFE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
                 >
                   + {chip.label}
                 </button>
@@ -661,8 +753,8 @@ export function QuickRepliesSection({
                 setNewBody(e.target.value);
                 if (formError) setFormError('');
               }}
-              placeholder="Escreva a mensagem que deseja salvar na sua biblioteca..."
-              className="w-full rounded-xl border border-slate-200 bg-white p-3.5 text-sm leading-relaxed text-[#0F172A] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+              placeholder="Escreva a mensagem que deseja salvar na sua biblioteca... (*use asteriscos para negrito*)"
+              className="w-full rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#090D16] p-3.5 text-sm leading-relaxed text-[#0F172A] dark:text-[#F8FAFC] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
             />
           </div>
 

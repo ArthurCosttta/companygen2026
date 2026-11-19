@@ -99,7 +99,7 @@ export function HighSaturationNotificationBar({
       aria-live={isUrgent ? 'assertive' : 'polite'}
       aria-label="Notificações da Loja"
       className={cn(
-        fixed ? 'fixed right-3 top-3 z-50 w-[min(420px,calc(100vw-24px))]' : 'relative z-30 w-full max-w-[440px]',
+        fixed ? 'fixed right-3 bottom-20 md:bottom-5 md:right-5 z-50 w-[min(390px,calc(100vw-24px))]' : 'relative z-30 w-full max-w-[440px]',
         'pointer-events-auto flex flex-col gap-2 transform-gpu',
         className,
       )}

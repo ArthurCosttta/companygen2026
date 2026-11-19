@@ -29,6 +29,12 @@ let trayStatusState = {
   repliedCount: 0,
   notifiedHide: false,
 };
+let healthMetrics = {
+  webviewConnected: false,
+  lastPollMs: 0,
+  lastPollAt: 0,
+  soundEnabled: true,
+};
 
 app.setName('CompanyGen');
 app.setPath('userData', process.env.COMPANYGEN_USER_DATA || path.join(app.getPath('appData'), 'CompanyGen'));
@@ -51,25 +57,63 @@ async function serverAvailable() {
   }
 }
 
+function resolvePackagedPaths() {
+  const candidates = [
+    process.resourcesPath ? path.join(process.resourcesPath, 'app.asar.unpacked') : '',
+    process.resourcesPath || '',
+    projectRoot,
+  ].filter(Boolean);
+  for (const base of candidates) {
+    const srv = path.join(base, 'server', 'index.mjs');
+    const dist = path.join(base, 'dist');
+    if (fs.existsSync(srv) && fs.existsSync(path.join(dist, 'index.html'))) {
+      return { baseDir: base, serverEntry: srv, distDir: dist };
+    }
+  }
+  return {
+    baseDir: projectRoot,
+    serverEntry: path.join(projectRoot, 'server', 'index.mjs'),
+    distDir: path.join(projectRoot, 'dist'),
+  };
+}
+
 async function ensureServer() {
   if (await serverAvailable()) return;
-  const hasBuiltDist = fs.existsSync(path.join(projectRoot, 'dist', 'index.html'));
-  const npmScript = hasBuiltDist && process.env.COMPANYGEN_DEV !== '1' ? 'preview' : 'dev';
-  const windows = process.platform === 'win32';
-  const command = windows ? (process.env.ComSpec || 'cmd.exe') : 'npm';
-  const args = windows
-    ? ['/d', '/s', '/c', `npm run ${npmScript} -- --host 127.0.0.1 --port 1245 --strictPort`]
-    : ['run', npmScript, '--', '--host', '127.0.0.1', '--port', '1245', '--strictPort'];
-  serverProcess = spawn(command, args, {
-    cwd: projectRoot,
-    windowsHide: true,
-    stdio: 'ignore',
-    env: { ...process.env },
-  });
+  const resolved = resolvePackagedPaths();
+  const hasBuiltDist = fs.existsSync(path.join(resolved.distDir, 'index.html'));
+  const port = new URL(appUrl).port || '1245';
+
+  if ((app.isPackaged || hasBuiltDist) && process.env.COMPANYGEN_DEV !== '1' && fs.existsSync(resolved.serverEntry)) {
+    serverProcess = spawn(process.execPath, [resolved.serverEntry], {
+      cwd: resolved.baseDir,
+      windowsHide: true,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        PORT: String(port),
+        HOST: '127.0.0.1',
+        COMPANYGEN_STATIC_ROOT: resolved.distDir,
+      },
+    });
+  } else {
+    const windows = process.platform === 'win32';
+    const command = windows ? (process.env.ComSpec || 'cmd.exe') : 'npm';
+    const args = windows
+      ? ['/d', '/s', '/c', `npm run dev -- --host 127.0.0.1 --port ${port} --strictPort`]
+      : ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port), '--strictPort'];
+    serverProcess = spawn(command, args, {
+      cwd: projectRoot,
+      windowsHide: true,
+      stdio: 'ignore',
+      env: { ...process.env },
+    });
+  }
+
   for (let attempt = 0; attempt < 60; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 500));
     if (await serverAvailable()) return;
-    if (serverProcess.exitCode !== null) break;
+    if (serverProcess?.exitCode !== null) break;
   }
   throw new Error('O servidor CompanyGen não iniciou na porta 1245.');
 }
@@ -115,35 +159,53 @@ async function readEmbeddedWhatsappIdentity() {
       const identity = await guest.executeJavaScript(script, true);
       const phoneE164 = validWhatsappPhone(identity?.phoneE164);
       if (phoneE164 && identity?.loggedIn !== false) {
+        healthMetrics.webviewConnected = true;
         return { connected: true, loggedIn: Boolean(identity?.loggedIn), phoneE164, source: 'webview' };
       }
       if (identity?.loggedIn) {
+        healthMetrics.webviewConnected = true;
         return { connected: true, loggedIn: true, phoneE164: '', source: 'webview' };
       }
     } catch {}
   }
 
+  healthMetrics.webviewConnected = false;
   return { connected: false, loggedIn: false, phoneE164: '', source: 'webview' };
 }
 
 async function pollEmbeddedWhatsappInbox() {
+  const startedAt = Date.now();
   const guests = getWhatsappWebviews();
   const guest = guests[0];
-  if (!guest) return { loggedIn: false, connected: false, action: 'no_webview' };
+  if (!guest) {
+    healthMetrics.webviewConnected = false;
+    return { loggedIn: false, connected: false, action: 'no_webview' };
+  }
 
   try {
-    const first = await guest.executeJavaScript(buildWebviewPollScript(), true);
-    if (first?.action === 'opened_unread_chat') {
+    let outcome = await guest.executeJavaScript(buildWebviewPollScript(), true);
+    if (outcome?.action === 'opened_unread_chat') {
       await new Promise(resolve => setTimeout(resolve, 550));
       let second = await guest.executeJavaScript(buildWebviewPollScript(), true);
       if (second?.action === 'idle') {
         await new Promise(resolve => setTimeout(resolve, 450));
         second = await guest.executeJavaScript(buildWebviewPollScript(), true);
       }
-      return second || first;
+      outcome = second || outcome;
     }
-    return first || { loggedIn: false, connected: false, action: 'empty' };
+    healthMetrics.lastPollMs = Math.max(1, Date.now() - startedAt);
+    healthMetrics.lastPollAt = Date.now();
+    healthMetrics.webviewConnected = Boolean(outcome?.connected || outcome?.loggedIn);
+
+    if (outcome?.action === 'manual_human_takeover' && mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        mainWindow.webContents.send('companygen:wa-manual-human-reply', outcome);
+      } catch {}
+    }
+
+    return outcome || { loggedIn: false, connected: false, action: 'empty' };
   } catch (err) {
+    healthMetrics.lastPollMs = Math.max(1, Date.now() - startedAt);
     return { loggedIn: false, connected: false, action: 'error', error: err?.message || 'poll_failed' };
   }
 }
@@ -417,11 +479,15 @@ async function sendEmbeddedWhatsappMediaItems(guest, mediaItems = []) {
 
 async function sendEmbeddedWhatsappReply(payload) {
   const chatTitle = String(payload?.chatTitle || '');
-  const text = String(payload?.text || '');
+  const rawParts = Array.isArray(payload?.replyParts)
+    ? payload.replyParts.map((p) => String(p || '').trim()).filter(Boolean).slice(0, 2)
+    : [];
+  const text = String(payload?.text || rawParts[0] || '');
+  const partsToSend = rawParts.length >= 2 ? rawParts : [text];
   const mediaItems = Array.isArray(payload?.mediaItems) ? payload.mediaItems : [];
   const typingDurationMs = Math.max(0, Math.min(45000, Number(payload?.typingDurationMs) || 0));
   const replyJobId = String(payload?.replyJobId || '');
-  if (!text.trim()) return { ok: false, error: 'Resposta vazia.' };
+  if (!partsToSend[0]?.trim()) return { ok: false, error: 'Resposta vazia.' };
   if (replyJobId && sentReplyJobs.has(replyJobId)) {
     return { ok: true, method: 'ipc_dedup_job_id' };
   }
@@ -444,15 +510,15 @@ async function sendEmbeddedWhatsappReply(payload) {
     } catch {}
   };
 
-  try {
+  async function dispatchBubble(bubbleText, bubbleJobId, bubbleTypingMs) {
     let result = await guest.executeJavaScript(
-      buildWebviewSendScript({ chatTitle, text, typingDurationMs, replyJobId, preferNativeHumanTyping: true }),
+      buildWebviewSendScript({ chatTitle, text: bubbleText, typingDurationMs: bubbleTypingMs, replyJobId: bubbleJobId, preferNativeHumanTyping: true }),
       true,
     );
     if (result?.switchedChat) {
       await new Promise(resolve => setTimeout(resolve, 500));
       result = await guest.executeJavaScript(
-        buildWebviewSendScript({ chatTitle, text, typingDurationMs, replyJobId, preferNativeHumanTyping: true }),
+        buildWebviewSendScript({ chatTitle, text: bubbleText, typingDurationMs: bubbleTypingMs, replyJobId: bubbleJobId, preferNativeHumanTyping: true }),
         true,
       );
     }
@@ -470,8 +536,8 @@ async function sendEmbeddedWhatsappReply(payload) {
 
       const alreadyHasDraft = Boolean(
         composerState?.text &&
-        composerState.text.length >= Math.min(16, text.trim().length) &&
-        composerState.text.slice(0, 20).toLowerCase() === text.trim().slice(0, 20).toLowerCase(),
+        composerState.text.length >= Math.min(16, bubbleText.trim().length) &&
+        composerState.text.slice(0, 20).toLowerCase() === bubbleText.trim().slice(0, 20).toLowerCase(),
       );
 
       if (!alreadyHasDraft) {
@@ -482,11 +548,11 @@ async function sendEmbeddedWhatsappReply(payload) {
           guest.sendInputEvent({ type: 'keyUp', keyCode: 'Backspace' });
           await new Promise(resolve => setTimeout(resolve, 80));
         }
-        await typeTextHumanLike(guest, text, { onProgress: emitProgress });
+        await typeTextHumanLike(guest, bubbleText, { onProgress: emitProgress });
       }
 
       for (let attempt = 0; attempt < 6; attempt += 1) {
-        result = await guest.executeJavaScript(buildWebviewClickSendScript(replyJobId), true);
+        result = await guest.executeJavaScript(buildWebviewClickSendScript(bubbleJobId), true);
         if (result?.ok) break;
         await new Promise(resolve => setTimeout(resolve, 120));
       }
@@ -499,7 +565,7 @@ async function sendEmbeddedWhatsappReply(payload) {
     } else if (result?.composerAlreadyHasText) {
       guest.focus();
       for (let attempt = 0; attempt < 4; attempt += 1) {
-        result = await guest.executeJavaScript(buildWebviewClickSendScript(replyJobId), true);
+        result = await guest.executeJavaScript(buildWebviewClickSendScript(bubbleJobId), true);
         if (result?.ok) break;
         await new Promise(resolve => setTimeout(resolve, 120));
       }
@@ -510,19 +576,28 @@ async function sendEmbeddedWhatsappReply(payload) {
         result = { ok: true, method: 'native_return_key' };
       }
     }
-    if (result?.ok && replyJobId) {
+    return result;
+  }
+
+  try {
+    let finalResult = await dispatchBubble(partsToSend[0], replyJobId ? `${replyJobId}_p1` : '', typingDurationMs);
+    if (finalResult?.ok && partsToSend.length > 1) {
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      finalResult = await dispatchBubble(partsToSend[1], replyJobId ? `${replyJobId}_p2` : '', Math.min(2500, Math.round(typingDurationMs * 0.5)));
+    }
+    if (finalResult?.ok && replyJobId) {
       sentReplyJobs.add(replyJobId);
       if (sentReplyJobs.size > 400) {
         const first = sentReplyJobs.values().next().value;
         if (first) sentReplyJobs.delete(first);
       }
     }
-    if (result?.ok && mediaItems.length > 0) {
+    if (finalResult?.ok && mediaItems.length > 0) {
       await new Promise(resolve => setTimeout(resolve, randomDelayMs(550, 950)));
       const mediaSentCount = await sendEmbeddedWhatsappMediaItems(guest, mediaItems);
-      return { ...result, mediaSentCount };
+      return { ...finalResult, mediaSentCount };
     }
-    return result || { ok: false, error: 'Sem resposta do WebView.' };
+    return finalResult || { ok: false, error: 'Sem resposta do WebView.' };
   } catch (err) {
     return { ok: false, error: err?.message || 'Falha ao enviar no WhatsApp Web.' };
   }
@@ -748,9 +823,52 @@ ipcMain.handle('companygen:set-tray-status', (_event, payload) => {
     summary: String(payload?.summary || 'Sofia IA — pronta'),
     repliedCount: Math.max(0, Number(payload?.repliedCount) || 0),
   };
+  if (typeof payload?.soundEnabled === 'boolean') {
+    healthMetrics.soundEnabled = payload.soundEnabled;
+  }
   refreshTrayMenu();
   return { ok: true };
 });
+ipcMain.handle('companygen:get-health-snapshot', () => ({
+  trayActive: Boolean(tray),
+  webviewConnected: Boolean(healthMetrics.webviewConnected),
+  lastPollMs: Number(healthMetrics.lastPollMs || 0),
+  appVersion: app.getVersion(),
+  soundEnabled: Boolean(healthMetrics.soundEnabled),
+}));
+
+let updaterRef = null;
+ipcMain.handle('companygen:install-update', () => {
+  if (updaterRef) {
+    allowQuit = true;
+    updaterRef.quitAndInstall();
+    return { ok: true };
+  }
+  return { ok: false };
+});
+
+async function setupSilentAutoUpdater() {
+  if (!app.isPackaged || process.env.COMPANYGEN_DISABLE_UPDATER === '1') return;
+  try {
+    const mod = await import('electron-updater');
+    const autoUpdater = mod?.default?.autoUpdater || mod?.autoUpdater;
+    if (!autoUpdater) return;
+    updaterRef = autoUpdater;
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on('update-downloaded', (info) => {
+      mainWindow?.webContents?.send('companygen:updater-status', {
+        status: 'downloaded',
+        version: info?.version || 'nova',
+      });
+    });
+    const runCheck = () => autoUpdater.checkForUpdates().catch(() => {});
+    void runCheck();
+    setInterval(runCheck, 4 * 60 * 60 * 1000).unref();
+  } catch {
+    // Auto-updater unavailable in local unpacked environments
+  }
+}
 
 if (hasSingleInstanceLock) {
   app.on('second-instance', () => {
@@ -761,6 +879,7 @@ if (hasSingleInstanceLock) {
     await ensureServer();
     ensureTray();
     createWindow();
+    void setupSilentAutoUpdater();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
       else showAndFocusMainWindow();

@@ -13,9 +13,24 @@ export type AcceptedPaymentMethod = 'pix' | 'credit_card' | 'debit_card' | 'cash
 
 export type OnboardingBusinessModel = 'produtos' | 'servicos' | 'hibrido';
 export type OnboardingFontStyle = 'modern_sans' | 'editorial_serif' | 'clean_geometric';
+export type OnboardingVisualMood = 'boutique' | 'direct' | 'warm';
+export type OnboardingDeliveryMode = 'pickup' | 'local' | 'national';
+export type OnboardingPaymentPolicy = 'on_delivery' | 'pix_discount' | 'deposit_50';
+
+export interface ExpressQuickProductDraft {
+  id: string;
+  name: string;
+  priceInput: string;
+  category: string;
+  variation: string;
+  description: string;
+  imageUrl: string;
+}
 
 export interface ExpressFichaDraft {
   currentStep: OnboardingWizardStep;
+  splitStep?: 1 | 2 | 3;
+  preferredTrack?: 'store_first' | 'whatsapp_first' | 'full_guided';
   businessName: string;
   instagramHandle: string;
   businessDescription: string;
@@ -29,12 +44,17 @@ export interface ExpressFichaDraft {
   generateAiLogo: boolean;
   noPhysicalLocation: boolean;
   primaryColor: string;
+  accentColor?: string;
+  palettePrimaryFromLogo?: string;
+  paletteAccentFromLogo?: string;
   fontStyle: OnboardingFontStyle;
+  visualMood?: OnboardingVisualMood;
   businessAddress: string;
   businessHours: string;
   phoneInput: string;
   deliveryEnabled: boolean;
   pickupEnabled: boolean;
+  deliveryModes?: OnboardingDeliveryMode[];
   deliveryFeeInput: string;
   deliveryAreasText: string;
   productName: string;
@@ -44,9 +64,17 @@ export interface ExpressFichaDraft {
   productStockInput: string;
   productDescription: string;
   productImageUrl: string;
+  photoMode?: 'upload' | 'ai' | 'draft';
+  quickProducts?: ExpressQuickProductDraft[];
   pixKey: string;
   pixDiscountPercent: number;
   acceptedMethods: AcceptedPaymentMethod[];
+  paymentPolicy?: OnboardingPaymentPolicy;
+  faqCardAnswer?: string;
+  faqDeliveryAnswer?: string;
+  faqLocationAnswer?: string;
+  welcomeGreeting?: string;
+  nightNotice?: string;
   publishOnComplete: boolean;
   updatedAt: string;
 }
@@ -142,8 +170,38 @@ export function readExpressFichaDraft(owner?: string): ExpressFichaDraft | null 
         ? parsed.fontStyle
         : 'modern_sans';
 
+    const validMood: OnboardingVisualMood =
+      parsed.visualMood === 'boutique' ||
+      parsed.visualMood === 'direct' ||
+      parsed.visualMood === 'warm'
+        ? parsed.visualMood
+        : 'boutique';
+    const validSplitStep: 1 | 2 | 3 =
+      parsed.splitStep === 2 || parsed.splitStep === 3 ? parsed.splitStep : 1;
+    const validDeliveryModes: OnboardingDeliveryMode[] = Array.isArray(parsed.deliveryModes)
+      ? parsed.deliveryModes.filter(
+          (m): m is OnboardingDeliveryMode =>
+            m === 'pickup' || m === 'local' || m === 'national',
+        )
+      : ['pickup', 'local'];
+    const validPaymentPolicy: OnboardingPaymentPolicy =
+      parsed.paymentPolicy === 'on_delivery' ||
+      parsed.paymentPolicy === 'pix_discount' ||
+      parsed.paymentPolicy === 'deposit_50'
+        ? parsed.paymentPolicy
+        : 'pix_discount';
+
+    const validTrack =
+      parsed.preferredTrack === 'store_first' ||
+      parsed.preferredTrack === 'whatsapp_first' ||
+      parsed.preferredTrack === 'full_guided'
+        ? parsed.preferredTrack
+        : undefined;
+
     return {
       currentStep: clampOnboardingStep(parsed.currentStep),
+      splitStep: validSplitStep,
+      preferredTrack: validTrack,
       businessName: typeof parsed.businessName === 'string' ? parsed.businessName : '',
       instagramHandle: typeof parsed.instagramHandle === 'string' ? parsed.instagramHandle : '',
       businessDescription: typeof parsed.businessDescription === 'string' ? parsed.businessDescription : '',
@@ -159,12 +217,19 @@ export function readExpressFichaDraft(owner?: string): ExpressFichaDraft | null 
       generateAiLogo: Boolean(parsed.generateAiLogo),
       noPhysicalLocation: Boolean(parsed.noPhysicalLocation),
       primaryColor: typeof parsed.primaryColor === 'string' && parsed.primaryColor ? parsed.primaryColor : '#0B4DB8',
+      accentColor: typeof parsed.accentColor === 'string' && parsed.accentColor ? parsed.accentColor : '#24A677',
+      palettePrimaryFromLogo:
+        typeof parsed.palettePrimaryFromLogo === 'string' ? parsed.palettePrimaryFromLogo : undefined,
+      paletteAccentFromLogo:
+        typeof parsed.paletteAccentFromLogo === 'string' ? parsed.paletteAccentFromLogo : undefined,
       fontStyle: validFont,
+      visualMood: validMood,
       businessAddress: typeof parsed.businessAddress === 'string' ? parsed.businessAddress : '',
       businessHours: typeof parsed.businessHours === 'string' ? parsed.businessHours : '',
       phoneInput: typeof parsed.phoneInput === 'string' ? parsed.phoneInput : '',
       deliveryEnabled: parsed.deliveryEnabled !== false,
       pickupEnabled: parsed.pickupEnabled !== false,
+      deliveryModes: validDeliveryModes.length > 0 ? validDeliveryModes : ['pickup', 'local'],
       deliveryFeeInput: typeof parsed.deliveryFeeInput === 'string' ? parsed.deliveryFeeInput : '0,00',
       deliveryAreasText: typeof parsed.deliveryAreasText === 'string' ? parsed.deliveryAreasText : '',
       productName: typeof parsed.productName === 'string' ? parsed.productName : '',
@@ -174,6 +239,11 @@ export function readExpressFichaDraft(owner?: string): ExpressFichaDraft | null 
       productStockInput: typeof parsed.productStockInput === 'string' && parsed.productStockInput ? parsed.productStockInput : '10',
       productDescription: typeof parsed.productDescription === 'string' ? parsed.productDescription : '',
       productImageUrl: typeof parsed.productImageUrl === 'string' ? parsed.productImageUrl : '',
+      photoMode:
+        parsed.photoMode === 'ai' || parsed.photoMode === 'upload' || parsed.photoMode === 'draft'
+          ? parsed.photoMode
+          : 'draft',
+      quickProducts: Array.isArray(parsed.quickProducts) ? parsed.quickProducts.slice(0, 30) : [],
       pixKey: typeof parsed.pixKey === 'string' ? parsed.pixKey : '',
       pixDiscountPercent:
         typeof parsed.pixDiscountPercent === 'number' && Number.isFinite(parsed.pixDiscountPercent)
@@ -183,6 +253,12 @@ export function readExpressFichaDraft(owner?: string): ExpressFichaDraft | null 
         Array.isArray(parsed.acceptedMethods) && parsed.acceptedMethods.length > 0
           ? parsed.acceptedMethods
           : ['pix', 'credit_card', 'debit_card', 'cash'],
+      paymentPolicy: validPaymentPolicy,
+      faqCardAnswer: typeof parsed.faqCardAnswer === 'string' ? parsed.faqCardAnswer : '',
+      faqDeliveryAnswer: typeof parsed.faqDeliveryAnswer === 'string' ? parsed.faqDeliveryAnswer : '',
+      faqLocationAnswer: typeof parsed.faqLocationAnswer === 'string' ? parsed.faqLocationAnswer : '',
+      welcomeGreeting: typeof parsed.welcomeGreeting === 'string' ? parsed.welcomeGreeting : '',
+      nightNotice: typeof parsed.nightNotice === 'string' ? parsed.nightNotice : '',
       publishOnComplete: parsed.publishOnComplete !== false,
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
     };
@@ -197,6 +273,9 @@ export function writeExpressFichaDraft(draft: ExpressFichaDraft, owner?: string)
     window.localStorage.setItem(
       getDraftStorageKey(owner),
       JSON.stringify({ ...draft, updatedAt: new Date().toISOString() }),
+    );
+    window.dispatchEvent(
+      new CustomEvent('companygen:ficha-draft-updated', { detail: { owner: owner || 'default' } }),
     );
   } catch {
     // Ignore storage quota or private mode failures.
@@ -221,6 +300,8 @@ export function buildDraftFromProfile(
 
   return {
     currentStep: clampOnboardingStep(initialStep),
+    splitStep: 1,
+    preferredTrack: profile?.onboarding?.preferredTrack,
     businessName: profile?.business?.name ?? '',
     instagramHandle: profile?.brand?.instagram ?? '',
     businessDescription: profile?.business?.description ?? '',
@@ -234,12 +315,17 @@ export function buildDraftFromProfile(
     generateAiLogo: Boolean(profile?.brand?.generateAiLogo),
     noPhysicalLocation: !profile?.business?.address?.trim() && !profile?.brand?.storefrontPhotoUrl,
     primaryColor: profile?.brand?.primaryColor || '#0B4DB8',
+    accentColor: profile?.brand?.accentColor || '#24A677',
     fontStyle: profile?.brand?.fontStyle ?? 'modern_sans',
+    visualMood: profile?.brand?.visualMood ?? 'boutique',
     businessAddress: profile?.business?.address ?? '',
     businessHours: profile?.business?.hours ?? '',
     phoneInput: formatBrazilPhoneDisplay(rawPhone),
     deliveryEnabled: profile?.delivery?.deliveryEnabled !== false,
     pickupEnabled: profile?.delivery?.pickupEnabled !== false,
+    deliveryModes: profile?.business?.deliveryModes && profile.business.deliveryModes.length > 0
+      ? [...profile.business.deliveryModes]
+      : ['pickup', 'local'],
     deliveryFeeInput: formatCentsToInputBrl(feeCents),
     deliveryAreasText: (profile?.delivery?.areas ?? []).join(', '),
     productName: '',
@@ -249,12 +335,20 @@ export function buildDraftFromProfile(
     productStockInput: '10',
     productDescription: '',
     productImageUrl: '',
+    photoMode: 'draft',
+    quickProducts: [],
     pixKey: profile?.payment?.pixKey ?? '',
     pixDiscountPercent: profile?.payment?.pixDiscountPercent ?? 0,
     acceptedMethods:
       profile?.payment?.acceptedMethods && profile.payment.acceptedMethods.length > 0
         ? [...profile.payment.acceptedMethods]
         : ['pix', 'credit_card', 'debit_card', 'cash'],
+    paymentPolicy: profile?.payment?.paymentPolicy ?? 'pix_discount',
+    faqCardAnswer: '',
+    faqDeliveryAnswer: '',
+    faqLocationAnswer: '',
+    welcomeGreeting: profile?.agent?.welcomeMessage ?? '',
+    nightNotice: '',
     publishOnComplete: true,
     updatedAt: new Date().toISOString(),
   };

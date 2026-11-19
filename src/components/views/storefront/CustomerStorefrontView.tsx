@@ -1,14 +1,18 @@
 import * as React from 'react';
 import {
+  AlertTriangle,
   ArrowLeft,
   Check,
+  Copy,
   MessageCircle,
   Minus,
   Plus,
   Send,
   ShoppingBag,
   Sparkles,
+  Tag,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
   buildDefaultMensagemMolde,
@@ -19,6 +23,7 @@ import {
   type BusinessOrder,
   type BusinessProfile,
   type CatalogProduct,
+  type StoreCoupon,
 } from '@/schemas/profile.schema';
 import type { WhatsappRuntimeStatus } from '@/hooks/useConnectionPhase';
 import { FormulaTreeRenderer } from './FormulaTreeRenderer';
@@ -28,6 +33,10 @@ import {
 } from '@/schemas/formula-v9.schema';
 import { ensureFormulaV9 } from '../../../../shared/formula-ir/neutral-fallback-v9.mjs';
 import { authenticatedFetch } from '@/services/supabase-client';
+import {
+  updateBusinessProfile,
+  type ProfileSnapshot,
+} from '@/services/profile-service';
 import {
   ActionButton,
   DrawerContainer,
@@ -63,6 +72,8 @@ export interface CustomerStorefrontViewProps {
   isLoading?: boolean;
   runtimeStatus?: WhatsappRuntimeStatus | null;
   onBackToAdmin?: () => void;
+  onGoToOrders?: () => void;
+  onProfileUpdated?: (snap: ProfileSnapshot) => void;
   onOrderCreated?: (order: BusinessOrder) => void;
   onUploadProductImage?: (productId: string, file: File) => void | Promise<void>;
   onUploadBrandAsset?: (slot: string, file: File) => void | Promise<void>;
@@ -101,6 +112,8 @@ export function CustomerStorefrontView({
   hidePreviewBanner = false,
   runtimeStatus,
   onBackToAdmin,
+  onGoToOrders,
+  onProfileUpdated,
   onOrderCreated,
 }: CustomerStorefrontViewProps) {
   const { showToast } = useToast();
@@ -111,6 +124,7 @@ export function CustomerStorefrontView({
   const [detailQty, setDetailQty] = React.useState(1);
   const [cartOpen, setCartOpen] = React.useState(false);
   const [lastDirectWaUrl, setLastDirectWaUrl] = React.useState<string>('');
+  const [lastSimulatedOrderRef, setLastSimulatedOrderRef] = React.useState<string>('');
 
   // Checkout fields
   const [customerName, setCustomerName] = React.useState('');
@@ -119,7 +133,24 @@ export function CustomerStorefrontView({
   const [deliveryNotes, setDeliveryNotes] = React.useState('');
   const [paymentMethod, setPaymentMethod] = React.useState<'pix' | 'credit_card' | 'cash'>('pix');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [simulatingOrder, setSimulatingOrder] = React.useState(false);
   const [brokenImages, setBrokenImages] = React.useState<Record<string, boolean>>({});
+  const [couponExpanded, setCouponExpanded] = React.useState(false);
+  const [couponInput, setCouponInput] = React.useState('');
+  const [appliedCoupon, setAppliedCoupon] = React.useState<StoreCoupon | null>(null);
+  const [couponError, setCouponError] = React.useState('');
+  const [checkoutError422, setCheckoutError422] = React.useState('');
+  const [localStockBySku, setLocalStockBySku] = React.useState<Record<string, number>>({});
+  const initialSkuHandledRef = React.useRef(false);
+
+  const qrOriginTag = React.useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const raw =
+      new URLSearchParams(window.location.search).get('origem') ||
+      new URLSearchParams(window.location.search).get('qr') ||
+      '';
+    return raw.trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
+  }, []);
 
   React.useEffect(() => {
     setCart(loadPersistedCart(storageKey));
@@ -151,9 +182,57 @@ export function CustomerStorefrontView({
   const hasStorePhone = isValidProductionPhone(storePhone) || storePhone.length >= 10;
 
   const activeProducts = React.useMemo(
-    () => (profile.catalog?.products ?? []).filter((p) => p.active !== false),
-    [profile.catalog?.products],
+    () =>
+      (profile.catalog?.products ?? [])
+        .filter((p) => p.active !== false || p.autoPausedOutOfStock === true)
+        .map((p) => {
+          const override = localStockBySku[p.sku.toUpperCase()];
+          if (override === undefined) return p;
+          return {
+            ...p,
+            stock: override,
+            active: override > 0 ? p.active : false,
+            autoPausedOutOfStock: override <= 0 ? true : p.autoPausedOutOfStock,
+          };
+        }),
+    [localStockBySku, profile.catalog?.products],
   );
+
+  React.useEffect(() => {
+    if (initialSkuHandledRef.current || typeof window === 'undefined') return;
+    const itemParam = new URLSearchParams(window.location.search)
+      .get('item')
+      ?.trim()
+      .toUpperCase();
+    if (!itemParam || activeProducts.length === 0) return;
+    const matched = activeProducts.find((p) => p.sku.toUpperCase() === itemParam);
+    if (matched) {
+      initialSkuHandledRef.current = true;
+      setDetailProduct(matched);
+      setDetailQty(1);
+    }
+  }, [activeProducts]);
+
+  const activeCoupons = React.useMemo(
+    () =>
+      (Array.isArray(profile.coupons) ? profile.coupons : []).filter(
+        (c) =>
+          c &&
+          c.active !== false &&
+          (!c.expiresAt || !Number.isFinite(Date.parse(c.expiresAt)) || Date.parse(c.expiresAt) >= Date.now()),
+      ),
+    [profile.coupons],
+  );
+
+  React.useEffect(() => {
+    if (appliedCoupon) {
+      const stillValid = activeCoupons.find((c) => c.code === appliedCoupon.code);
+      if (!stillValid) setAppliedCoupon(null);
+      else if (stillValid.discountPercent !== appliedCoupon.discountPercent) {
+        setAppliedCoupon(stillValid);
+      }
+    }
+  }, [activeCoupons, appliedCoupon]);
 
   const totalItemsCount = React.useMemo(
     () => cart.reduce((sum, item) => sum + item.quantity, 0),
@@ -165,19 +244,70 @@ export function CustomerStorefrontView({
     [cart],
   );
 
+  const couponDiscountCents = React.useMemo(() => {
+    if (!appliedCoupon || totalCents <= 0) return 0;
+    return Math.round((totalCents * Math.min(90, Math.max(1, appliedCoupon.discountPercent))) / 100);
+  }, [appliedCoupon, totalCents]);
+
+  const afterCouponCents = Math.max(0, totalCents - couponDiscountCents);
+
+  const shippingFixedFeeCents = Math.max(
+    0,
+    Number(profile.shipping?.fixedFeeCents ?? profile.delivery?.defaultFeeCents ?? 0),
+  );
+  const shippingFreeThresholdCents = Math.max(
+    0,
+    Number(profile.shipping?.freeShippingThresholdCents ?? 0),
+  );
+  const pickupAvailable =
+    profile.shipping?.pickupAvailable !== undefined
+      ? Boolean(profile.shipping.pickupAvailable)
+      : profile.delivery?.pickupEnabled !== false;
+
+  React.useEffect(() => {
+    if (!pickupAvailable && deliveryType === 'retirada') {
+      setDeliveryType('entrega');
+    }
+  }, [pickupAvailable, deliveryType]);
+
+  const qualifiesForFreeShipping =
+    deliveryType === 'entrega' &&
+    shippingFreeThresholdCents > 0 &&
+    afterCouponCents >= shippingFreeThresholdCents;
+
   const activeShippingCents = React.useMemo(() => {
-    if (deliveryType !== 'entrega') return 0;
-    return profile.delivery?.deliveryEnabled !== false
-      ? Math.max(0, Number(profile.delivery?.defaultFeeCents || 0))
-      : 0;
-  }, [deliveryType, profile.delivery?.defaultFeeCents, profile.delivery?.deliveryEnabled]);
+    if (deliveryType !== 'entrega' || profile.delivery?.deliveryEnabled === false) return 0;
+    if (qualifiesForFreeShipping) return 0;
+    return shippingFixedFeeCents;
+  }, [deliveryType, profile.delivery?.deliveryEnabled, qualifiesForFreeShipping, shippingFixedFeeCents]);
 
   const pixDiscountPercent = Math.max(0, Number(profile.payment?.pixDiscountPercent || 0));
   const pixDiscountCents =
     paymentMethod === 'pix' && pixDiscountPercent > 0
-      ? Math.round((totalCents * pixDiscountPercent) / 100)
+      ? Math.round((afterCouponCents * pixDiscountPercent) / 100)
       : 0;
-  const grandTotalCents = Math.max(0, totalCents - pixDiscountCents) + activeShippingCents;
+  const grandTotalCents = Math.max(0, afterCouponCents - pixDiscountCents) + activeShippingCents;
+
+  function handleApplyCoupon() {
+    const clean = couponInput.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (!clean) {
+      setCouponError('Digite o código do cupom.');
+      return;
+    }
+    const found = activeCoupons.find((c) => c.code === clean);
+    if (!found) {
+      setCouponError('Cupom inválido, pausado ou expirado.');
+      return;
+    }
+    setCouponError('');
+    setAppliedCoupon(found);
+    setCouponInput('');
+    showToast({
+      type: 'success',
+      message: `Cupom ${found.code} (-${found.discountPercent}%) aplicado na sacola!`,
+      durationMs: 2600,
+    });
+  }
 
   function getImageSrc(product: { id: string; imageUrl?: string; name: string; category?: string }) {
     if (brokenImages[product.id]) {
@@ -197,6 +327,14 @@ export function CustomerStorefrontView({
   }
 
   function handleAddToCart(product: CatalogProduct, quantity: number) {
+    if (Number(product.stock ?? 10) <= 0) {
+      showToast({
+        type: 'amber',
+        message: `"${product.name}" está esgotado no momento.`,
+        durationMs: 2600,
+      });
+      return;
+    }
     const cleanQty = Math.max(1, quantity);
     const display = sanitizeProductForCustomerDisplay(product);
     setCart((prev) => {
@@ -308,6 +446,8 @@ export function CustomerStorefrontView({
       `Recebimento: ${deliveryType === 'retirada' ? 'Retirar na loja' : 'Entrega'}`,
       deliveryNotes.trim() ? `Obs/Endereço: ${deliveryNotes.trim()}` : '',
       `Pagamento: ${paymentMethod === 'pix' ? 'Pix' : paymentMethod === 'credit_card' ? 'Cartão' : 'Dinheiro'}`,
+      appliedCoupon ? `Cupom aplicado: ${appliedCoupon.code} (-${appliedCoupon.discountPercent}%)` : '',
+      qrOriginTag ? `Origem QR: ${qrOriginTag}` : '',
     ].filter(Boolean);
     return lines.join('\n');
   }
@@ -337,6 +477,7 @@ export function CustomerStorefrontView({
       await copyTextToClipboard(immediateMessage);
     }
 
+    setCheckoutError422('');
     setIsSubmitting(true);
     try {
       const response = await authenticatedFetch(
@@ -352,6 +493,8 @@ export function CustomerStorefrontView({
               mode: deliveryType,
               notes: deliveryNotes.trim(),
             },
+            deliveryType,
+            couponCode: appliedCoupon?.code || undefined,
             shippingCents: activeShippingCents,
             items: cart.map((item) => ({
               sku: item.sku,
@@ -365,6 +508,18 @@ export function CustomerStorefrontView({
       );
 
       const raw = await response.json().catch(() => ({}));
+      if (response.status === 422) {
+        const errMsg = String(
+          raw?.error || 'Verifique a disponibilidade dos itens ou o cupom aplicado.',
+        );
+        setCheckoutError422(errMsg);
+        showToast({
+          type: 'error',
+          message: errMsg,
+          durationMs: 4200,
+        });
+        return;
+      }
       if (!response.ok || !raw.order) {
         throw new Error(raw.error || 'Falha ao enviar pedido.');
       }
@@ -372,7 +527,21 @@ export function CustomerStorefrontView({
       const createdOrder = raw.order as BusinessOrder;
       onOrderCreated?.(createdOrder);
 
+      const nextStockPatch: Record<string, number> = {};
+      for (const ordered of cart) {
+        const skuUpper = String(ordered.sku || '').trim().toUpperCase();
+        if (!skuUpper) continue;
+        const matchedProd = activeProducts.find((p) => p.sku.toUpperCase() === skuUpper);
+        const currentQty = Number.isFinite(matchedProd?.stock) ? Number(matchedProd!.stock) : 10;
+        nextStockPatch[skuUpper] = Math.max(0, currentQty - ordered.quantity);
+      }
+      if (Object.keys(nextStockPatch).length > 0) {
+        setLocalStockBySku((prev) => ({ ...prev, ...nextStockPatch }));
+      }
+
       setCart([]);
+      setAppliedCoupon(null);
+      setCheckoutError422('');
       setCartOpen(false);
       showToast({
         type: 'success',
@@ -397,6 +566,84 @@ export function CustomerStorefrontView({
   const detailSanitized = detailProduct ? sanitizeProductForCustomerDisplay(detailProduct) : null;
   const activeThemeMode = 'light';
   const isCarbonDark = false;
+  const isOwnerQueryPreview =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('ownerPreview') === '1';
+  const showOwnerPreviewBar = (mode === 'preview' || isOwnerQueryPreview) && !hidePreviewBanner;
+
+  const publicStoreLink = React.useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const u = new URL(window.location.href);
+    u.search = '';
+    u.searchParams.set('view', 'store');
+    if (ownerId) u.searchParams.set('u', ownerId);
+    else if (profile.publishedStore?.publicSlug) {
+      u.searchParams.set('loja', profile.publishedStore.publicSlug);
+    }
+    return u.toString();
+  }, [ownerId, profile.publishedStore?.publicSlug]);
+
+  const handleSimulateFirstOrder = async () => {
+    if (simulatingOrder) return;
+    const sample = activeProducts[0];
+    if (!sample) {
+      showToast({ type: 'amber', message: 'Adicione ao menos 1 produto para simular o pedido.' });
+      return;
+    }
+    setSimulatingOrder(true);
+    try {
+      const response = await authenticatedFetch(
+        '/api/orders',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            isSimulation: true,
+            customerName: 'Pedido de Teste (Simulação)',
+            paymentMethod: 'pix',
+            deliveryAddress: { mode: 'retirada', notes: 'Simulação guiada do lojista' },
+            shippingCents: 0,
+            items: [
+              {
+                sku: sample.sku,
+                name: sample.name,
+                variation: sample.variation || 'Padrão',
+                qty: 1,
+              },
+            ],
+          }),
+        },
+        ownerId,
+      );
+      const raw = await response.json().catch(() => ({}));
+      if (response.ok && raw.order) {
+        const orderRef = String(raw.order.order_ref || 'SIM-1');
+        setLastSimulatedOrderRef(orderRef);
+        onOrderCreated?.(raw.order as BusinessOrder);
+        if (ownerId) {
+          updateBusinessProfile(
+            (draft) => {
+              draft.onboarding = {
+                ...draft.onboarding,
+                completedFirstSimulatedOrder: true,
+              };
+            },
+            undefined,
+            ownerId,
+          )
+            .then((snap) => onProfileUpdated?.(snap))
+            .catch(() => {});
+        }
+        showToast({
+          type: 'success',
+          message: `1º Pedido simulado (#${orderRef}) criado! Confira na aba Pedidos.`,
+          durationMs: 4000,
+        });
+      }
+    } finally {
+      setSimulatingOrder(false);
+    }
+  };
 
   return (
     <div
@@ -413,48 +660,85 @@ export function CustomerStorefrontView({
           : undefined
       }
     >
-      {/* Faixa Modo Preview do Lojista */}
-      {mode === 'preview' && !hidePreviewBanner ? (
+      {/* Faixa Modo Preview do Lojista (40px+ compacta com copiar link + simular 1º pedido) */}
+      {showOwnerPreviewBar ? (
         <div
+          data-testid="storefront-owner-preview-bar"
           className={
             isCarbonDark
-              ? 'relative z-40 border-b border-[#27272A] bg-[#121215] px-4 py-2 text-white'
-              : 'relative z-40 border-b border-blue-200 bg-[#EFF6FF] px-4 py-2'
+              ? 'relative z-40 min-h-[40px] border-b border-[#27272A] bg-[#121215] px-4 py-1.5 text-white'
+              : 'relative z-40 min-h-[40px] border-b border-blue-200 bg-[#EFF6FF] px-4 py-1.5'
           }
         >
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
             <div
-              className={`flex flex-wrap items-center gap-2 text-xs font-semibold sm:text-sm ${
+              className={`flex flex-wrap items-center gap-2 text-xs font-semibold ${
                 isCarbonDark ? 'text-[#F4F4F5]' : 'text-[#1D4ED8]'
               }`}
             >
-              <Sparkles className="size-4 shrink-0" aria-hidden="true" />
-              <span>Visualização de como seus clientes veem a loja</span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                  isCarbonDark
-                    ? 'border border-[#27272A] bg-[#18181B] text-[#E4E4E7]'
-                    : 'bg-blue-100 text-[#1D4ED8]'
-                }`}
-              >
-                {activeFormulaV9.analysis?.mainExperienceSummary ? 'Formula v9' : 'Vitrine v9'}
-              </span>
+              <Sparkles className="size-3.5 shrink-0" aria-hidden="true" />
+              <span>Prévia da sua loja</span>
             </div>
-            {onBackToAdmin ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {publicStoreLink ? (
+                <ActionButton
+                  variant="secondary"
+                  size={44}
+                  copyText={publicStoreLink}
+                  data-testid="owner-preview-copy-link"
+                  leftIcon={<Copy className="size-3.5" />}
+                >
+                  Copiar link
+                </ActionButton>
+              ) : null}
               <ActionButton
-                variant="secondary"
+                variant="primary"
                 size={44}
-                leftIcon={<ArrowLeft className="size-4" />}
-                onClick={onBackToAdmin}
-                className={
-                  isCarbonDark
-                    ? '!border-[#27272A] !bg-[#18181B] !text-white hover:!bg-[#27272A]'
-                    : undefined
-                }
+                isLoading={simulatingOrder}
+                loadingText="Simulando..."
+                data-testid="owner-preview-simulate-order-btn"
+                leftIcon={<ShoppingBag className="size-3.5" />}
+                onClick={() => void handleSimulateFirstOrder()}
               >
-                Voltar ao Painel
+                Simular 1º Pedido (Teste)
               </ActionButton>
-            ) : null}
+              {lastSimulatedOrderRef ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    data-testid="owner-preview-simulated-badge"
+                    className="inline-flex min-h-[34px] items-center gap-1 rounded-lg bg-emerald-100 px-2.5 text-xs font-bold text-emerald-900"
+                  >
+                    <Check className="size-3.5" aria-hidden="true" />
+                    <span>#{lastSimulatedOrderRef} criado</span>
+                  </span>
+                  {onGoToOrders ? (
+                    <ActionButton
+                      variant="success"
+                      size={44}
+                      data-testid="owner-preview-open-orders-btn"
+                      onClick={onGoToOrders}
+                    >
+                      Ver Pedido nos Pedidos →
+                    </ActionButton>
+                  ) : null}
+                </div>
+              ) : null}
+              {onBackToAdmin ? (
+                <ActionButton
+                  variant="secondary"
+                  size={44}
+                  leftIcon={<ArrowLeft className="size-4" />}
+                  onClick={onBackToAdmin}
+                  className={
+                    isCarbonDark
+                      ? '!border-[#27272A] !bg-[#18181B] !text-white hover:!bg-[#27272A]'
+                      : undefined
+                  }
+                >
+                  Voltar ao Painel
+                </ActionButton>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}
@@ -639,9 +923,13 @@ export function CustomerStorefrontView({
       {/* TELA 23: Carrinho & Finalizar no WhatsApp */}
       <DrawerContainer
         open={cartOpen}
-        onOpenChange={setCartOpen}
+        onOpenChange={(next) => {
+          setCartOpen(next);
+          if (!next) setCheckoutError422('');
+        }}
         preventCloseWhileSubmitting={isSubmitting}
         size="default"
+        className="max-[640px]:rounded-t-3xl"
         title="Sua Sacola de Compras"
         description={
           cart.length > 0
@@ -651,26 +939,77 @@ export function CustomerStorefrontView({
         footer={
           cart.length > 0 ? (
             <div className="space-y-2">
-              {activeShippingCents > 0 ? (
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>Taxa de entrega local</span>
+              {qualifiesForFreeShipping ? (
+                <div
+                  data-testid="cart-free-shipping-badge"
+                  className="flex items-center justify-between rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"
+                >
+                  <span>Entrega na sua região</span>
+                  <span>✓ Frete Grátis</span>
+                </div>
+              ) : activeShippingCents > 0 ? (
+                <div className="cg-tabular flex items-center justify-between text-xs text-slate-600">
+                  <span>Taxa de entrega</span>
                   <span>{formatCurrencyBRL(activeShippingCents)}</span>
+                </div>
+              ) : null}
+              {couponDiscountCents > 0 && appliedCoupon ? (
+                <div
+                  data-testid="cart-coupon-discount-row"
+                  className="cg-tabular flex items-center justify-between rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-[#1D4ED8]"
+                >
+                  <span className="flex items-center gap-1.5">
+                    Cupom {appliedCoupon.code} (-{appliedCoupon.discountPercent}%)
+                    <button
+                      type="button"
+                      aria-label="Remover cupom"
+                      onClick={() => setAppliedCoupon(null)}
+                      className="rounded-full p-0.5 hover:bg-blue-100"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                  <span>-{formatCurrencyBRL(couponDiscountCents)}</span>
                 </div>
               ) : null}
               {pixDiscountCents > 0 ? (
                 <div
                   data-testid="cart-pix-discount-row"
-                  className="flex items-center justify-between rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-extrabold text-emerald-700"
+                  className="cg-tabular flex items-center justify-between rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-extrabold text-emerald-700"
                 >
                   <span>Desconto Pix (-{pixDiscountPercent}% Pix)</span>
                   <span>-{formatCurrencyBRL(pixDiscountCents)}</span>
+                </div>
+              ) : null}
+              {checkoutError422 ? (
+                <div
+                  data-testid="cart-checkout-error-card"
+                  role="alert"
+                  className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-[#991B1B]"
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[#DC2626]" aria-hidden="true" />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="font-bold text-[#7F1D1D]">
+                        Não foi possível concluir o pedido
+                      </p>
+                      <p className="leading-snug">{checkoutError422}</p>
+                      <button
+                        type="button"
+                        onClick={() => setCheckoutError422('')}
+                        className="mt-1 inline-flex rounded-lg border border-red-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#991B1B] hover:bg-red-100"
+                      >
+                        Entendi / Revisar sacola
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : null}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-600">Total do Pedido</span>
                 <strong
                   data-testid="cart-grand-total"
-                  className="text-xl font-bold text-[#0F172A]"
+                  className="cg-tabular text-xl font-bold text-[#0F172A]"
                 >
                   {formatCurrencyBRL(grandTotalCents)}
                 </strong>
@@ -815,7 +1154,7 @@ export function CustomerStorefrontView({
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className={`grid ${pickupAvailable ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                 <button
                   type="button"
                   onClick={() => setDeliveryType('entrega')}
@@ -827,17 +1166,69 @@ export function CustomerStorefrontView({
                 >
                   Entrega
                 </button>
+                {pickupAvailable ? (
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryType('retirada')}
+                    className={`min-h-[44px] rounded-xl border px-3 text-xs font-semibold transition-colors ${
+                      deliveryType === 'retirada'
+                        ? 'border-[#2563EB] bg-[#EFF6FF] text-[#1D4ED8]'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    Retirar na loja
+                  </button>
+                ) : null}
+              </div>
+
+              {/* Cupom de Desconto Colapsável */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
                 <button
                   type="button"
-                  onClick={() => setDeliveryType('retirada')}
-                  className={`min-h-[44px] rounded-xl border px-3 text-xs font-semibold transition-colors ${
-                    deliveryType === 'retirada'
-                      ? 'border-[#2563EB] bg-[#EFF6FF] text-[#1D4ED8]'
-                      : 'border-slate-200 bg-white text-slate-700'
-                  }`}
+                  data-testid="cart-coupon-toggle"
+                  onClick={() => setCouponExpanded((v) => !v)}
+                  className="flex w-full items-center justify-between text-xs font-semibold text-[#1D4ED8]"
                 >
-                  Retirar na loja
+                  <span className="flex items-center gap-1.5">
+                    <Tag className="size-3.5" aria-hidden="true" />
+                    {appliedCoupon
+                      ? `Cupom ${appliedCoupon.code} aplicado (-${appliedCoupon.discountPercent}%)`
+                      : 'Possui cupom de desconto?'}
+                  </span>
+                  <span>{couponExpanded ? 'Fechar' : 'Aplicar'}</span>
                 </button>
+                {couponExpanded ? (
+                  <div className="mt-2.5 space-y-1.5">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        data-testid="cart-coupon-input"
+                        value={couponInput}
+                        onChange={(e) => {
+                          setCouponInput(
+                            e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 20),
+                          );
+                          setCouponError('');
+                        }}
+                        placeholder="Ex: PRIMEIRA10"
+                        className="h-[40px] flex-1 rounded-lg border border-slate-200 bg-white px-3 font-mono text-xs font-bold text-[#0F172A] uppercase focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                      />
+                      <ActionButton
+                        variant="primary"
+                        size={44}
+                        data-testid="cart-coupon-apply-btn"
+                        onClick={handleApplyCoupon}
+                      >
+                        Aplicar
+                      </ActionButton>
+                    </div>
+                    {couponError ? (
+                      <p data-testid="cart-coupon-error" className="text-[11px] font-medium text-[#D94C4C]">
+                        {couponError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-1.5">

@@ -679,3 +679,95 @@ html.dark .cg-card-shadow {
     color: #000000 !important;
   }
 }
+
+/* Preserva fidelidade da vitrine clara dentro do simulador de smartphone quando o painel está no Modo Escuro */
+html.dark .cg-light-preview,
+html.dark .cg-light-preview .bg-white,
+html.dark .cg-light-preview .bg-white\/95,
+html.dark .cg-light-preview .bg-white\/90,
+html.dark .cg-light-preview .bg-white\/80,
+html.dark .cg-light-preview .bg-white\/75,
+html.dark .cg-light-preview .bg-white\/60,
+html.dark .cg-light-preview .bg-\[\#FFFFFF\],
+html.dark .cg-light-preview .bg-\[\#FDFEFE\] {
+  background-color: #ffffff !important;
+}
+html.dark .cg-light-preview .bg-\[\#F8FAFC\],
+html.dark .cg-light-preview .bg-\[\#F7FAFF\],
+html.dark .cg-light-preview .bg-\[\#F1F5F9\],
+html.dark .cg-light-preview .bg-slate-50,
+html.dark .cg-light-preview .bg-slate-50\/80,
+html.dark .cg-light-preview .bg-slate-50\/70,
+html.dark .cg-light-preview .bg-slate-100,
+html.dark .cg-light-preview .bg-gray-50,
+html.dark .cg-light-preview .bg-zinc-50 {
+  background-color: #f8fafc !important;
+}
+html.dark .cg-light-preview .bg-\[\#0F172A\],
+html.dark .cg-light-preview .bg-slate-900 {
+  background-color: #0f172a !important;
+}
+html.dark .cg-light-preview .text-\[\#0F172A\],
+html.dark .cg-light-preview .text-\[\#0B1D52\],
+html.dark .cg-light-preview .text-slate-950,
+html.dark .cg-light-preview .text-slate-900,
+html.dark .cg-light-preview .text-slate-800,
+html.dark .cg-light-preview .text-gray-900,
+html.dark .cg-light-preview .text-zinc-900 {
+  color: #0f172a !important;
+}
+html.dark .cg-light-preview .text-slate-700,
+html.dark .cg-light-preview .text-slate-600,
+html.dark .cg-light-preview .text-\[\#334155\],
+html.dark .cg-light-preview .text-\[\#475569\] {
+  color: #475569 !important;
+}
+html.dark .cg-light-preview .text-slate-500,
+html.dark .cg-light-preview .text-slate-400,
+html.dark .cg-light-preview .text-\[\#64748B\] {
+  color: #64748b !important;
+}
+html.dark .cg-light-preview .border-slate-200,
+html.dark .cg-light-preview .border-slate-200\/80,
+html.dark .cg-light-preview .border-slate-100,
+html.dark .cg-light-preview .border-slate-300,
+html.dark .cg-light-preview .border-\[\#E2E8F0\] {
+  border-color: #e2e8f0 !important;
+}
+html.dark .cg-light-preview input,
+html.dark .cg-light-preview select,
+html.dark .cg-light-preview textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* BUG-F06-09 / C72: Impressão limpa de Comanda em Ordem de Pedido (@media print) */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  aside,
+  nav,
+  [data-cg-toast-region],
+  [data-testid="tela-38-notification-bar"],
+  [data-testid="orders-kanban-view"],
+  .no-print {
+    display: none !important;
+  }
+  .cg-print-comanda-root {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+}

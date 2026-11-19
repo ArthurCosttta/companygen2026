@@ -6,6 +6,8 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { pipeline } from 'node:stream/promises';
+import JSZip from 'jszip';
+import { stripSecretKeys } from './pii-scrubber.mjs';
 import {
   normalizeProfile,
   diffProfile,
@@ -17,9 +19,15 @@ import {
   computeDigest,
 } from './sync-engine.mjs';
 import { handleSpreadsheetRoutes } from './ai-spreadsheet-engine.mjs';
-import { handleWhatsappAiRoutes, computeD1FunnelMetrics } from './ai-sofia-local.mjs';
+import { handleWhatsappAiRoutes, computeD1FunnelMetrics, notifyOrderStageToWhatsapp } from './ai-sofia-local.mjs';
 import { handleAccessAndCheckoutRoutes, verifyLocalShowcaseToken } from './access-and-checkout.mjs';
-import { handleAdminRoutes, isAdminRequest, recordUserTouchAndCheckBan } from './admin-console.mjs';
+import {
+  handleAdminRoutes,
+  handlePublicOrUserFleetRoutes,
+  isAdminRequest,
+  recordUserTouchAndCheckBan,
+} from './admin-console.mjs';
+import { checkUserAiTierLimit } from './middleware/ai-budget.mjs';
 import {
   downloadStorefrontFileFromStorage,
   fetchCloudPublishedFlag,
@@ -799,7 +807,7 @@ export function createWorkspaceApi(options = {}) {
     return { current: current || { revision: 0, data: {} }, remote, provider };
   }
 
-  async function saveProfileState(user, directory, expectedRevision, rawProfile) {
+  async function saveProfileState(user, directory, expectedRevision, rawProfile, { preserveRevision = false } = {}) {
     return queue(user.id + ':profile', async () => {
       const { current, remote } = await loadProfileState(user, directory);
       const nextProfile = normalizeProfile(rawProfile);
@@ -807,8 +815,9 @@ export function createWorkspaceApi(options = {}) {
       let nextRevision = current.revision;
       if (remote && !user?.isLocalShowcase) {
         nextRevision = await cloudSaveProfile(user.bearer, baseRevision, nextProfile);
+        if (preserveRevision) nextRevision = current.revision;
       } else {
-        nextRevision = Number(current?.revision || 0) + 1;
+        nextRevision = preserveRevision ? Number(current?.revision || 0) : Number(current?.revision || 0) + 1;
       }
       await atomicWriteJson(path.join(directory, 'profile.json'), { revision: nextRevision, data: nextProfile });
       const bot = buildBotProjections(nextProfile, nextRevision);
@@ -1049,7 +1058,7 @@ export function createWorkspaceApi(options = {}) {
   }
 
   async function ordersHandler(req, res, user, directory) {
-    const allowedStatuses = new Set(['aguardando_dados', 'aguardando_pagamento', 'confirmado', 'cancelado', 'concluido']);
+    const allowedStatuses = new Set(['aguardando_dados', 'aguardando_pagamento', 'confirmado', 'em_preparo', 'enviado', 'entregue', 'cancelado', 'concluido']);
     if (req.method === 'GET') {
       const orders = await syncLocalOrders(user, directory);
       return send(res, 200, { orders });
@@ -1070,6 +1079,8 @@ export function createWorkspaceApi(options = {}) {
             manual: isManual,
             orderRef: body.orderRef || '',
             customer: dedupePhone,
+            couponCode: String(body.couponCode || '').trim().toUpperCase(),
+            deliveryType: String(body.deliveryAddress?.mode || body.deliveryType || ''),
             items: body.items || [],
             productId: body.productId || '',
             customItemName: body.customItemName || '',
@@ -1083,11 +1094,15 @@ export function createWorkspaceApi(options = {}) {
 
         const { current } = await loadProfileState(user, directory);
         const profile = normalizeProfile(current.data);
+        const isSimulationOrder = Boolean(body?.isSimulation);
+        let profileMutated = false;
 
         let verifiedItems = [];
         let unmatchedItems = [];
         let subtotalCents = 0;
         let shippingCents = 0;
+        let discountCents = 0;
+        let appliedCouponCode = '';
         let totalCents = 0;
         let initialStatus = 'aguardando_dados';
 
@@ -1112,18 +1127,119 @@ export function createWorkspaceApi(options = {}) {
         } else {
           const calc = recalculateOrderTotals(body.items || [], profile.catalog.products, Number(body.shippingCents) || 0);
           if (calc.verifiedItems.length === 0) {
+            const rawReqItems = Array.isArray(body.items) ? body.items : [];
+            for (const rawItem of rawReqItems) {
+              const reqSku = String(rawItem?.sku || '').trim().toUpperCase();
+              const reqName = String(rawItem?.name || '').trim().toLowerCase();
+              const catalogHit = profile.catalog.products.find(
+                (p) =>
+                  (reqSku && p.sku.toUpperCase() === reqSku) ||
+                  (reqName && p.name.toLowerCase() === reqName),
+              );
+              if (catalogHit && (catalogHit.active === false || Number(catalogHit.stock || 0) <= 0)) {
+                throw new ApiError(
+                  422,
+                  `Estoque insuficiente para ${catalogHit.name} (disponível: ${Math.max(0, Number(catalogHit.stock || 0))}).`,
+                );
+              }
+            }
             throw new ApiError(400, 'Nenhum produto válido do catálogo encontrado no pedido.');
           }
           verifiedItems = calc.verifiedItems;
           unmatchedItems = calc.unmatchedItems;
           subtotalCents = calc.subtotalCents;
-          shippingCents = calc.shippingCents;
+
+          // Atomic stock check & decrement inside serialized per-user order queue (skip simulations)
+          if (!isSimulationOrder) {
+            for (const item of verifiedItems) {
+              const prod = profile.catalog.products.find(
+                (p) =>
+                  (p.sku && p.sku.toUpperCase() === String(item.sku || '').toUpperCase()) ||
+                  p.name.toLowerCase() === String(item.name || '').toLowerCase(),
+              );
+              if (prod) {
+                const available = Math.max(0, Number(prod.stock || 0));
+                if (available < item.quantity) {
+                  throw new ApiError(
+                    422,
+                    `Estoque insuficiente para ${prod.name} (disponível: ${available}).`,
+                  );
+                }
+              }
+            }
+            const tsNow = new Date().toISOString();
+            for (const item of verifiedItems) {
+              const prod = profile.catalog.products.find(
+                (p) =>
+                  (p.sku && p.sku.toUpperCase() === String(item.sku || '').toUpperCase()) ||
+                  p.name.toLowerCase() === String(item.name || '').toLowerCase(),
+              );
+              if (prod) {
+                const nextStock = Math.max(0, Number(prod.stock || 0) - item.quantity);
+                prod.stock = nextStock;
+                if (nextStock === 0) {
+                  prod.active = false;
+                  prod.autoPausedOutOfStock = true;
+                }
+                prod.updatedAt = tsNow;
+                profileMutated = true;
+              }
+            }
+          }
+
+          // Server-side coupon validation (never trust client discountPercent or couponDiscountCents)
+          const rawCouponCode = String(body.couponCode || '').trim().toUpperCase();
+          let couponDiscountCents = 0;
+          if (rawCouponCode) {
+            const matchedCoupon = (Array.isArray(profile.coupons) ? profile.coupons : []).find(
+              (c) => c && c.code === rawCouponCode,
+            );
+            const isExpired =
+              matchedCoupon?.expiresAt &&
+              Number.isFinite(Date.parse(matchedCoupon.expiresAt)) &&
+              Date.parse(matchedCoupon.expiresAt) < Date.now();
+            if (!matchedCoupon || matchedCoupon.active === false || isExpired) {
+              throw new ApiError(422, 'Cupom inválido, pausado ou expirado.');
+            }
+            const couponPct = Math.min(90, Math.max(1, Number(matchedCoupon.discountPercent) || 0));
+            couponDiscountCents = Math.round((calc.subtotalCents * couponPct) / 100);
+            appliedCouponCode = matchedCoupon.code;
+            if (!isSimulationOrder) {
+              matchedCoupon.usageCount = Math.max(0, Number(matchedCoupon.usageCount || 0)) + 1;
+              profileMutated = true;
+            }
+          }
+
+          const afterCouponCents = Math.max(0, calc.subtotalCents - couponDiscountCents);
           const pixDiscPct =
             String(body.paymentMethod || '').toLowerCase() === 'pix'
               ? Math.max(0, Math.min(90, Number(profile.payment?.pixDiscountPercent || 0)))
               : 0;
-          const pixDiscountCents = pixDiscPct > 0 ? Math.round((calc.subtotalCents * pixDiscPct) / 100) : 0;
-          totalCents = Math.max(0, calc.subtotalCents - pixDiscountCents) + calc.shippingCents;
+          const pixDiscountCents = pixDiscPct > 0 ? Math.round((afterCouponCents * pixDiscPct) / 100) : 0;
+          discountCents = couponDiscountCents + pixDiscountCents;
+
+          // Server-side shipping enforcement
+          const deliveryMode = String(body.deliveryAddress?.mode || body.deliveryType || '').trim().toLowerCase();
+          const configuredFee = Math.max(0, Number(profile.shipping?.fixedFeeCents ?? profile.delivery?.defaultFeeCents ?? 0));
+          const freeThreshold = Math.max(0, Number(profile.shipping?.freeShippingThresholdCents || 0));
+          if (deliveryMode === 'retirada') {
+            shippingCents = 0;
+          } else if (freeThreshold > 0 && afterCouponCents >= freeThreshold) {
+            shippingCents = 0;
+          } else if (configuredFee > 0) {
+            shippingCents = configuredFee;
+          } else {
+            shippingCents = calc.shippingCents;
+          }
+
+          totalCents = Math.max(0, afterCouponCents - pixDiscountCents) + shippingCents;
+        }
+
+        const orderRevision = current.revision;
+        if (profileMutated && !isSimulationOrder) {
+          await saveProfileState(user, directory, current.revision, profile, {
+            preserveRevision: true,
+          });
         }
 
         const now = new Date().toISOString();
@@ -1135,11 +1251,15 @@ export function createWorkspaceApi(options = {}) {
           items: verifiedItems,
           subtotal_cents: subtotalCents,
           shipping_cents: shippingCents,
+          discount_cents: discountCents,
+          ...(appliedCouponCode ? { coupon_code: appliedCouponCode } : {}),
           total_cents: totalCents,
           payment_method: String(body.paymentMethod || 'pendente'),
           delivery_address: body.deliveryAddress && typeof body.deliveryAddress === 'object' ? body.deliveryAddress : {},
           status: initialStatus,
-          source_revision: current.revision,
+          isSimulation: isSimulationOrder,
+          is_simulation: isSimulationOrder,
+          source_revision: orderRevision,
           created_at: now,
           updated_at: now,
         };
@@ -1162,12 +1282,20 @@ export function createWorkspaceApi(options = {}) {
         const localOrders = await readJsonFile(path.join(directory, 'orders.json'), []);
         const target = localOrders.find(o => o.order_ref === orderRef || o.id === orderRef);
         if (!target) throw new ApiError(404, 'Pedido não encontrado.');
+        const prevStatus = target.status;
         if (body.status && allowedStatuses.has(body.status)) target.status = body.status;
         if (typeof body.paymentMethod === 'string' && body.paymentMethod.trim()) target.payment_method = body.paymentMethod.trim();
         if (body.deliveryAddress && typeof body.deliveryAddress === 'object') target.delivery_address = body.deliveryAddress;
         target.updated_at = new Date().toISOString();
         await atomicWriteJson(path.join(directory, 'orders.json'), localOrders);
         await cloudUpsertOrder(user.bearer, target);
+        if (body.status && body.status !== prevStatus && target.customer_jid) {
+          await notifyOrderStageToWhatsapp(
+            { ...target, stageChangedAt: target.updated_at },
+            body.status,
+            { directory, readJsonFile, atomicWriteJson },
+          ).catch(() => {});
+        }
         return send(res, 200, { order: target });
       });
     }
@@ -1177,12 +1305,17 @@ export function createWorkspaceApi(options = {}) {
   async function dashboardHandler(req, res, user, directory) {
     if (req.method !== 'GET') throw new ApiError(405, 'Método indisponível.');
     const parsedUrl = new URL(req.url || '/api/dashboard', 'http://localhost');
+    const rawPeriod = parsedUrl.searchParams.get('period') || '';
     const rawDays = parsedUrl.searchParams.get('days');
-    const days = rawDays === 'all' || rawDays === 'todos'
+    const days = rawDays === 'all' || rawDays === 'todos' || rawPeriod === 'all'
       ? 'all'
-      : Number.isFinite(Number(rawDays)) && Number(rawDays) > 0
-        ? Number(rawDays)
-        : 7;
+      : rawPeriod === '30d'
+        ? 30
+        : rawPeriod === '7d'
+          ? 7
+          : Number.isFinite(Number(rawDays)) && Number(rawDays) > 0
+            ? Number(rawDays)
+            : 7;
 
     const { current } = await loadProfileState(user, directory);
     const orders = await syncLocalOrders(user, directory);
@@ -1197,6 +1330,8 @@ export function createWorkspaceApi(options = {}) {
       (o) =>
         o &&
         o.status !== 'cancelado' &&
+        !o.isSimulation &&
+        !o.is_simulation &&
         (o.manual === true ||
           String(o.order_ref || '').startsWith('PED-') ||
           (Array.isArray(o.items) && o.items.some((i) => i?.variation === 'Balcão'))),
@@ -1205,7 +1340,7 @@ export function createWorkspaceApi(options = {}) {
       ...buildDashboardProjection(current.data, current.revision, orders, metrics, {
         conversas,
         conectado: Boolean(config?.conectado),
-      }, { days }),
+      }, { period: rawPeriod, days }),
       d1StrictConversion: {
         visits: funnel.visits,
         productClicks: funnel.productClicks,
@@ -1217,6 +1352,130 @@ export function createWorkspaceApi(options = {}) {
       },
     };
     send(res, 200, { dashboard });
+  }
+
+  async function backupExportHandler(req, res, user, directory) {
+    if (req.method !== 'GET') throw new ApiError(405, 'Método indisponível.');
+    const { current } = await loadProfileState(user, directory);
+    const customTemplates = await readJsonFile(path.join(directory, 'ai_custom_templates.json'), []);
+    const rawPayload = stripSecretKeys({
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      profile: current.data,
+      quickReplies: Array.isArray(customTemplates) ? customTemplates : [],
+      formulaIr: current.data?.storeLayout?.formulasIr || null,
+    });
+    const payloadJson = JSON.stringify(rawPayload, null, 2);
+    const sha256 = createHash('sha256').update(payloadJson, 'utf8').digest('hex');
+    const manifest = {
+      schemaVersion: 1,
+      exportedAt: rawPayload.exportedAt,
+      sha256,
+      app: 'companygen-post-studio',
+    };
+
+    const zip = new JSZip();
+    zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+    zip.file('payload.json', payloadJson);
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    const parsedUrl = new URL(req.url || '/api/workspace/backup-export', 'http://localhost');
+    if (parsedUrl.searchParams.get('format') === 'json') {
+      return send(res, 200, {
+        ok: true,
+        sha256,
+        filename: `companygen-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+        zipBase64: zipBuffer.toString('base64'),
+        sizeBytes: zipBuffer.length,
+      });
+    }
+    res.writeHead(200, {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="companygen-backup-${new Date().toISOString().slice(0, 10)}.zip"`,
+      'X-Backup-Sha256': sha256,
+      'Cache-Control': 'private, no-store',
+    });
+    res.end(zipBuffer);
+  }
+
+  async function backupRestoreHandler(req, res, user, directory) {
+    if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
+    const body = await readJson(req, 12 * 1024 * 1024);
+    const rawBase64 = String(body?.zipBase64 || '').replace(/^data:[^;]+;base64,/, '').trim();
+    if (!rawBase64) {
+      throw new ApiError(400, 'Arquivo .zip de backup não enviado.');
+    }
+    const zipBuffer = Buffer.from(rawBase64, 'base64');
+    // M5: Validacao de magic bytes ZIP ("PK\x03\x04" ou "PK\x05\x06")
+    if (zipBuffer.length < 22 || zipBuffer[0] !== 0x50 || zipBuffer[1] !== 0x4b) {
+      throw new ApiError(400, 'Arquivo inválido: formato .zip corrompido ou não reconhecido.');
+    }
+
+    let zip;
+    try {
+      zip = await JSZip.loadAsync(zipBuffer);
+    } catch {
+      throw new ApiError(400, 'Não foi possível ler o pacote .zip de backup.');
+    }
+
+    const manifestFile = zip.file('manifest.json');
+    const payloadFile = zip.file('payload.json');
+    if (!manifestFile || !payloadFile) {
+      throw new ApiError(400, 'Backup incompleto: manifest.json ou payload.json ausente.');
+    }
+
+    const manifestText = await manifestFile.async('string');
+    const payloadText = await payloadFile.async('string');
+    let manifest;
+    let payload;
+    try {
+      manifest = JSON.parse(manifestText);
+      payload = JSON.parse(payloadText);
+    } catch {
+      throw new ApiError(400, 'Conteúdo JSON do backup está corrompido.');
+    }
+
+    const expectedSha = String(manifest?.sha256 || '').trim().toLowerCase();
+    const computedSha = createHash('sha256').update(payloadText, 'utf8').digest('hex').toLowerCase();
+    if (!expectedSha || expectedSha !== computedSha) {
+      throw new ApiError(400, 'Checksum SHA-256 inválido ou arquivo adulterado.');
+    }
+
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      !payload.profile ||
+      typeof payload.profile !== 'object' ||
+      !payload.profile.business ||
+      typeof payload.profile.business !== 'object' ||
+      !Array.isArray(payload.profile.catalog?.products)
+    ) {
+      throw new ApiError(400, 'Estrutura de loja inválida dentro do snapshot.');
+    }
+
+    const sanitizedProfile = normalizeProfile(stripSecretKeys(payload.profile));
+    if (payload.formulaIr && typeof payload.formulaIr === 'object') {
+      sanitizedProfile.storeLayout = {
+        ...sanitizedProfile.storeLayout,
+        formulasIr: stripSecretKeys(payload.formulaIr),
+      };
+    }
+
+    const { current } = await loadProfileState(user, directory);
+    const saved = await saveProfileState(user, directory, current.revision, sanitizedProfile);
+    if (Array.isArray(payload.quickReplies)) {
+      await atomicWriteJson(
+        path.join(directory, 'ai_custom_templates.json'),
+        stripSecretKeys(payload.quickReplies).slice(0, 80),
+      );
+    }
+
+    send(res, 200, {
+      ok: true,
+      restoredAt: new Date().toISOString(),
+      sha256: computedSha,
+      revision: saved?.current?.revision ?? current.revision + 1,
+      profile: saved?.current?.data ?? sanitizedProfile,
+    });
   }
 
   async function whatsapp(req, res, user, directory, pathname) {
@@ -1518,6 +1777,7 @@ export function createWorkspaceApi(options = {}) {
         '/api/store-molde/generate-full',
         '/api/store-molde/create-page',
         '/api/store-molde/edit-block',
+        '/api/store-molde/patch-section',
         '/api/store-molde/generate-image',
         '/api/store-molde/upload-asset',
         '/api/store-molde/save-ir',
@@ -1559,8 +1819,28 @@ export function createWorkspaceApi(options = {}) {
       }
     }
 
+    if (pathname === '/api/desktop/release-policy') {
+      try {
+        const publicFleetCtx = {
+          user: { id: 'public-visitor' },
+          root,
+          readJson,
+          send,
+          ApiError,
+          readJsonFile,
+          atomicWriteJson,
+        };
+        if (await handlePublicOrUserFleetRoutes(req, res, publicFleetCtx)) return;
+      } catch (error) {
+        if (!res.headersSent) send(res, error.status || 500, { ok: false, error: error.message || 'Erro ao consultar política desktop.' });
+        return;
+      }
+    }
+
     const owned = [
       '/api/workspace',
+      '/api/workspace/backup-export',
+      '/api/workspace/backup-restore',
       '/api/profile',
       '/api/store/public',
       '/api/store/visit',
@@ -1577,6 +1857,9 @@ export function createWorkspaceApi(options = {}) {
       '/api/checkout/confirm',
       '/api/support/tickets',
       '/api/store/qr-code',
+      '/api/desktop/release-policy',
+      '/api/desktop/heartbeat',
+      '/api/features',
     ].includes(pathname) ||
       pathname.startsWith('/api/whatsapp/') ||
       pathname.startsWith('/api/ai/') ||
@@ -1600,6 +1883,37 @@ export function createWorkspaceApi(options = {}) {
           message: touchState.reason || 'Sua conta foi suspensa pelo administrador.',
         });
       }
+      const readonlyHeader = String(req.headers['x-support-readonly'] || '').trim().toLowerCase();
+      if (
+        (readonlyHeader === '1' || readonlyHeader === 'true') &&
+        ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(req.method || '').toUpperCase()) &&
+        !pathname.startsWith('/api/admin/')
+      ) {
+        return send(res, 403, {
+          ok: false,
+          error: 'SUPPORT_READONLY_BLOCKED',
+          message: 'Modo Suporte Somente Leitura ativo — ações de escrita estão bloqueadas.',
+        });
+      }
+      if (
+        req.method === 'POST' &&
+        (pathname.startsWith('/api/ai/') ||
+          pathname.startsWith('/api/store-molde/generate') ||
+          pathname.startsWith('/api/whatsapp/ai/'))
+      ) {
+        const reg = await readJsonFile(path.join(root, '_admin_registry.json'), null);
+        const tier = reg?.userLimits?.[user.id]?.tier || 'standard';
+        const limitCheck = checkUserAiTierLimit(user.id, tier);
+        if (!limitCheck.allowed) {
+          res.setHeader('Retry-After', String(limitCheck.retryAfterSeconds || 60));
+          return send(res, 429, {
+            ok: false,
+            error: 'AI_TIER_RATE_LIMIT',
+            tier: limitCheck.tier,
+            message: limitCheck.reason,
+          });
+        }
+      }
       const aiCtx = {
         user,
         bearer: user?.bearer || '',
@@ -1616,9 +1930,12 @@ export function createWorkspaceApi(options = {}) {
         readJsonFile,
         atomicWriteJson,
       };
+      if (await handlePublicOrUserFleetRoutes(req, res, aiCtx)) return;
       if (await handleAdminRoutes(req, res, aiCtx)) return;
       if (await handleSupportAndQrClientRoutes(req, res, aiCtx)) return;
       if (pathname === '/api/workspace') return await storage(req, res, user, directory);
+      if (pathname === '/api/workspace/backup-export') return await backupExportHandler(req, res, user, directory);
+      if (pathname === '/api/workspace/backup-restore') return await backupRestoreHandler(req, res, user, directory);
       if (pathname === '/api/profile') return await profileHandler(req, res, user, directory);
       if (pathname === '/api/store/public') return await storePublicHandler(req, res, user, directory);
       if (pathname === '/api/store/visit') return await storeVisitHandler(req, res, user, directory);

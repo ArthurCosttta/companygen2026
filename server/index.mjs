@@ -5,7 +5,9 @@ import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createWorkspaceApi } from './workspace.mjs';
 
-const root = fileURLToPath(new URL('../dist/', import.meta.url));
+const root = process.env.COMPANYGEN_STATIC_ROOT
+  ? path.resolve(process.env.COMPANYGEN_STATIC_ROOT)
+  : fileURLToPath(new URL('../dist/', import.meta.url));
 const api = createWorkspaceApi();
 const mime = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',

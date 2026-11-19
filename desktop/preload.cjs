@@ -11,10 +11,24 @@ contextBridge.exposeInMainWorld('companygenDesktop', Object.freeze({
   quitApp: () => ipcRenderer.invoke('companygen:quit-app'),
   notifyDesktop: (payload) => ipcRenderer.invoke('companygen:notify-desktop', payload),
   setTrayStatus: (payload) => ipcRenderer.invoke('companygen:set-tray-status', payload),
+  getHealthSnapshot: () => ipcRenderer.invoke('companygen:get-health-snapshot'),
   onWhatsappTypingProgress: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, data) => callback(data);
     ipcRenderer.on('companygen:wa-typing-progress', listener);
     return () => ipcRenderer.removeListener('companygen:wa-typing-progress', listener);
   },
+  onManualHumanReply: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on('companygen:wa-manual-human-reply', listener);
+    return () => ipcRenderer.removeListener('companygen:wa-manual-human-reply', listener);
+  },
+  onUpdaterStatus: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on('companygen:updater-status', listener);
+    return () => ipcRenderer.removeListener('companygen:updater-status', listener);
+  },
+  installDesktopUpdate: () => ipcRenderer.invoke('companygen:install-update'),
 }));

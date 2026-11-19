@@ -100,7 +100,7 @@ export interface ToastProviderProps {
   maxVisible?: number;
 }
 
-export function ToastProvider({ children, maxVisible = 4 }: ToastProviderProps) {
+export function ToastProvider({ children, maxVisible = 2 }: ToastProviderProps) {
   const [toasts, setToasts] = React.useState<ToastItem[]>([]);
   const timersRef = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const callbacksRef = React.useRef<
@@ -242,9 +242,22 @@ export function ToastProvider({ children, maxVisible = 4 }: ToastProviderProps) 
     <ToastContext.Provider value={contextValue}>
       {children}
       <div
+        data-cg-toast-region="true"
         aria-live="polite"
         aria-atomic="false"
-        className="pointer-events-none fixed bottom-4 right-4 left-4 z-[90] flex w-auto flex-col gap-2 sm:top-4 sm:right-4 sm:bottom-auto sm:left-auto sm:w-[min(92vw,400px)] sm:translate-x-0"
+        onPointerDownCapture={(e) => {
+          (e.nativeEvent as Event & { __cgToastOrigin?: boolean }).__cgToastOrigin = true;
+        }}
+        onMouseDownCapture={(e) => {
+          (e.nativeEvent as Event & { __cgToastOrigin?: boolean }).__cgToastOrigin = true;
+        }}
+        onClickCapture={(e) => {
+          (e.nativeEvent as Event & { __cgToastOrigin?: boolean }).__cgToastOrigin = true;
+        }}
+        onFocusCapture={(e) => {
+          (e.nativeEvent as Event & { __cgToastOrigin?: boolean }).__cgToastOrigin = true;
+        }}
+        className="pointer-events-none fixed top-4 right-4 left-4 z-[90] flex w-auto flex-col gap-2 sm:right-4 sm:left-auto sm:w-[min(92vw,400px)] sm:translate-x-0"
       >
         {toasts.map((item) => (
           <ToastCard

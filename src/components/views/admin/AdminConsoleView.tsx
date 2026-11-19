@@ -1,57 +1,36 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
+  Activity,
   AlertTriangle,
-  Ban,
   Check,
   CheckCircle2,
   Copy,
   Download,
-  ExternalLink,
-  Globe,
+  Flag,
   KeyRound,
   LifeBuoy,
+  Monitor,
+  Package,
   Plus,
+  Printer,
   QrCode,
   RefreshCw,
   Search,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
-  UserCheck,
+  TrendingUp,
   Users,
   Zap,
 } from 'lucide-react';
 import { ActionButton, useToast } from '@/components/ui';
 import { authenticatedFetch } from '@/services/supabase-client';
-
-interface AdminUserRow {
-  id: string;
-  email: string;
-  displayName: string;
-  businessName: string;
-  whatsappPhone: string;
-  credits: number;
-  totalSpent?: number;
-  totalPurchased?: number;
-  published?: boolean;
-  publicSlug?: string;
-  storeUrl?: string;
-  source?: string;
-  banned: boolean;
-  banReason: string;
-  bannedAt: string | null;
-  isAdmin: boolean;
-  lastSeenAt: string | null;
-}
-
-interface AdminSiteRow {
-  userId: string;
-  email: string;
-  businessName: string;
-  published: boolean;
-  publicSlug: string;
-  storeUrl: string;
-  updatedAt: string | null;
-}
+import {
+  AdminUser360Drawer,
+  type AdminFeatureFlagDef,
+  type AdminKiwifyEventRow,
+  type AdminUser360Target,
+} from './AdminUser360Drawer';
 
 interface AdminTicketRow {
   id: string;
@@ -100,6 +79,37 @@ interface AdminIncidentRow {
   createdAt: string;
 }
 
+interface DesktopFleetRow {
+  machineId: string;
+  userId: string;
+  appVersion: string;
+  osPlatform: string;
+  webviewPhase: string;
+  selectorHealth: 'healthy' | 'degraded' | 'offline';
+  outdated?: boolean;
+  lastSeenAt: string;
+}
+
+interface DesktopPolicyData {
+  minSupportedVersion: string;
+  latestVersion: string;
+  forceUpdate: boolean;
+  downloadUrl: string;
+  releaseNotes: string;
+}
+
+interface QrBatchResponse {
+  batchId: string;
+  batchName: string;
+  count: number;
+  creditsPerCode: number;
+  codes: Array<{ index: number; code: string; shortUrl: string; pngDataUrl: string }>;
+  manifestCsv: string;
+  a4Html: string;
+  zipBase64: string;
+  filename: string;
+}
+
 interface AdminOverviewData {
   summary: {
     totalUsers: number;
@@ -110,45 +120,142 @@ interface AdminOverviewData {
     openTicketsCount?: number;
     qrCount?: number;
     incidentsCount?: number;
+    onboardingFeedbackCount?: number;
+    grossRevenueCents?: number;
+    kiwifyFeeCents?: number;
+    aiCostCents?: number;
+    netMarginCents?: number;
+    marginAlert?: boolean;
   };
-  users: AdminUserRow[];
-  sites?: AdminSiteRow[];
+  funnelSummary?: {
+    conta_criada: number;
+    dados_loja: number;
+    whatsapp_conectado: number;
+    publicado: number;
+    primeira_venda: number;
+    stalledOver24h: number;
+  };
+  onboardingFeedbackSummary?: {
+    total: number;
+    easy: number;
+    medium: number;
+    stuck: number;
+  };
+  desktopFleet?: DesktopFleetRow[];
+  desktopPolicy?: DesktopPolicyData;
+  canaryDomAlert?: {
+    active: boolean;
+    code: string;
+    degradedUsersCount: number;
+    message: string;
+  };
+  engineHealth?: {
+    glm: { status: string; avgLatencyMs: number; fallbackRatePct: number };
+    runpod: { status: string; queueDepth: number };
+    smtp: { status: string };
+    failureRefunds24h: { glm: number; runpod: number; smtp: number; other: number; total: number };
+  };
+  kiwifyEvents?: AdminKiwifyEventRow[];
+  featureFlags?: Record<string, AdminFeatureFlagDef>;
+  auditLog?: Array<{
+    id: string;
+    action: string;
+    targetUserId?: string;
+    reasonCode?: string;
+    note?: string;
+    by?: string;
+    at?: string;
+  }>;
+  users: AdminUser360Target[];
   tickets?: AdminTicketRow[];
   qrCampaigns?: AdminQrCampaignRow[];
   invites: AdminInviteRow[];
   incidents?: AdminIncidentRow[];
 }
 
-type AdminSectionTab = 'users' | 'sites' | 'tickets' | 'qr_codes';
+type AdminSectionTab = 'clients' | 'finance' | 'fleet' | 'qr_batches';
+type ClientFilterChip = 'all' | 'stalled' | 'low_balance' | 'chargeback' | 'risk';
 
-export function AdminConsoleView({ userId }: { userId: string }) {
+const FUNNEL_STAGE_BADGE: Record<string, { label: string; cls: string }> = {
+  conta_criada: {
+    label: 'Conta Criada',
+    cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  },
+  dados_loja: {
+    label: 'Dados da Loja',
+    cls: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+  },
+  whatsapp_conectado: {
+    label: 'WhatsApp Conectado',
+    cls: 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300',
+  },
+  publicado: {
+    label: 'Vitrine Publicada',
+    cls: 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
+  },
+  primeira_venda: {
+    label: '1ª Venda ✓',
+    cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+  },
+};
+
+function formatBrl(cents = 0): string {
+  return (Number(cents || 0) / 100).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+}
+
+export function AdminConsoleView({
+  userId,
+  onEnterSupportMode,
+}: {
+  userId: string;
+  onEnterSupportMode?: (snapshot: Record<string, unknown>, target: AdminUser360Target) => void;
+}) {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<AdminSectionTab>('users');
+  const [activeTab, setActiveTab] = useState<AdminSectionTab>('clients');
   const [data, setData] = useState<AdminOverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [creditDrafts, setCreditDrafts] = useState<Record<string, string>>({});
-  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [filterChip, setFilterChip] = useState<ClientFilterChip>('all');
+  const [drawerUser, setDrawerUser] = useState<AdminUser360Target | null>(null);
 
+  // Invites & Support Tickets
   const [inviteCredits, setInviteCredits] = useState('250');
   const [inviteMaxUses, setInviteMaxUses] = useState('1');
   const [inviteNote, setInviteNote] = useState('');
   const [creatingInvite, setCreatingInvite] = useState(false);
+  const [ticketReplyDrafts, setTicketReplyDrafts] = useState<Record<string, string>>({});
 
+  // Kiwify DLQ search/replay
+  const [kwQuery, setKwQuery] = useState('');
+  const [kwStatus, setKwStatus] = useState('');
+  const [replayingId, setReplayingId] = useState<string | null>(null);
+
+  // Desktop Policy
+  const [minVersion, setMinVersion] = useState('1.0.0');
+  const [latestVersion, setLatestVersion] = useState('1.0.0');
+  const [forceUpdate, setForceUpdate] = useState(false);
+  const [savingPolicy, setSavingPolicy] = useState(false);
+
+  // QR Campaigns & Batch A4/ZIP
   const [qrName, setQrName] = useState('');
   const [qrTargetUrl, setQrTargetUrl] = useState('https://companygen.store/');
   const [qrFilter, setQrFilter] = useState('');
   const [creatingQr, setCreatingQr] = useState(false);
+  const [batchName, setBatchName] = useState('Panfleto Lançamento');
+  const [batchCount, setBatchCount] = useState('6');
+  const [batchCredits, setBatchCredits] = useState('100');
+  const [creatingBatch, setCreatingBatch] = useState(false);
+  const [lastBatch, setLastBatch] = useState<QrBatchResponse | null>(null);
 
-  const [ticketReplyDrafts, setTicketReplyDrafts] = useState<Record<string, string>>({});
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const copyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
-      if (copyTimerRef.current !== null) {
-        window.clearTimeout(copyTimerRef.current);
-      }
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
     };
   }, []);
 
@@ -160,7 +267,16 @@ export function AdminConsoleView({ userId }: { userId: string }) {
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || 'Não foi possível carregar o console admin.');
       }
-      setData(json as AdminOverviewData);
+      const typed = json as AdminOverviewData;
+      setData(typed);
+      if (typed.desktopPolicy) {
+        setMinVersion(typed.desktopPolicy.minSupportedVersion || '1.0.0');
+        setLatestVersion(typed.desktopPolicy.latestVersion || '1.0.0');
+        setForceUpdate(Boolean(typed.desktopPolicy.forceUpdate));
+      }
+      setDrawerUser((prev) =>
+        prev ? typed.users.find((u) => u.id === prev.id) || prev : null,
+      );
     } catch (err) {
       showToast({
         type: 'error',
@@ -175,111 +291,66 @@ export function AdminConsoleView({ userId }: { userId: string }) {
     void loadOverview();
   }, [loadOverview]);
 
+  const ticketsByUser = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of data?.tickets || []) {
+      if (t.status !== 'resolved' && t.user_id) {
+        map.set(t.user_id, (map.get(t.user_id) || 0) + 1);
+      }
+    }
+    return map;
+  }, [data?.tickets]);
+
   const filteredUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const list = data?.users || [];
-    if (!q) return list;
-    return list.filter(
-      (u) =>
+    return (data?.users || []).filter((u) => {
+      if (filterChip === 'stalled' && !u.stalledOver24h) return false;
+      if (filterChip === 'low_balance' && u.credits >= 15) return false;
+      if (filterChip === 'chargeback' && u.reviewFlag !== 'NEGATIVE_BALANCE_REVIEW') return false;
+      if (filterChip === 'risk' && !u.riskAbuse) return false;
+      if (!q) return true;
+      return (
         u.id.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
         u.businessName.toLowerCase().includes(q) ||
-        u.displayName.toLowerCase().includes(q),
-    );
-  }, [data?.users, searchQuery]);
+        u.displayName.toLowerCase().includes(q)
+      );
+    });
+  }, [data?.users, filterChip, searchQuery]);
+
+  const filteredKiwifyEvents = useMemo(() => {
+    const q = kwQuery.trim().toLowerCase();
+    return (data?.kiwifyEvents || []).filter((ev) => {
+      if (kwStatus && String(ev.processing_status || '').toLowerCase() !== kwStatus) return false;
+      if (!q) return true;
+      return `${ev.order_id} ${ev.customer_email || ''} ${ev.plan_code || ''} ${ev.error_message || ''}`
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [data?.kiwifyEvents, kwQuery, kwStatus]);
 
   const filteredQrs = useMemo(() => {
     const q = qrFilter.trim().toLowerCase();
-    const list = data?.qrCampaigns || [];
-    if (!q) return list;
-    return list.filter(
-      (item) =>
+    return (data?.qrCampaigns || []).filter((item) => {
+      if (!q) return true;
+      return (
         item.name.toLowerCase().includes(q) ||
         item.slug.toLowerCase().includes(q) ||
-        item.target_url.toLowerCase().includes(q),
-    );
+        item.target_url.toLowerCase().includes(q)
+      );
+    });
   }, [data?.qrCampaigns, qrFilter]);
 
-  const handleUpdateCredits = async (targetUser: AdminUserRow, mode: 'add' | 'set', explicitAmount?: number) => {
-    const raw = explicitAmount !== undefined ? String(explicitAmount) : creditDrafts[targetUser.id] ?? '';
-    const amount = Math.round(Number(raw));
-    if (!Number.isFinite(amount)) {
-      showToast({ type: 'error', message: 'Informe um número válido de créditos.' });
-      return;
-    }
-    setBusyUserId(targetUser.id);
-    try {
-      const res = await authenticatedFetch(
-        '/api/admin/users/credits',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: targetUser.id,
-            mode,
-            amount,
-            note: mode === 'add' ? 'Ajuste rápido pelo admin' : 'Definição direta pelo admin',
-          }),
-        },
-        userId,
-      );
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || 'Falha ao atualizar créditos.');
-      }
-      showToast({
-        type: 'success',
-        message: `Saldo atualizado para ${Number(json.newBalance).toLocaleString('pt-BR')} créditos.`,
-      });
-      setCreditDrafts((prev) => ({ ...prev, [targetUser.id]: '' }));
-      await loadOverview();
-    } catch (err) {
-      showToast({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Erro ao ajustar créditos.',
-      });
-    } finally {
-      setBusyUserId(null);
-    }
+  const handleCopyText = (key: string, text: string) => {
+    if (!text) return;
+    void navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedCode(key);
+    showToast({ type: 'success', message: 'Copiado para a área de transferência!' });
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  const handleToggleBan = async (targetUser: AdminUserRow) => {
-    setBusyUserId(targetUser.id);
-    try {
-      const nextBanned = !targetUser.banned;
-      const res = await authenticatedFetch(
-        '/api/admin/users/ban',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: targetUser.id,
-            banned: nextBanned,
-            reason: nextBanned ? 'Suspenso pelo administrador no Painel Admin.' : '',
-          }),
-        },
-        userId,
-      );
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || 'Falha ao atualizar status da conta.');
-      }
-      showToast({
-        type: 'success',
-        message: nextBanned ? 'Usuário banido e bloqueado imediatamente.' : 'Usuário reativado.',
-      });
-      await loadOverview();
-    } catch (err) {
-      showToast({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Erro ao alterar banimento.',
-      });
-    } finally {
-      setBusyUserId(null);
-    }
-  };
-
-  const handleCreateInvite = async (e: React.FormEvent) => {
+  const handleCreateInvite = async (e: FormEvent) => {
     e.preventDefault();
     if (creatingInvite) return;
     setCreatingInvite(true);
@@ -298,104 +369,15 @@ export function AdminConsoleView({ userId }: { userId: string }) {
         userId,
       );
       const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || 'Falha ao criar convite.');
-      }
-      if (json.invite?.inviteUrl && navigator.clipboard) {
-        void navigator.clipboard.writeText(json.invite.inviteUrl).catch(() => {});
-      }
-      showToast({
-        type: 'success',
-        message: `Link de convite criado (${json.invite?.code}) e copiado!`,
-      });
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Falha ao criar convite.');
+      if (json.invite?.inviteUrl) void navigator.clipboard?.writeText(json.invite.inviteUrl).catch(() => {});
+      showToast({ type: 'success', message: `Convite criado (${json.invite?.code}) e copiado!` });
       setInviteNote('');
       await loadOverview();
     } catch (err) {
-      showToast({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Erro ao gerar link de convite.',
-      });
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao criar convite.' });
     } finally {
       setCreatingInvite(false);
-    }
-  };
-
-  const handleRevokeInvite = async (invite: AdminInviteRow) => {
-    try {
-      const res = await authenticatedFetch(
-        '/api/admin/invites/revoke',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: invite.code, masked: invite.masked }),
-        },
-        userId,
-      );
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Falha ao revogar convite.');
-      showToast({ type: 'success', message: 'Convite revogado.' });
-      await loadOverview();
-    } catch (err) {
-      showToast({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Erro ao revogar convite.',
-      });
-    }
-  };
-
-  const handleCreateQr = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (creatingQr) return;
-    setCreatingQr(true);
-    try {
-      const res = await authenticatedFetch(
-        '/api/admin/qr-campaigns',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: qrName.trim(),
-            targetUrl: qrTargetUrl.trim(),
-          }),
-        },
-        userId,
-      );
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || 'Não foi possível criar o QR Code.');
-      }
-      setQrName('');
-      showToast({
-        type: 'success',
-        message: `QR Code "${json.campaign?.name}" criado com link rastreável!`,
-      });
-      await loadOverview();
-    } catch (err) {
-      showToast({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Erro ao criar QR Code.',
-      });
-    } finally {
-      setCreatingQr(false);
-    }
-  };
-
-  const handleDeleteQr = async (id: string) => {
-    try {
-      const res = await authenticatedFetch(
-        '/api/admin/qr-campaigns',
-        {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id }),
-        },
-        userId,
-      );
-      if (!res.ok) throw new Error('Falha ao excluir QR Code.');
-      showToast({ type: 'success', message: 'QR Code removido.' });
-      await loadOverview();
-    } catch (err) {
-      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao remover QR.' });
     }
   };
 
@@ -420,744 +402,1102 @@ export function AdminConsoleView({ userId }: { userId: string }) {
     }
   };
 
-  const handleCopyText = (key: string, text: string) => {
-    if (!text) return;
-    void navigator.clipboard.writeText(text).catch(() => {});
-    setCopiedCode(key);
-    showToast({ type: 'success', message: 'Copiado para a área de transferência!' });
-    if (copyTimerRef.current !== null) {
-      window.clearTimeout(copyTimerRef.current);
+  const handleReplayKiwify = async (ev: AdminKiwifyEventRow) => {
+    const key = `${ev.order_id}-${ev.webhook_event_type}`;
+    setReplayingId(key);
+    try {
+      const res = await authenticatedFetch(
+        '/api/admin/kiwify/replay',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: ev.order_id,
+            eventType: ev.webhook_event_type || 'order_approved',
+          }),
+        },
+        userId,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Falha no replay.');
+      showToast({
+        type: 'success',
+        message: json.duplicate
+          ? `Pedido ${ev.order_id}: replay idempotente ignorou duplicata.`
+          : `Pedido ${ev.order_id} reprocessado com sucesso!`,
+      });
+      await loadOverview();
+    } catch (err) {
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro no replay.' });
+    } finally {
+      setReplayingId(null);
     }
-    copyTimerRef.current = window.setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  const sitesList = data?.sites || [];
-  const ticketsList = data?.tickets || [];
+  const handleSaveDesktopPolicy = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingPolicy(true);
+    try {
+      const res = await authenticatedFetch(
+        '/api/admin/desktop-policy',
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            minSupportedVersion: minVersion.trim(),
+            latestVersion: latestVersion.trim(),
+            forceUpdate,
+          }),
+        },
+        userId,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Falha ao salvar política.');
+      showToast({ type: 'success', message: 'Política de versão mínima .exe salva!' });
+      await loadOverview();
+    } catch (err) {
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao salvar política.' });
+    } finally {
+      setSavingPolicy(false);
+    }
+  };
+
+  const handleUpdateFlagMode = async (flag: AdminFeatureFlagDef, nextMode: AdminFeatureFlagDef['globalMode']) => {
+    try {
+      const res = await authenticatedFetch(
+        '/api/admin/feature-flags',
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: flag.key,
+            globalMode: nextMode,
+            betaUserIds: flag.betaUserIds,
+            description: flag.description || '',
+          }),
+        },
+        userId,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Erro ao atualizar flag.');
+      showToast({ type: 'success', message: `Flag "${flag.key}" -> ${nextMode}` });
+      await loadOverview();
+    } catch (err) {
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao atualizar flag.' });
+    }
+  };
+
+  const handleCreateQr = async (e: FormEvent) => {
+    e.preventDefault();
+    if (creatingQr) return;
+    setCreatingQr(true);
+    try {
+      const res = await authenticatedFetch(
+        '/api/admin/qr-campaigns',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: qrName.trim(), targetUrl: qrTargetUrl.trim() }),
+        },
+        userId,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Não foi possível criar QR.');
+      setQrName('');
+      showToast({ type: 'success', message: `QR "${json.campaign?.name}" criado!` });
+      await loadOverview();
+    } catch (err) {
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao criar QR.' });
+    } finally {
+      setCreatingQr(false);
+    }
+  };
+
+  const handleDeleteQr = async (id: string) => {
+    try {
+      const res = await authenticatedFetch(
+        '/api/admin/qr-campaigns',
+        { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) },
+        userId,
+      );
+      if (!res.ok) throw new Error('Falha ao remover QR.');
+      showToast({ type: 'success', message: 'QR Code removido.' });
+      await loadOverview();
+    } catch (err) {
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao remover QR.' });
+    }
+  };
+
+  const handleCreateQrBatch = async (e: FormEvent) => {
+    e.preventDefault();
+    if (creatingBatch) return;
+    setCreatingBatch(true);
+    try {
+      const res = await authenticatedFetch(
+        '/api/admin/qr-batches',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            batchName: batchName.trim() || 'Lote Campanha',
+            count: Number(batchCount) || 6,
+            credits: Number(batchCredits) || 100,
+          }),
+        },
+        userId,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Falha ao gerar lote gráfico.');
+      setLastBatch(json as QrBatchResponse);
+      showToast({
+        type: 'success',
+        message: `Lote A4/ZIP gerado com ${json.count} cartelas e códigos AI10!`,
+      });
+      await loadOverview();
+    } catch (err) {
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao gerar lote.' });
+    } finally {
+      setCreatingBatch(false);
+    }
+  };
+
+  const downloadBase64Zip = (batch: QrBatchResponse) => {
+    const bin = atob(batch.zipBase64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = batch.filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const openPrintA4 = (batch: QrBatchResponse) => {
+    const blob = new Blob([batch.a4Html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const summary = data?.summary;
+  const openTickets = (data?.tickets || []).filter((t) => t.status !== 'resolved');
 
   return (
-    <div data-testid="desktop-admin-console" className="min-w-0 space-y-6 pb-10">
-      {/* Cabeçalho & Métricas Globais */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+    <div data-testid="desktop-admin-console" className="min-w-0 space-y-5 pb-10">
+      {/* Cabeçalho + 4 KPIs principais */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4 dark:border-slate-800 dark:bg-[#111726]">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex size-10 items-center justify-center rounded-xl bg-[#0F172A] text-white">
-              <ShieldCheck className="size-5" />
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#0F172A] text-white dark:bg-[#2563EB]">
+              <ShieldCheck className="size-5" aria-hidden="true" />
             </span>
-            <div>
-              <h2 className="text-lg font-bold text-[#0F172A]">Console Admin Cloud — CompanyGen</h2>
-              <p className="text-xs text-slate-600">
-                Visão global de clientes, gastos, sites gerados, chamados de suporte e QR Codes rastreáveis.
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-bold text-[#0F172A] dark:text-slate-100">
+                Console Admin 360° — CompanyGen
+              </h2>
+              <p className="truncate text-xs text-slate-600 dark:text-slate-300">
+                Suporte Somente Leitura, Reconciliador Kiwify, Frota Desktop .exe e Lotes QR A4.
               </p>
             </div>
           </div>
 
-          <ActionButton
-            variant="secondary"
-            size={44}
-            isLoading={loading}
-            loadingText="Atualizando..."
-            leftIcon={<RefreshCw className="size-4" />}
-            onClick={() => void loadOverview()}
-          >
-            Atualizar dados
-          </ActionButton>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-            <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
-              <Users className="size-3.5 text-blue-600" />
-              Clientes
-            </span>
-            <p className="mt-1 text-2xl font-extrabold text-[#0F172A]">{data?.summary.totalUsers ?? 0}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-            <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
-              <Zap className="size-3.5 text-emerald-600" />
-              Saldo em circulação
-            </span>
-            <p className="mt-1 text-2xl font-extrabold text-[#0F172A]">
-              {(data?.summary.totalCredits ?? 0).toLocaleString('pt-BR')}
-            </p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-            <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
-              <Globe className="size-3.5 text-indigo-600" />
-              Sites criados
-            </span>
-            <p className="mt-1 text-2xl font-extrabold text-[#0F172A]">{sitesList.length}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-            <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
-              <LifeBuoy className="size-3.5 text-amber-600" />
-              Problemas abertos
-            </span>
-            <p className="mt-1 text-2xl font-extrabold text-[#B45309]">
-              {data?.summary.openTicketsCount ?? 0}
-            </p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-            <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
-              <QrCode className="size-3.5 text-violet-600" />
-              QR Codes ativos
-            </span>
-            <p className="mt-1 text-2xl font-extrabold text-[#0F172A]">{data?.summary.qrCount ?? 0}</p>
-          </div>
-        </div>
-
-        {/* Navegação de Abas Internas do Admin */}
-        <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-          {(
-            [
-              ['users', `Clientes & Gastos (${filteredUsers.length})`, Users],
-              ['sites', `Sites Criados (${sitesList.length})`, Globe],
-              ['tickets', `Problemas & Alertas (${ticketsList.length + (data?.incidents?.length || 0)})`, AlertTriangle],
-              ['qr_codes', `QR Codes & Códigos (${filteredQrs.length})`, QrCode],
-            ] as const
-          ).map(([id, label, Icon]) => (
-            <button
-              key={id}
+          <div className="flex items-center gap-2">
+            {summary?.marginAlert ? (
+              <span className="inline-flex items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+                <AlertTriangle className="size-3.5" /> Margem Negativa Detectada
+              </span>
+            ) : null}
+            <ActionButton
               type="button"
-              data-testid={`admin-tab-${id}`}
-              onClick={() => setActiveTab(id)}
-              className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3.5 text-xs font-bold transition ${
-                activeTab === id
-                  ? 'bg-[#0F172A] text-white shadow-xs'
-                  : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-              }`}
+              size={44}
+              variant="secondary"
+              data-testid="admin-refresh-btn"
+              isLoading={loading}
+              onClick={() => void loadOverview()}
+              leftIcon={<RefreshCw className="size-4" />}
             >
-              <Icon className="size-3.5" />
-              <span>{label}</span>
-            </button>
-          ))}
+              Atualizar
+            </ActionButton>
+          </div>
+        </div>
+
+        {/* 4 KPIs Estritos */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090D16]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              <Users className="size-3.5 text-[#2563EB]" /> Lojas Cadastradas
+            </div>
+            <div data-testid="admin-kpi-users" className="cg-tabular mt-1 text-xl font-extrabold text-[#0F172A] dark:text-slate-100">
+              {summary?.totalUsers ?? 0}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090D16]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              <Zap className="size-3.5 text-amber-500" /> Créditos Ativos
+            </div>
+            <div data-testid="admin-kpi-credits" className="cg-tabular mt-1 text-xl font-extrabold text-[#0F172A] dark:text-slate-100">
+              {(summary?.totalCredits ?? 0).toLocaleString('pt-BR')} cr
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090D16]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              <TrendingUp className="size-3.5 text-emerald-500" /> Margem Líquida
+            </div>
+            <div
+              data-testid="admin-kpi-margin"
+              className={`cg-tabular mt-1 text-xl font-extrabold ${(summary?.netMarginCents ?? 0) < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}
+            >
+              {formatBrl(summary?.netMarginCents ?? 0)}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090D16]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              <LifeBuoy className="size-3.5 text-rose-500" /> Tickets / Alertas
+            </div>
+            <div data-testid="admin-kpi-alerts" className="cg-tabular mt-1 text-xl font-extrabold text-[#0F172A] dark:text-slate-100">
+              {openTickets.length} / {summary?.incidentsCount ?? 0}
+            </div>
+          </div>
+        </div>
+
+        {/* 4 Sub-abas Enxutas */}
+        <div role="tablist" aria-label="Seções do Console Admin" className="flex flex-wrap gap-2 pt-1">
+          {[
+            { id: 'clients', label: 'Clientes & Suporte', testId: 'admin-subtab-clients' },
+            { id: 'finance', label: 'Financeiro & Kiwify', testId: 'admin-subtab-finance' },
+            { id: 'fleet', label: 'Frota .exe & IA', testId: 'admin-subtab-fleet' },
+            { id: 'qr_batches', label: 'QR & Lotes', testId: 'admin-subtab-qr' },
+          ].map((tab) => {
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={active}
+                data-testid={tab.testId}
+                type="button"
+                onClick={() => setActiveTab(tab.id as AdminSectionTab)}
+                className={`min-h-[40px] rounded-xl px-4 text-xs font-bold transition-all ${
+                  active
+                    ? 'bg-[#2563EB] text-white shadow-xs'
+                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </section>
 
-      {/* ABA 1: Clientes, Créditos & Gastos */}
-      {activeTab === 'users' && (
-        <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-[#0F172A]">
-                Usuários, Saldos & Consumo ({filteredUsers.length})
+      {/* SUB-ABA 1: CLIENTES & SUPORTE */}
+      {activeTab === 'clients' ? (
+        <div className="space-y-5">
+          {/* Termômetro de Onboarding */}
+          <section
+            data-testid="admin-onboarding-thermometer"
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-[#111726]"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Termômetro de Onboarding
               </h3>
-              <p className="text-xs text-slate-500">
-                Total consumido histórico: {(data?.summary.totalSpent ?? 0).toLocaleString('pt-BR')} créditos.
-              </p>
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="cg-tabular rounded-full bg-amber-50 px-2.5 py-0.5 font-bold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                  {data?.funnelSummary?.stalledOver24h ?? 0} travado(s) &gt;24h
+                </span>
+                <span className="cg-tabular rounded-full bg-slate-100 px-2.5 py-0.5 font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  Feedback: {data?.onboardingFeedbackSummary?.easy ?? 0} Fácil ·{' '}
+                  {data?.onboardingFeedbackSummary?.stuck ?? 0} Travou
+                </span>
+              </div>
             </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="size-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por email, loja ou ID..."
-                className="w-full min-h-[40px] rounded-xl border border-slate-200 pl-9 pr-3 text-xs"
-              />
-            </div>
-          </div>
-
-          {/* Mobile Stacked Cards (< 768px) */}
-          <div className="space-y-3 md:hidden">
-            {filteredUsers.map((u) => {
-              const isBusy = busyUserId === u.id;
-              return (
-                <article
-                  key={u.id}
-                  data-testid={`admin-user-card-${u.id}`}
-                  className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-3"
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {[
+                { key: 'conta_criada', label: '1. Conta Criada', val: data?.funnelSummary?.conta_criada ?? 0 },
+                { key: 'dados_loja', label: '2. Dados Loja', val: data?.funnelSummary?.dados_loja ?? 0 },
+                { key: 'whatsapp_conectado', label: '3. WhatsApp', val: data?.funnelSummary?.whatsapp_conectado ?? 0 },
+                { key: 'publicado', label: '4. Publicado', val: data?.funnelSummary?.publicado ?? 0 },
+                { key: 'primeira_venda', label: '5. 1ª Venda', val: data?.funnelSummary?.primeira_venda ?? 0 },
+              ].map((step) => (
+                <div
+                  key={step.key}
+                  className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 text-center dark:border-slate-800 dark:bg-[#090D16]"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-[#0F172A]">{u.businessName}</p>
-                      <p className="truncate text-xs text-slate-600">{u.email || u.displayName || 'Sem email'}</p>
-                      <p className="text-[11px] text-slate-500">
-                        Gasto total: {(u.totalSpent ?? 0).toLocaleString('pt-BR')} cr
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right space-y-1">
-                      {u.isAdmin ? (
-                        <span className="inline-block rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-bold text-white">
-                          ADMIN
-                        </span>
-                      ) : u.banned ? (
-                        <span className="inline-block rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-bold text-red-700">
-                          BANIDO
-                        </span>
-                      ) : (
-                        <span className="inline-block rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                          Ativo
-                        </span>
-                      )}
-                      <p className="text-xs font-extrabold text-[#0F172A]">
-                        {u.credits.toLocaleString('pt-BR')} cr
-                      </p>
-                    </div>
+                  <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{step.label}</div>
+                  <div className="cg-tabular mt-0.5 text-lg font-extrabold text-[#0F172A] dark:text-slate-100">
+                    {step.val}
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <input
-                      type="number"
-                      placeholder="Qtd"
-                      value={creditDrafts[u.id] ?? ''}
-                      onChange={(e) => setCreditDrafts((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                      className="min-w-[72px] flex-1 min-h-[38px] rounded-lg border border-slate-200 bg-white px-2.5 text-xs"
-                    />
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => void handleUpdateCredits(u, 'add')}
-                      className="min-h-[38px] shrink-0 rounded-lg bg-blue-50 border border-blue-200 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                    >
-                      +Somar
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => void handleUpdateCredits(u, 'set')}
-                      className="min-h-[38px] shrink-0 rounded-lg bg-slate-100 border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200"
-                    >
-                      Definir
-                    </button>
-                  </div>
-
-                  {!u.isAdmin ? (
-                    <ActionButton
-                      variant={u.banned ? 'success' : 'secondary'}
-                      size={44}
-                      fullWidth
-                      isLoading={isBusy}
-                      loadingText="..."
-                      leftIcon={u.banned ? <UserCheck className="size-3.5" /> : <Ban className="size-3.5 text-red-600" />}
-                      onClick={() => void handleToggleBan(u)}
-                    >
-                      {u.banned ? 'Reativar' : 'Banir usuário'}
-                    </ActionButton>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-
-          {/* Desktop Table (>= 768px) */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="py-2 pr-3 font-semibold">Usuário / Loja</th>
-                  <th className="py-2 px-3 font-semibold">Saldo Atual</th>
-                  <th className="py-2 px-3 font-semibold">Gasto Histórico</th>
-                  <th className="py-2 px-3 font-semibold">Ajustar Saldo</th>
-                  <th className="py-2 px-3 font-semibold">Status</th>
-                  <th className="py-2 pl-3 text-right font-semibold">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredUsers.map((u) => {
-                  const isBusy = busyUserId === u.id;
-                  return (
-                    <tr key={u.id} data-testid={`admin-user-row-${u.id}`}>
-                      <td className="py-3 pr-3 align-middle">
-                        <p className="font-bold text-[#0F172A]">{u.businessName}</p>
-                        <p className="text-[11px] text-slate-600">{u.email || u.displayName || 'Sem email'}</p>
-                        <p className="font-mono text-[10px] text-slate-400">{u.id}</p>
-                      </td>
-                      <td className="py-3 px-3 align-middle font-extrabold text-[#0F172A]">
-                        {u.credits.toLocaleString('pt-BR')} cr
-                      </td>
-                      <td className="py-3 px-3 align-middle font-semibold text-slate-600">
-                        {(u.totalSpent ?? 0).toLocaleString('pt-BR')} cr
-                      </td>
-                      <td className="py-3 px-3 align-middle">
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            placeholder="Qtd"
-                            value={creditDrafts[u.id] ?? ''}
-                            onChange={(e) => setCreditDrafts((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                            className="w-20 min-h-[34px] rounded-lg border border-slate-200 px-2 text-xs"
-                          />
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => void handleUpdateCredits(u, 'add')}
-                            className="min-h-[34px] rounded-lg bg-blue-50 border border-blue-200 px-2 font-semibold text-blue-700 hover:bg-blue-100"
-                          >
-                            +Somar
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => void handleUpdateCredits(u, 'set')}
-                            className="min-h-[34px] rounded-lg bg-slate-100 border border-slate-200 px-2 font-semibold text-slate-700 hover:bg-slate-200"
-                          >
-                            Definir
-                          </button>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 align-middle">
-                        {u.isAdmin ? (
-                          <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-[10px] font-bold text-white">
-                            ADMIN
-                          </span>
-                        ) : u.banned ? (
-                          <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-bold text-red-700">
-                            BANIDO
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                            Ativo
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 pl-3 align-middle text-right">
-                        {!u.isAdmin ? (
-                          <ActionButton
-                            variant={u.banned ? 'success' : 'secondary'}
-                            size={44}
-                            isLoading={isBusy}
-                            loadingText="..."
-                            leftIcon={u.banned ? <UserCheck className="size-3.5" /> : <Ban className="size-3.5 text-red-600" />}
-                            onClick={() => void handleToggleBan(u)}
-                          >
-                            {u.banned ? 'Reativar' : 'Banir'}
-                          </ActionButton>
-                        ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {/* ABA 2: Sites / Vitrines Criadas pelos Usuários */}
-      {activeTab === 'sites' && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-          <div>
-            <h3 className="text-sm font-bold text-[#0F172A]">Sites & Vitrines Criadas ({sitesList.length})</h3>
-            <p className="text-xs text-slate-500">
-              Inspecione o endereço público das lojas configuradas pelos usuários no Supabase.
-            </p>
-          </div>
-          {sitesList.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
-              Nenhuma vitrine configurada ainda pelos usuários.
-            </p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {sitesList.map((site) => (
-                <article
-                  key={site.userId}
-                  className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="truncate font-bold text-[#0F172A] text-sm">{site.businessName}</h4>
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          site.published ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {site.published ? 'Publicada' : 'Rascunho'}
-                      </span>
-                    </div>
-                    <p className="truncate text-slate-600">{site.email || site.userId}</p>
-                    {site.publicSlug ? (
-                      <p className="font-mono text-[11px] text-slate-500">/{site.publicSlug}</p>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={site.storeUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex min-h-[38px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#2563EB] px-3 font-bold text-white hover:bg-[#1D4ED8]"
-                    >
-                      <ExternalLink className="size-3.5" />
-                      Abrir Vitrine
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyText(site.userId, `${window.location.origin}${site.storeUrl}`)}
-                      className="inline-flex min-h-[38px] items-center justify-center rounded-xl border border-slate-300 bg-white px-3 font-semibold text-slate-700 hover:bg-slate-100"
-                    >
-                      <Copy className="size-3.5" />
-                    </button>
-                  </div>
-                </article>
+                </div>
               ))}
             </div>
-          )}
-        </section>
-      )}
+          </section>
 
-      {/* ABA 3: Problemas Enviados pelos Clientes + Incidentes do Sistema */}
-      {activeTab === 'tickets' && (
-        <div className="space-y-6">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-            <div>
-              <h3 className="text-sm font-bold text-[#0F172A]">
-                Chamados de Suporte dos Clientes ({ticketsList.length})
-              </h3>
-              <p className="text-xs text-slate-500">
-                Problemas enviados diretamente pelos usuários pela tela Ajustes → Reportar Problema.
-              </p>
-            </div>
-            {ticketsList.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
-                Nenhum chamado aberto pelos clientes até o momento.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {ticketsList.map((ticket) => (
-                  <article
-                    key={ticket.id}
-                    className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs space-y-2.5"
+          {/* Tabela estrita de 5 colunas + Filtros */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4 dark:border-slate-800 dark:bg-[#111726]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { id: 'all', label: 'Todos' },
+                  { id: 'stalled', label: 'Travou >24h' },
+                  { id: 'low_balance', label: 'Saldo Baixo (<15)' },
+                  { id: 'chargeback', label: 'Chargeback' },
+                  { id: 'risk', label: '⚠ Risco' },
+                ].map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    data-testid={`admin-filter-${chip.id}`}
+                    onClick={() => setFilterChip(chip.id as ClientFilterChip)}
+                    className={`min-h-[34px] rounded-full px-3 text-[11px] font-bold transition ${
+                      filterChip === chip.id
+                        ? 'bg-[#0F172A] text-white dark:bg-[#2563EB]'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-[#090D16] dark:text-slate-300'
+                    }`}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <span className="mr-2 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-800">
-                          {ticket.category}
-                        </span>
-                        <span className="font-bold text-sm text-[#0F172A]">{ticket.subject}</span>
-                      </div>
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+              <div className="relative min-w-[220px] flex-1 max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  data-testid="admin-client-search"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar loja ou e-mail..."
+                  className="min-h-[40px] w-full rounded-xl border border-slate-300 bg-white pl-9 pr-3 text-xs text-[#0F172A] dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table data-testid="admin-clients-table" className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <th className="py-2.5 pr-3">Loja / E-mail</th>
+                    <th className="py-2.5 px-3">Etapa Setup</th>
+                    <th className="py-2.5 px-3">Saldo / Margem</th>
+                    <th className="py-2.5 px-3">Saúde / Tickets</th>
+                    <th className="py-2.5 pl-3 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredUsers.map((u) => {
+                    const st = FUNNEL_STAGE_BADGE[u.funnelStage || 'conta_criada'] || FUNNEL_STAGE_BADGE.conta_criada;
+                    const tCount = ticketsByUser.get(u.id) || 0;
+                    return (
+                      <tr
+                        key={u.id}
+                        data-testid={`admin-user-row-${u.id}`}
+                        className="hover:bg-slate-50/70 dark:hover:bg-[#090D16]/70"
+                      >
+                        <td className="py-3 pr-3">
+                          <div className="font-bold text-[#0F172A] dark:text-slate-100">
+                            {u.businessName || 'Sem nome'}
+                          </div>
+                          <div className="truncate max-w-[220px] text-[11px] text-slate-500 dark:text-slate-400">
+                            {u.email || u.id}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${st.cls}`}>
+                            {st.label}
+                          </span>
+                          {u.stalledOver24h ? (
+                            <div className="mt-1 text-[10px] font-semibold text-amber-600">
+                              Travou há {u.stalledHours}h
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="cg-tabular font-extrabold text-[#0F172A] dark:text-slate-100">
+                            {u.credits.toLocaleString('pt-BR')} cr
+                          </div>
+                          <div
+                            className={`cg-tabular text-[11px] font-semibold ${(u.marginCents || 0) < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}
+                          >
+                            Margem {formatBrl(u.marginCents || 0)}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="flex flex-wrap items-center gap-1">
+                            {u.banned ? (
+                              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+                                Banido
+                              </span>
+                            ) : u.reviewFlag === 'NEGATIVE_BALANCE_REVIEW' ? (
+                              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+                                Chargeback Lock
+                              </span>
+                            ) : u.riskAbuse ? (
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+                                ⚠ Risco
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                                Saudável
+                              </span>
+                            )}
+                            {tCount > 0 ? (
+                              <span className="cg-tabular rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+                                {tCount} ticket(s)
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="py-3 pl-3 text-right">
+                          <ActionButton
+                            type="button"
+                            size={44}
+                            variant="secondary"
+                            data-testid={`admin-open-360-${u.id}`}
+                            onClick={() => setDrawerUser(u)}
+                          >
+                            Abrir 360° →
+                          </ActionButton>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-slate-500">
+                        Nenhuma conta encontrada para os filtros selecionados.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Fila de Suporte & Convites Rápidos */}
+          <div className="grid gap-5 lg:grid-cols-2">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3 dark:border-slate-800 dark:bg-[#111726]">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-[#0F172A] dark:text-slate-100">
+                <LifeBuoy className="size-4 text-rose-500" /> Chamados de Suporte ({openTickets.length} abertos)
+              </h3>
+              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                {(data?.tickets || []).slice(0, 12).map((tk) => (
+                  <div
+                    key={tk.id}
+                    className="rounded-xl border border-slate-200 p-3 text-xs space-y-2 dark:border-slate-800 dark:bg-[#090D16]"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-[#0F172A] dark:text-slate-100">{tk.subject}</span>
                       <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                          ticket.status === 'resolved'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-amber-100 text-amber-800'
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          tk.status === 'resolved'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-amber-50 text-amber-800'
                         }`}
                       >
-                        {ticket.status === 'resolved' ? <CheckCircle2 className="size-3" /> : null}
-                        {ticket.status === 'resolved' ? 'Resolvido' : 'Aberto'}
+                        {tk.status === 'resolved' ? 'Resolvido' : 'Aberto'}
                       </span>
                     </div>
-                    <p className="text-slate-700 leading-relaxed">{ticket.description}</p>
-                    <p className="text-[11px] text-slate-500">
-                      Cliente: <strong>{ticket.store_name || ticket.user_email || ticket.user_id}</strong> ·{' '}
-                      {new Date(ticket.created_at).toLocaleString('pt-BR')}
-                    </p>
-                    {ticket.status !== 'resolved' ? (
-                      <div className="flex flex-col gap-2 pt-1 sm:flex-row">
+                    <p className="text-slate-600 dark:text-slate-300">{tk.description}</p>
+                    {tk.status !== 'resolved' ? (
+                      <div className="flex gap-2">
                         <input
                           type="text"
-                          value={ticketReplyDrafts[ticket.id] ?? ''}
+                          placeholder="Nota de resolução..."
+                          value={ticketReplyDrafts[tk.id] || ''}
                           onChange={(e) =>
-                            setTicketReplyDrafts((prev) => ({ ...prev, [ticket.id]: e.target.value }))
+                            setTicketReplyDrafts((prev) => ({ ...prev, [tk.id]: e.target.value }))
                           }
-                          placeholder="Resposta curta para o cliente (opcional)..."
-                          className="min-h-[38px] flex-1 rounded-xl border border-slate-300 bg-white px-3 text-xs"
+                          className="min-h-[34px] flex-1 rounded-lg border border-slate-300 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-[#111726] dark:text-slate-100"
                         />
                         <ActionButton
-                          variant="success"
+                          type="button"
                           size={44}
-                          onClick={() => void handleResolveTicket(ticket)}
+                          variant="primary"
+                          onClick={() => void handleResolveTicket(tk)}
                         >
-                          Marcar como Resolvido
+                          Resolver
                         </ActionButton>
                       </div>
-                    ) : ticket.admin_note ? (
-                      <p className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-[11px] text-emerald-800">
-                        <strong>Nota registrada:</strong> {ticket.admin_note}
-                      </p>
                     ) : null}
-                  </article>
+                  </div>
                 ))}
+                {(data?.tickets || []).length === 0 ? (
+                  <p className="text-xs text-slate-500">Nenhum chamado registrado.</p>
+                ) : null}
               </div>
-            )}
-          </section>
+            </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4" data-testid="admin-incidents-section">
-            <div>
-              <h3 className="text-sm font-bold text-[#0F172A]">
-                Incidentes Automáticos do Sistema ({data?.incidents?.length || 0})
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3 dark:border-slate-800 dark:bg-[#111726]">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-[#0F172A] dark:text-slate-100">
+                <KeyRound className="size-4 text-[#2563EB]" /> Gerador de Convite Rápido (AI10)
               </h3>
-              <p className="text-xs text-slate-500">
-                Webhooks Kiwify com pendência, falhas de e-mail, bloqueios HTTP 402 e fallbacks de IA.
-              </p>
-            </div>
-            {(data?.incidents?.length || 0) === 0 ? (
-              <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                Nenhum incidente crítico registrado até o momento.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {(data?.incidents || []).slice(0, 20).map((inc) => (
-                  <article key={inc.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono font-bold text-[#0F172A] truncate">{inc.type}</span>
-                      <span className="text-[11px] text-slate-500 shrink-0">
-                        {inc.createdAt ? new Date(inc.createdAt).toLocaleString('pt-BR') : '-'}
-                      </span>
-                    </div>
-                    <div className="font-mono text-[11px] text-slate-600 break-all">{inc.endpoint}</div>
-                    <p className="text-slate-700">{inc.detail}</p>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-      )}
-
-      {/* ABA 4: Gerador & Rastreador Simples de QR Codes + Links de Convite */}
-      {activeTab === 'qr_codes' && (
-        <div className="space-y-6">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <QrCode className="size-4 text-[#2563EB]" />
-                <div>
-                  <h3 className="text-sm font-bold text-[#0F172A]">
-                    Campanhas de QR Code com Nome & Link Rastreável
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Crie QR Codes com nome curto (ex.: Panfleto Centro, Cartão Mesa) apontando para qualquer URL.
-                  </p>
-                </div>
-              </div>
-              <div className="relative w-full sm:w-64">
-                <Search className="size-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="search"
-                  value={qrFilter}
-                  onChange={(e) => setQrFilter(e.target.value)}
-                  placeholder="Filtrar QR por nome..."
-                  className="w-full min-h-[40px] rounded-xl border border-slate-200 pl-9 pr-3 text-xs"
-                />
-              </div>
-            </div>
-
-            <form onSubmit={handleCreateQr} className="grid gap-3 sm:grid-cols-3 items-end">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Nome do QR Code
-                </label>
-                <input
-                  type="text"
-                  required
-                  data-testid="admin-qr-name-input"
-                  value={qrName}
-                  onChange={(e) => setQrName(e.target.value)}
-                  placeholder="Ex: Panfleto Centro"
-                  className="w-full min-h-[42px] rounded-xl border border-slate-200 px-3 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Link de destino
-                </label>
-                <input
-                  type="text"
-                  required
-                  data-testid="admin-qr-target-input"
-                  value={qrTargetUrl}
-                  onChange={(e) => setQrTargetUrl(e.target.value)}
-                  placeholder="https://companygen.store/..."
-                  className="w-full min-h-[42px] rounded-xl border border-slate-200 px-3 text-xs"
-                />
-              </div>
-              <ActionButton
-                type="submit"
-                variant="primary"
-                size={44}
-                data-testid="admin-qr-create-btn"
-                isLoading={creatingQr}
-                loadingText="Gerando QR..."
-                leftIcon={<Plus className="size-4" />}
-              >
-                Criar QR Code
-              </ActionButton>
-            </form>
-
-            {filteredQrs.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
-                Nenhum QR Code encontrado. Crie o primeiro acima para baixar e imprimir.
-              </p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredQrs.map((qr) => (
-                  <article
-                    key={qr.id}
-                    className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs"
-                  >
-                    <div className="flex items-start gap-3">
-                      {qr.pngDataUrl ? (
-                        <img
-                          src={qr.pngDataUrl}
-                          alt={`QR ${qr.name}`}
-                          className="size-20 shrink-0 rounded-xl border border-slate-200 bg-white p-1"
-                        />
-                      ) : null}
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <h4 className="truncate text-sm font-bold text-[#0F172A]">{qr.name}</h4>
-                        <p className="font-mono text-[11px] text-blue-700 truncate">/q/{qr.slug}</p>
-                        <p className="truncate text-[11px] text-slate-500" title={qr.target_url}>
-                          → {qr.target_url}
-                        </p>
-                        <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                          {Number(qr.scans_count || 0)} acessos
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                      {qr.pngDataUrl ? (
-                        <a
-                          href={qr.pngDataUrl}
-                          download={`qr-${qr.slug}.png`}
-                          className="inline-flex min-h-[36px] flex-1 items-center justify-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 font-semibold text-slate-700 hover:bg-slate-100"
-                        >
-                          <Download className="size-3.5" />
-                          PNG
-                        </a>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => handleCopyText(qr.id, qr.shortUrl || `${window.location.origin}/q/${qr.slug}`)}
-                        className="inline-flex min-h-[36px] flex-1 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 font-semibold text-blue-700 hover:bg-blue-100"
-                      >
-                        <Copy className="size-3.5" />
-                        Link
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Remover QR ${qr.name}`}
-                        onClick={() => void handleDeleteQr(qr.id)}
-                        className="inline-flex min-h-[36px] items-center justify-center rounded-lg border border-red-200 bg-red-50 px-2.5 text-red-700 hover:bg-red-100"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* Gerador de Links de Convite */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-            <div className="flex items-center gap-2">
-              <KeyRound className="size-4 text-[#2563EB]" />
-              <h3 className="text-sm font-bold text-[#0F172A]">Links de Convite & Créditos Iniciais</h3>
-            </div>
-
-            <form onSubmit={handleCreateInvite} className="grid gap-3 sm:grid-cols-4 items-end">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Créditos iniciais
-                </label>
+              <form onSubmit={handleCreateInvite} className="grid grid-cols-2 gap-2.5">
                 <input
                   type="number"
-                  min={10}
-                  max={100000}
                   value={inviteCredits}
                   onChange={(e) => setInviteCredits(e.target.value)}
-                  className="w-full min-h-[42px] rounded-xl border border-slate-200 px-3 text-sm"
+                  placeholder="Créditos"
+                  className="cg-tabular min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Limite de ativações
-                </label>
                 <input
                   type="number"
-                  min={1}
-                  max={500}
                   value={inviteMaxUses}
                   onChange={(e) => setInviteMaxUses(e.target.value)}
-                  className="w-full min-h-[42px] rounded-xl border border-slate-200 px-3 text-sm"
+                  placeholder="Usos máx."
+                  className="cg-tabular min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Observação (opcional)
-                </label>
                 <input
                   type="text"
                   value={inviteNote}
                   onChange={(e) => setInviteNote(e.target.value)}
-                  placeholder="Ex: Cliente VIP"
-                  className="w-full min-h-[42px] rounded-xl border border-slate-200 px-3 text-sm"
+                  placeholder="Observação do convite"
+                  className="col-span-2 min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+                />
+                <ActionButton
+                  type="submit"
+                  size={44}
+                  variant="primary"
+                  isLoading={creatingInvite}
+                  className="col-span-2"
+                  leftIcon={<Plus className="size-4" />}
+                >
+                  Gerar &amp; Copiar Link AI10
+                </ActionButton>
+              </form>
+            </section>
+          </div>
+        </div>
+      ) : null}
+
+      {/* SUB-ABA 2: FINANCEIRO & KIWIFY */}
+      {activeTab === 'finance' ? (
+        <div className="space-y-5">
+          {/* Unit Economics */}
+          <section
+            data-testid="admin-unit-economics"
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4 dark:border-slate-800 dark:bg-[#111726]"
+          >
+            <h3 className="text-sm font-bold text-[#0F172A] dark:text-slate-100">
+              Economia Real por Crédito (Kiwify × GLM × RunPod)
+            </h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-[#090D16]">
+                <div className="text-[11px] text-slate-500">Receita Bruta Kiwify</div>
+                <div className="cg-tabular text-lg font-extrabold text-[#0F172A] dark:text-slate-100">
+                  {formatBrl(summary?.grossRevenueCents)}
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-[#090D16]">
+                <div className="text-[11px] text-slate-500">Taxa Kiwify Estimada</div>
+                <div className="cg-tabular text-lg font-extrabold text-amber-600">
+                  -{formatBrl(summary?.kiwifyFeeCents)}
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-[#090D16]">
+                <div className="text-[11px] text-slate-500">Custo Estimado IA</div>
+                <div className="cg-tabular text-lg font-extrabold text-slate-700 dark:text-slate-300">
+                  -{formatBrl(summary?.aiCostCents)}
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-[#090D16]">
+                <div className="text-[11px] text-slate-500">Margem Líquida</div>
+                <div
+                  className={`cg-tabular text-lg font-extrabold ${(summary?.netMarginCents ?? 0) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}
+                >
+                  {formatBrl(summary?.netMarginCents)}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <span className="font-bold">Estornos automáticos 24h (failure_refund):</span>
+              <span className="cg-tabular rounded-lg bg-slate-100 px-2 py-0.5 dark:bg-slate-800">
+                GLM: {data?.engineHealth?.failureRefunds24h.glm ?? 0}
+              </span>
+              <span className="cg-tabular rounded-lg bg-slate-100 px-2 py-0.5 dark:bg-slate-800">
+                RunPod: {data?.engineHealth?.failureRefunds24h.runpod ?? 0}
+              </span>
+              <span className="cg-tabular rounded-lg bg-slate-100 px-2 py-0.5 dark:bg-slate-800">
+                SMTP: {data?.engineHealth?.failureRefunds24h.smtp ?? 0}
+              </span>
+            </div>
+          </section>
+
+          {/* Reconciliador Kiwify Event Bus & DLQ */}
+          <section
+            data-testid="admin-kiwify-dlq"
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4 dark:border-slate-800 dark:bg-[#111726]"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-[#0F172A] dark:text-slate-100">
+                Reconciliador Kiwify &amp; DLQ Replay Idempotente
+              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  data-testid="admin-kiwify-search"
+                  type="search"
+                  value={kwQuery}
+                  onChange={(e) => setKwQuery(e.target.value)}
+                  placeholder="Buscar order_id ou e-mail..."
+                  className="min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+                />
+                <select
+                  value={kwStatus}
+                  onChange={(e) => setKwStatus(e.target.value)}
+                  className="min-h-[38px] rounded-xl border border-slate-300 bg-white px-2.5 text-xs font-semibold dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+                >
+                  <option value="">Todos Status</option>
+                  <option value="failed">Falha (DLQ)</option>
+                  <option value="needs_review">Em Revisão</option>
+                  <option value="processed">Processado</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {filteredKiwifyEvents.map((ev) => {
+                const evKey = `${ev.order_id}-${ev.webhook_event_type}`;
+                return (
+                  <div
+                    key={evKey}
+                    data-testid={`admin-kiwify-event-${ev.order_id}`}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800 dark:bg-[#090D16]"
+                  >
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-[#0F172A] dark:text-slate-100">
+                          {ev.order_id}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          {ev.webhook_event_type}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            ev.processing_status === 'processed'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-rose-50 text-rose-700'
+                          }`}
+                        >
+                          {ev.processing_status || 'processed'}
+                        </span>
+                        {ev.classification ? (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                            {ev.classification}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="truncate text-[11px] text-slate-500">
+                        {ev.customer_email || 'Sem e-mail'} · {ev.credits ?? 0} cr
+                        {ev.error_message ? ` · Erro: ${ev.error_message}` : ''}
+                      </p>
+                    </div>
+                    <ActionButton
+                      type="button"
+                      size={44}
+                      variant="secondary"
+                      data-testid={`admin-kiwify-replay-${ev.order_id}`}
+                      isLoading={replayingId === evKey}
+                      onClick={() => void handleReplayKiwify(ev)}
+                      leftIcon={<RefreshCw className="size-3.5" />}
+                    >
+                      Replay Idempotente
+                    </ActionButton>
+                  </div>
+                );
+              })}
+              {filteredKiwifyEvents.length === 0 ? (
+                <p className="py-4 text-center text-xs text-slate-500">
+                  Nenhum evento Kiwify registrado no filtro atual.
+                </p>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {/* SUB-ABA 3: FROTA .EXE & IA */}
+      {activeTab === 'fleet' ? (
+        <div className="space-y-5">
+          {/* Canário DOM WhatsApp */}
+          <div
+            data-testid="admin-canary-dom-banner"
+            className={`flex items-center gap-3 rounded-2xl border p-4 text-xs font-semibold ${
+              data?.canaryDomAlert?.active
+                ? 'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-500/40 dark:bg-rose-950/50 dark:text-rose-200'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-950/35 dark:text-emerald-200'
+            }`}
+          >
+            {data?.canaryDomAlert?.active ? (
+              <ShieldAlert className="size-5 shrink-0 text-rose-600" />
+            ) : (
+              <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
+            )}
+            <div>
+              <p className="font-bold">
+                {data?.canaryDomAlert?.active
+                  ? 'WHATSAPP_DOM_CANARY — Seletores Degradados Detectados'
+                  : 'Seletores DOM WhatsApp Web — Frota Saudável'}
+              </p>
+              <p className="opacity-85">{data?.canaryDomAlert?.message}</p>
+            </div>
+          </div>
+
+          {/* Saúde dos Motores */}
+          <section className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#111726]">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                <Activity className="size-4 text-[#2563EB]" /> GLM-5.3 Arquitetura
+              </div>
+              <div className="cg-tabular mt-1 text-lg font-extrabold text-[#0F172A] dark:text-slate-100">
+                {data?.engineHealth?.glm.avgLatencyMs ?? 840} ms
+              </div>
+              <p className="cg-tabular text-[11px] text-slate-500">
+                Fallback 24h: {data?.engineHealth?.glm.fallbackRatePct ?? 0}%
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#111726]">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                <Zap className="size-4 text-violet-500" /> RunPod Imagens
+              </div>
+              <div className="mt-1 text-lg font-extrabold uppercase text-emerald-600">
+                {data?.engineHealth?.runpod.status ?? 'healthy'}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#111726]">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                <Monitor className="size-4 text-emerald-500" /> Máquinas Desktop Ativas
+              </div>
+              <div className="cg-tabular mt-1 text-lg font-extrabold text-[#0F172A] dark:text-slate-100">
+                {data?.desktopFleet?.length ?? 0}
+              </div>
+            </div>
+          </section>
+
+          {/* Política de Versão Mínima + Frota */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4 dark:border-slate-800 dark:bg-[#111726]">
+            <h3 className="text-sm font-bold text-[#0F172A] dark:text-slate-100">
+              Política de Versão Mínima Desktop (.exe)
+            </h3>
+            <form onSubmit={handleSaveDesktopPolicy} className="grid gap-3 sm:grid-cols-4 items-end">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Versão Mínima</label>
+                <input
+                  data-testid="admin-desktop-min-version"
+                  type="text"
+                  value={minVersion}
+                  onChange={(e) => setMinVersion(e.target.value)}
+                  className="cg-tabular min-h-[38px] w-full rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Última Release</label>
+                <input
+                  type="text"
+                  value={latestVersion}
+                  onChange={(e) => setLatestVersion(e.target.value)}
+                  className="cg-tabular min-h-[38px] w-full rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+                />
+              </div>
+              <label className="flex min-h-[38px] items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={forceUpdate}
+                  onChange={(e) => setForceUpdate(e.target.checked)}
+                />
+                Forçar atualização
+              </label>
+              <ActionButton type="submit" size={44} variant="primary" isLoading={savingPolicy}>
+                Salvar Política
+              </ActionButton>
+            </form>
+
+            <div className="space-y-2 pt-2">
+              {(data?.desktopFleet || []).map((m) => (
+                <div
+                  key={m.machineId}
+                  data-testid={`admin-fleet-row-${m.machineId}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800 dark:bg-[#090D16]"
+                >
+                  <div>
+                    <span className="font-bold text-[#0F172A] dark:text-slate-100">{m.machineId}</span>
+                    <span className="ml-2 text-slate-500">
+                      v{m.appVersion} · {m.osPlatform} · {m.webviewPhase}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {m.outdated ? (
+                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-900">
+                        Desatualizado
+                      </span>
+                    ) : null}
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                        m.selectorHealth === 'degraded'
+                          ? 'bg-rose-100 text-rose-700'
+                          : 'bg-emerald-50 text-emerald-700'
+                      }`}
+                    >
+                      {m.selectorHealth}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {(data?.desktopFleet || []).length === 0 ? (
+                <p className="text-xs text-slate-500">Nenhuma máquina Desktop enviou heartbeat ainda.</p>
+              ) : null}
+            </div>
+          </section>
+
+          {/* Feature Flags Globais */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3 dark:border-slate-800 dark:bg-[#111726]">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-[#0F172A] dark:text-slate-100">
+              <Flag className="size-4 text-violet-600" /> Feature Flags Dinâmicas
+            </h3>
+            <div className="space-y-2">
+              {Object.values(data?.featureFlags || {}).map((flag) => (
+                <div
+                  key={flag.key}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800 dark:bg-[#090D16]"
+                >
+                  <div>
+                    <p className="font-bold text-[#0F172A] dark:text-slate-100">{flag.key}</p>
+                    <p className="text-[11px] text-slate-500">{flag.description}</p>
+                  </div>
+                  <select
+                    value={flag.globalMode}
+                    onChange={(e) =>
+                      void handleUpdateFlagMode(flag, e.target.value as AdminFeatureFlagDef['globalMode'])
+                    }
+                    className="min-h-[36px] rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-bold dark:border-slate-700 dark:bg-[#111726] dark:text-slate-100"
+                  >
+                    <option value="off">Desligada (off)</option>
+                    <option value="admin_only">Somente Admin</option>
+                    <option value="beta_list">Lista Beta ({flag.betaUserIds.length})</option>
+                    <option value="all">Liberada para Todos</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {/* SUB-ABA 4: QR & LOTES */}
+      {activeTab === 'qr_batches' ? (
+        <div className="space-y-5">
+          {/* Gerador de Lotes Gráficos A4/ZIP */}
+          <section
+            data-testid="admin-qr-batch-generator"
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4 dark:border-slate-800 dark:bg-[#111726]"
+          >
+            <div className="flex items-center gap-2">
+              <Package className="size-5 text-[#2563EB]" />
+              <div>
+                <h3 className="text-sm font-bold text-[#0F172A] dark:text-slate-100">
+                  Gerador de Lotes Gráficos A4 / ZIP
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Cria até 50 códigos AI10 + QR Codes rastreáveis em PNG + manifest.csv + cartela A4 para gráfica.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateQrBatch} className="grid gap-3 sm:grid-cols-4 items-end">
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Nome do Lote</label>
+                <input
+                  data-testid="admin-qr-batch-name"
+                  type="text"
+                  value={batchName}
+                  onChange={(e) => setBatchName(e.target.value)}
+                  className="min-h-[40px] w-full rounded-xl border border-slate-300 bg-white px-3 text-xs dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Qtd (1–50)</label>
+                <input
+                  data-testid="admin-qr-batch-count"
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={batchCount}
+                  onChange={(e) => setBatchCount(e.target.value)}
+                  className="cg-tabular min-h-[40px] w-full rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Créditos / QR</label>
+                <input
+                  data-testid="admin-qr-batch-credits"
+                  type="number"
+                  min={10}
+                  value={batchCredits}
+                  onChange={(e) => setBatchCredits(e.target.value)}
+                  className="cg-tabular min-h-[40px] w-full rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
                 />
               </div>
               <ActionButton
                 type="submit"
-                variant="primary"
                 size={44}
-                data-testid="admin-create-invite-btn"
-                isLoading={creatingInvite}
-                loadingText="Gerando..."
-                leftIcon={<Plus className="size-4" />}
+                variant="primary"
+                data-testid="admin-qr-batch-submit"
+                isLoading={creatingBatch}
+                className="sm:col-span-4"
+                leftIcon={<QrCode className="size-4" />}
               >
-                Criar Link de Convite
+                Gerar Lote Gráfico A4/ZIP
               </ActionButton>
             </form>
 
-            <div className="space-y-2 max-h-[260px] overflow-y-auto pt-1">
-              {(data?.invites || []).map((inv, idx) => (
-                <div
-                  key={`${inv.masked}-${idx}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs"
-                >
-                  <div className="min-w-0 space-y-0.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono font-bold text-[#0F172A]">
-                        {inv.code || inv.masked}
-                      </span>
-                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">
-                        +{inv.credits} créditos
-                      </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          inv.status === 'active'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {inv.status} ({inv.redemptionCount}/{inv.maxRedemptions})
-                      </span>
-                      {inv.note ? <span className="text-slate-500">· {inv.note}</span> : null}
-                    </div>
-                    {inv.inviteUrl ? (
-                      <p className="truncate text-[11px] font-mono text-slate-500">{inv.inviteUrl}</p>
-                    ) : null}
+            {lastBatch ? (
+              <div
+                data-testid="admin-qr-batch-result"
+                className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-3 dark:border-emerald-500/35 dark:bg-emerald-950/30"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                      {lastBatch.batchName} — {lastBatch.count} códigos AI10 prontos ({lastBatch.creditsPerCode} cr cada)
+                    </p>
+                    <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300">
+                      ZIP com manifest.csv + {lastBatch.count} PNGs + Cartela A4 imprimível
+                    </p>
                   </div>
+                  <div className="flex flex-wrap gap-2">
+                    <ActionButton
+                      type="button"
+                      size={44}
+                      variant="primary"
+                      data-testid="admin-qr-batch-download-zip"
+                      onClick={() => downloadBase64Zip(lastBatch)}
+                      leftIcon={<Download className="size-4" />}
+                    >
+                      Baixar ZIP
+                    </ActionButton>
+                    <ActionButton
+                      type="button"
+                      size={44}
+                      variant="secondary"
+                      data-testid="admin-qr-batch-print-a4"
+                      onClick={() => openPrintA4(lastBatch)}
+                      leftIcon={<Printer className="size-4" />}
+                    >
+                      Cartela A4
+                    </ActionButton>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {lastBatch.codes.slice(0, 3).map((item) => (
+                    <div
+                      key={item.code}
+                      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-[#111726]"
+                    >
+                      <div className="shrink-0 rounded-lg bg-[#FFFFFF] p-3 border border-slate-200">
+                        <img src={item.pngDataUrl} alt={item.code} className="size-14 object-contain" />
+                      </div>
+                      <div className="min-w-0 text-[11px]">
+                        <div className="font-mono font-bold text-[#0F172A] dark:text-slate-100">
+                          {item.code}
+                        </div>
+                        <div className="truncate text-slate-500">/q/{item.code.split('-')[2].toLowerCase()}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </section>
 
-                  <div className="flex items-center gap-2">
-                    {inv.inviteUrl && inv.status === 'active' ? (
+          {/* Criar QR Individual + Listagem com Quiet Zone #FFFFFF p-3 */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4 dark:border-slate-800 dark:bg-[#111726]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-[#0F172A] dark:text-slate-100">
+                Campanhas QR Individuais (/q/:slug Auto-Healing)
+              </h3>
+              <input
+                type="search"
+                value={qrFilter}
+                onChange={(e) => setQrFilter(e.target.value)}
+                placeholder="Filtrar campanhas..."
+                className="min-h-[36px] rounded-xl border border-slate-300 bg-white px-3 text-xs dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+              />
+            </div>
+
+            <form onSubmit={handleCreateQr} className="grid gap-2 sm:grid-cols-3">
+              <input
+                type="text"
+                value={qrName}
+                onChange={(e) => setQrName(e.target.value)}
+                placeholder="Nome da campanha"
+                className="min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+              />
+              <input
+                type="url"
+                value={qrTargetUrl}
+                onChange={(e) => setQrTargetUrl(e.target.value)}
+                placeholder="https://companygen.store/..."
+                className="min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+              />
+              <ActionButton type="submit" size={44} variant="secondary" isLoading={creatingQr}>
+                Criar QR Rastreado
+              </ActionButton>
+            </form>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredQrs.slice(0, 12).map((q) => (
+                <div
+                  key={q.id}
+                  className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800 dark:bg-[#090D16]"
+                >
+                  {q.pngDataUrl ? (
+                    <div className="shrink-0 rounded-lg bg-[#FFFFFF] p-3 border border-slate-200">
+                      <img src={q.pngDataUrl} alt={q.name} className="size-14 object-contain" />
+                    </div>
+                  ) : null}
+                  <div className="min-w-0 flex-1 space-y-1 text-xs">
+                    <div className="truncate font-bold text-[#0F172A] dark:text-slate-100">{q.name}</div>
+                    <div className="cg-tabular text-[11px] font-semibold text-[#2563EB]">
+                      /q/{q.slug} · {q.scans_count} acesso(s)
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
                       <button
                         type="button"
-                        onClick={() => handleCopyText(inv.masked + idx, inv.inviteUrl || '')}
-                        className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        onClick={() => handleCopyText(q.id, q.shortUrl || `/q/${q.slug}`)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-[#2563EB] dark:text-slate-300"
                       >
-                        {copiedCode === inv.masked + idx ? (
-                          <Check className="size-3.5 text-emerald-600" />
-                        ) : (
-                          <Copy className="size-3.5" />
-                        )}
-                        Copiar link
+                        {copiedCode === q.id ? <Check className="size-3" /> : <Copy className="size-3" />}
+                        Copiar
                       </button>
-                    ) : null}
-                    {inv.status === 'active' ? (
                       <button
                         type="button"
-                        onClick={() => void handleRevokeInvite(inv)}
-                        className="inline-flex min-h-[34px] items-center rounded-lg border border-red-200 bg-red-50 px-2.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+                        onClick={() => void handleDeleteQr(q.id)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:underline"
                       >
-                        Revogar
+                        <Trash2 className="size-3" /> Excluir
                       </button>
-                    ) : null}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </section>
         </div>
-      )}
+      ) : null}
+
+      <AdminUser360Drawer
+        open={Boolean(drawerUser)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setDrawerUser(null);
+        }}
+        adminUserId={userId}
+        targetUser={drawerUser}
+        featureFlags={data?.featureFlags || {}}
+        kiwifyEvents={data?.kiwifyEvents || []}
+        onRefreshOverview={loadOverview}
+        onEnterSupportMode={onEnterSupportMode}
+      />
     </div>
   );
 }

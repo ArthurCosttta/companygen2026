@@ -88,12 +88,53 @@ export function DrawerContainer({
             }
           }}
           onPointerDownOutside={(event) => {
-            if (isCloseBlocked) {
+            const originalEvent = (
+              event as unknown as {
+                detail?: { originalEvent?: Event & { __cgToastOrigin?: boolean } };
+              }
+            ).detail?.originalEvent;
+            const rawTarget = originalEvent?.target ?? event.target;
+            const target =
+              rawTarget instanceof Element ? rawTarget : (rawTarget as Node | null)?.parentElement;
+            if (
+              isCloseBlocked ||
+              originalEvent?.__cgToastOrigin ||
+              target?.closest?.('[data-cg-toast-region="true"]')
+            ) {
+              event.preventDefault();
+            }
+          }}
+          onFocusOutside={(event) => {
+            const originalEvent = (
+              event as unknown as {
+                detail?: { originalEvent?: Event & { __cgToastOrigin?: boolean } };
+              }
+            ).detail?.originalEvent;
+            const rawTarget = originalEvent?.target ?? event.target;
+            const target =
+              rawTarget instanceof Element ? rawTarget : (rawTarget as Node | null)?.parentElement;
+            if (
+              isCloseBlocked ||
+              originalEvent?.__cgToastOrigin ||
+              target?.closest?.('[data-cg-toast-region="true"]')
+            ) {
               event.preventDefault();
             }
           }}
           onInteractOutside={(event) => {
-            if (isCloseBlocked) {
+            const originalEvent = (
+              event as unknown as {
+                detail?: { originalEvent?: Event & { __cgToastOrigin?: boolean } };
+              }
+            ).detail?.originalEvent;
+            const rawTarget = originalEvent?.target ?? event.target;
+            const target =
+              rawTarget instanceof Element ? rawTarget : (rawTarget as Node | null)?.parentElement;
+            if (
+              isCloseBlocked ||
+              originalEvent?.__cgToastOrigin ||
+              target?.closest?.('[data-cg-toast-region="true"]')
+            ) {
               event.preventDefault();
             }
           }}

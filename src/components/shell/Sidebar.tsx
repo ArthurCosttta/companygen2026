@@ -54,6 +54,8 @@ export interface ElectronHealthInfo {
   trayActive?: boolean;
   soundEnabled?: boolean;
   lastPollMs?: number;
+  updateReadyVersion?: string;
+  onInstallUpdate?: () => void;
 }
 
 export interface SidebarProps {
@@ -347,6 +349,16 @@ export function Sidebar({
                   Bandeja {electronHealth.trayActive !== false ? 'ativa' : 'pausada'} · Som{' '}
                   {electronHealth.soundEnabled !== false ? 'ligado' : 'mudo'}
                 </p>
+                {electronHealth.updateReadyVersion ? (
+                  <button
+                    type="button"
+                    data-testid="sidebar-updater-restart-btn"
+                    onClick={electronHealth.onInstallUpdate}
+                    className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-lg bg-[#2563EB] px-2 py-1 text-[10px] font-bold text-white shadow-xs hover:bg-[#1D4ED8]"
+                  >
+                    Atualização pronta ({electronHealth.updateReadyVersion}) · Reiniciar
+                  </button>
+                ) : null}
               </>
             )}
           </div>

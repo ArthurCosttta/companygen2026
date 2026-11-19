@@ -365,19 +365,11 @@ export function StorePublishedModal({
           escolherem produtos e fecharem pedidos direto com você.
         </div>
 
-        <div className="space-y-1.5">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Link público da sua vitrine
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              type="text"
-              readOnly
-              value={publicUrl}
-              aria-label="Link público da sua vitrine"
-              onClick={(e) => e.currentTarget.select()}
-              className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-            />
+        <div className="space-y-2">
+          <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-xs sm:text-sm font-semibold text-[#0F172A]">
+              Vitrine Online Publicada · Link pronto na memória ao copiar
+            </span>
             <ActionButton
               variant={copied ? 'success' : 'softBlue'}
               size={44}

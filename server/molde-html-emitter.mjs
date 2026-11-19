@@ -163,8 +163,25 @@ a { color: inherit; }
 }
 h1, h2, h3 { font-family: var(--font-heading); letter-spacing: -0.02em; margin: 0 0 12px; color: var(--ink); }
 .cg-hero-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 36px; align-items: center; }
-.cg-hero-title { font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.08; }
-.cg-hero-sub { font-size: 1.05rem; color: var(--ink-muted); max-width: 58ch; margin: 0 0 24px; }
+.cg-hero-title { font-size: clamp(1.7rem, 4.2vw, 3.1rem); line-height: 1.08; }
+.cg-hero-sub { font-size: clamp(0.95rem, 2vw, 1.05rem); color: var(--ink-muted); max-width: 58ch; margin: 0 0 20px; }
+.cg-tabular { font-variant-numeric: tabular-nums; }
+.cg-pix-pill {
+  display: inline-flex; align-items: center; gap: 4px; width: fit-content;
+  border-radius: 999px; padding: 3px 10px; font-size: 0.72rem; font-weight: 800;
+  background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0;
+  font-variant-numeric: tabular-nums;
+}
+.cg-bundles-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.cg-bundle-card {
+  background: var(--card); border: 1px solid rgba(15,23,42,0.1); border-radius: var(--radius);
+  padding: 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
+}
+.cg-faq-item {
+  background: var(--card); border: 1px solid rgba(15,23,42,0.1); border-radius: 14px;
+  padding: 14px 18px; transition: border-color 200ms ease, background-color 200ms ease;
+}
+.cg-faq-item[open] { border-color: var(--accent); }
 .cg-hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .cg-media-box {
   border-radius: var(--radius); overflow: hidden; background: #F1F5F9;
@@ -261,8 +278,10 @@ h1, h2, h3 { font-family: var(--font-heading); letter-spacing: -0.02em; margin: 
 @media (max-width: 420px) {
   html, body { max-width: 100%; overflow-x: hidden; }
   .cg-container { padding-left: 14px; padding-right: 14px; }
+  .cg-section { padding: 28px 0; }
+  .cg-media-box { aspect-ratio: 16 / 10; max-height: 210px; }
   .cg-exp-wrap { padding: 18px 14px; }
-  .cg-options-grid, .cg-catalog-grid, .cg-highlights-grid, .cg-diff-strip { grid-template-columns: minmax(0, 1fr); }
+  .cg-options-grid, .cg-catalog-grid, .cg-highlights-grid, .cg-diff-strip, .cg-bundles-grid { grid-template-columns: minmax(0, 1fr); }
   .cg-summary-total, .cg-price { white-space: nowrap; }
   .cg-btn { width: 100%; min-width: 0; padding: 11px 14px; text-align: center; line-height: 1.25; }
   .cg-hero-bleed-content { padding: 22px 16px; }
@@ -346,9 +365,14 @@ export function buildMoldeAppJs() {
           }
         });
       } else if (ctrl.atomType === 'slider_range') {
-        var qty = Number(val !== undefined ? val : ctrl.min || 1);
-        totalCents += Math.round(qty * Number(ctrl.pricePerUnitCents || 0));
+        var minV = Number(ctrl.min || 1);
+        var maxV = Number(ctrl.max || 10);
+        var qty = Math.max(minV, Math.min(maxV, Math.round(Number(val !== undefined ? val : minV))));
+        var sliderSku = ctrl.skuRef ? byRef[String(ctrl.skuRef).toUpperCase()] || byRef[String(ctrl.skuRef)] : null;
+        var unitC = sliderSku ? Math.round(Number(sliderSku.priceCents || 0)) : Math.round(Number(ctrl.pricePerUnitCents || 0));
+        totalCents += Math.round(qty * unitC);
         lines.push(ctrl.label + ': ' + qty + ' ' + (ctrl.unitLabel || ''));
+        if (sliderSku) selectedProducts.push(Object.assign({}, sliderSku, { quantity: qty }));
       } else if (ctrl.atomType === 'slot_time_picker') {
         if (val) lines.push(ctrl.label + ': ' + val);
       }
@@ -367,12 +391,13 @@ export function buildMoldeAppJs() {
     renderCartItems();
   }
 
-  function addItemToCart(item) {
+  function addItemToCart(item, qtyOverride) {
     if (!item) return;
+    var addQty = Math.max(1, Math.round(Number(qtyOverride !== undefined ? qtyOverride : item.quantity || 1)));
     var key = item.id || item.sku || item.name;
     var existing = cart.find(function (c) { return (c.id || c.sku || c.name) === key; });
-    if (existing) existing.qty = Number(existing.qty || 1) + 1;
-    else cart.push({ id: item.id, sku: item.sku, name: item.name, priceCents: Number(item.priceCents || 0), qty: 1 });
+    if (existing) existing.qty = Number(existing.qty || 1) + addQty;
+    else cart.push({ id: item.id, sku: item.sku, name: item.name, priceCents: Math.round(Number(item.priceCents || 0)), qty: addQty });
     saveCart();
   }
 
@@ -493,7 +518,7 @@ export function buildMoldeAppJs() {
       primaryBtn.addEventListener('click', function () {
         var res = updateSummary();
         if (res.selectedProducts.length > 0) {
-          res.selectedProducts.forEach(addItemToCart);
+          res.selectedProducts.forEach(function (sp) { addItemToCart(sp, sp.quantity || 1); });
           flashButtonAdded(primaryBtn);
         } else {
           addItemToCart({
@@ -524,7 +549,22 @@ export function buildMoldeAppJs() {
       var sku = btn.getAttribute('data-cg-add-sku');
       var item = (storeData.catalog || []).find(function (p) { return (p.sku || p.id) === sku; });
       if (item) {
-        addItemToCart(item);
+        addItemToCart(item, 1);
+        flashButtonAdded(btn);
+      }
+    });
+  });
+
+  // ComplementaryBundles add-combo buttons
+  document.querySelectorAll('[data-cg-add-bundle]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var raw = String(btn.getAttribute('data-cg-add-bundle') || '');
+      var skus = raw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      var matched = skus.map(function (s) {
+        return (storeData.catalog || []).find(function (p) { return String(p.sku || p.id) === s; });
+      }).filter(Boolean);
+      if (matched.length > 0) {
+        matched.forEach(function (it) { addItemToCart(it, 1); });
         flashButtonAdded(btn);
       }
     });
@@ -828,9 +868,11 @@ export function renderV9SectionHtml(sec, formulasIr, relPrefix = '') {
       </section>`;
 
     case 'FaqAccordion':
+    case 'ContextualFaq':
       return `<section class="cg-section">
         <div class="cg-container">
           <h2 style="font-size:1.75rem;">${escapeHtml(cfg.title || 'Dúvidas frequentes')}</h2>
+          ${cfg.subtitle ? `<p style="color:var(--ink-muted);margin-bottom:18px;">${escapeHtml(cfg.subtitle)}</p>` : ''}
           <div class="cg-faq-list">
             ${(cfg.items || [])
               .map(
@@ -844,7 +886,49 @@ export function renderV9SectionHtml(sec, formulasIr, relPrefix = '') {
         </div>
       </section>`;
 
-    case 'CatalogGrid':
+    case 'ComplementaryBundles': {
+      const pixPct = Math.max(0, Math.min(90, Number(storeInfo.pixDiscountPercent || 0)));
+      const catalogMap = new Map();
+      catalog.filter((p) => p && p.active !== false).forEach((p) => {
+        if (p.sku) catalogMap.set(String(p.sku).toUpperCase(), p);
+        if (p.id) catalogMap.set(String(p.id), p);
+      });
+      const bundleCards = (cfg.items || [])
+        .map((bundle) => {
+          const matched = (Array.isArray(bundle.skuIds) ? bundle.skuIds : [])
+            .map((id) => catalogMap.get(String(id).toUpperCase()) || catalogMap.get(String(id)))
+            .filter(Boolean);
+          if (matched.length === 0) return '';
+          const totalCents = matched.reduce((s, p) => s + Math.round(Number(p.priceCents || 0)), 0);
+          const pixSaveCents = pixPct > 0 ? Math.round((totalCents * pixPct) / 100) : 0;
+          const namesLine = matched.map((m) => m.name).join(' + ');
+          const skusAttr = matched.map((m) => String(m.sku || m.id)).join(',');
+          return `<div class="cg-bundle-card">
+            <div>
+              <h3 style="font-size:1.05rem;margin:0 0 6px;">${escapeHtml(bundle.title || 'Combine e Economize')}</h3>
+              <p style="font-size:0.85rem;color:var(--ink-muted);margin:0;">${escapeHtml(namesLine)}</p>
+            </div>
+            <div style="display:grid;gap:8px;">
+              ${pixSaveCents > 0 ? `<span class="cg-pix-pill">Economize ${escapeHtml(formatBrl(pixSaveCents))} no Pix</span>` : ''}
+              <div class="cg-price cg-tabular">${escapeHtml(formatBrl(totalCents))}</div>
+              <button type="button" class="cg-btn cg-btn-primary" data-cg-add-bundle="${escapeHtml(skusAttr)}">Adicionar Combo</button>
+            </div>
+          </div>`;
+        })
+        .filter(Boolean)
+        .join('');
+      if (!bundleCards) return '';
+      return `<section class="cg-section" id="combos">
+        <div class="cg-container">
+          <h2 style="font-size:1.75rem;">${escapeHtml(cfg.title || 'Combine e Economize')}</h2>
+          ${cfg.subtitle ? `<p style="color:var(--ink-muted);margin-bottom:20px;">${escapeHtml(cfg.subtitle)}</p>` : ''}
+          <div class="cg-bundles-grid">${bundleCards}</div>
+        </div>
+      </section>`;
+    }
+
+    case 'CatalogGrid': {
+      const catalogPixPct = Math.max(0, Math.min(90, Number(storeInfo.pixDiscountPercent || 0)));
       return `<section class="cg-section" id="catalogo">
         <div class="cg-container">
           <h2 style="font-size:1.75rem;">${escapeHtml(cfg.title || 'Catálogo')}</h2>
@@ -862,20 +946,30 @@ export function renderV9SectionHtml(sec, formulasIr, relPrefix = '') {
                     .map((w) => (w[0] || '').toUpperCase())
                     .join('') || 'CG',
                 );
+                const focalX = Math.min(100, Math.max(0, Number(p.imageFocalPoint?.x ?? 50)));
+                const focalY = Math.min(100, Math.max(0, Number(p.imageFocalPoint?.y ?? 50)));
                 const thumbHtml = itemImg
-                  ? `<img src="${escapeHtml(itemImg)}" alt="${escapeHtml(p.name)}" />`
+                  ? `<img src="${escapeHtml(itemImg)}" alt="${escapeHtml(p.name)}" style="object-position:${focalX}% ${focalY}%;" />`
                   : `<div class="cg-neutral-gray-box">
                       <div style="width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,0.86);border:1px solid rgba(15,23,42,0.12);border-bottom:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;color:var(--ink);">${initials}</div>
                       <span>${escapeHtml(p.category || 'Catálogo')}</span>
                     </div>`;
+                const outOfStock = Number(p.stock ?? 10) <= 0;
+                const priceCents = Math.round(Number(p.priceCents || 0));
+                const pixSaveCents = catalogPixPct > 0 ? Math.round((priceCents * catalogPixPct) / 100) : 0;
                 return `<article class="cg-product-card">
                   <div class="cg-product-thumb">${thumbHtml}</div>
                   <div class="cg-product-body">
                     <span style="font-size:0.72rem;font-weight:700;color:var(--ink-muted);text-transform:uppercase;">${escapeHtml(p.category || 'Geral')}</span>
                     <h3 style="font-size:1rem;margin:0;">${escapeHtml(p.name)}</h3>
                     ${p.variation && p.variation !== 'Padrão' ? `<span style="font-size:0.8rem;color:var(--ink-muted);">${escapeHtml(p.variation)}</span>` : ''}
-                    <div class="cg-price">${formatBrl(p.priceCents)}</div>
-                    <button type="button" class="cg-btn cg-btn-primary" style="margin-top:auto;" data-cg-add-sku="${escapeHtml(p.sku || p.id)}">${escapeHtml(cfg.itemActionLabel || 'Adicionar à sacola')}</button>
+                    ${pixSaveCents > 0 ? `<span class="cg-pix-pill">Economize ${escapeHtml(formatBrl(pixSaveCents))} no Pix</span>` : ''}
+                    <div class="cg-price cg-tabular">${formatBrl(priceCents)}</div>
+                    ${
+                      outOfStock
+                        ? `<button type="button" disabled class="cg-btn" style="margin-top:auto;min-height:44px;opacity:0.6;cursor:not-allowed;">Esgotado</button>`
+                        : `<button type="button" class="cg-btn cg-btn-primary" style="margin-top:auto;min-height:44px;" data-cg-add-sku="${escapeHtml(p.sku || p.id)}">${escapeHtml(cfg.itemActionLabel || 'Adicionar à sacola')}</button>`
+                    }
                   </div>
                 </article>`;
               })
@@ -883,6 +977,7 @@ export function renderV9SectionHtml(sec, formulasIr, relPrefix = '') {
           </div>
         </div>
       </section>`;
+    }
 
     case 'ClosingScheduleSplit': {
       const imgUrl = toRelativeMoldeAsset(cfg.imageUrl, relPrefix);

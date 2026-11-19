@@ -12,7 +12,9 @@ import {
   formatCurrencyBRL,
   type CatalogItemType,
   type CatalogProduct,
+  type ProductFocalPoint,
 } from '@/schemas/profile.schema';
+import { validateAndOptimizeImageFile } from '@/utils/imageOptimize';
 import {
   updateBusinessProfile,
   type ProfileSnapshot,
@@ -48,8 +50,11 @@ interface ProductFormState {
   category: string;
   variation: string;
   stockText: string;
+  lowStockThresholdText: string;
   description: string;
   imageUrl: string;
+  imageFocalPoint: ProductFocalPoint;
+  imageLowRes: boolean;
   itemType: CatalogItemType;
   prazoOuDuracao: string;
   mensagemMolde: string;
@@ -64,8 +69,11 @@ function createInitialForm(product: CatalogProduct | null): ProductFormState {
       category: 'Geral',
       variation: 'Padrão',
       stockText: '10',
+      lowStockThresholdText: '3',
       description: '',
       imageUrl: '',
+      imageFocalPoint: { x: 50, y: 50 },
+      imageLowRes: false,
       itemType: 'produto_fisico',
       prazoOuDuracao: '',
       mensagemMolde: '',
@@ -79,8 +87,16 @@ function createInitialForm(product: CatalogProduct | null): ProductFormState {
     category: product.category || 'Geral',
     variation: product.variation || 'Padrão',
     stockText: String(Number.isFinite(product.stock) ? product.stock : 0),
+    lowStockThresholdText: String(
+      Number.isFinite(product.lowStockThreshold) ? product.lowStockThreshold : 3,
+    ),
     description: product.description || '',
     imageUrl: product.imageUrl || '',
+    imageFocalPoint: {
+      x: Number.isFinite(product.imageFocalPoint?.x) ? Number(product.imageFocalPoint?.x) : 50,
+      y: Number.isFinite(product.imageFocalPoint?.y) ? Number(product.imageFocalPoint?.y) : 50,
+    },
+    imageLowRes: Boolean(product.imageLowRes),
     itemType,
     prazoOuDuracao: product.prazoOuDuracao || '',
     mensagemMolde: product.mensagemMolde || buildDefaultMensagemMolde(product),
@@ -135,8 +151,11 @@ export function ProductEditorDrawer({
       form.category !== baseline.category ||
       form.variation !== baseline.variation ||
       form.stockText !== baseline.stockText ||
+      form.lowStockThresholdText !== baseline.lowStockThresholdText ||
       form.description !== baseline.description ||
       form.imageUrl !== baseline.imageUrl ||
+      form.imageFocalPoint.x !== baseline.imageFocalPoint.x ||
+      form.imageFocalPoint.y !== baseline.imageFocalPoint.y ||
       form.itemType !== baseline.itemType ||
       form.prazoOuDuracao !== baseline.prazoOuDuracao ||
       form.mensagemMolde !== baseline.mensagemMolde ||
@@ -147,6 +166,10 @@ export function ProductEditorDrawer({
   const cleanName = form.name.trim();
   const parsedPriceCents = parseBRLInputToCents(form.priceText);
   const parsedStock = Math.max(0, Number.parseInt(form.stockText.replace(/\D/g, ''), 10) || 0);
+  const parsedLowStockThreshold = Math.max(
+    0,
+    Math.min(999, Number.parseInt(form.lowStockThresholdText.replace(/\D/g, ''), 10) || 0),
+  );
 
   const isNameValid = cleanName.length >= 2;
   const isPriceValid = parsedPriceCents > 0;
@@ -183,40 +206,52 @@ export function ProductEditorDrawer({
     onOpenChange(false);
   }
 
-  function handleLocalFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+  const [optimizingPhoto, setOptimizingPhoto] = React.useState(false);
+  const [draggingFocal, setDraggingFocal] = React.useState(false);
+
+  async function handleLocalFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
 
-    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
-      showToast({
-        type: 'error',
-        message: 'Escolha uma imagem JPG, PNG, WebP ou GIF.',
+    setOptimizingPhoto(true);
+    try {
+      const optimized = await validateAndOptimizeImageFile(file, {
+        maxDimension: 1200,
+        quality: 0.82,
+        minRecommendedPx: 500,
       });
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      showToast({
-        type: 'error',
-        message: 'A imagem deve ter no máximo 2 MB.',
-      });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      if (result) {
-        setForm((prev) => ({ ...prev, imageUrl: result }));
+      setForm((prev) => ({
+        ...prev,
+        imageUrl: optimized.dataUrl,
+        imageLowRes: optimized.lowResolution,
+      }));
+      if (optimized.lowResolution) {
+        showToast({
+          type: 'amber',
+          message: `Foto otimizada (${optimized.originalWidth}×${optimized.originalHeight}px). Recomendamos >= 500px para mais nitidez.`,
+          durationMs: 3200,
+        });
       }
-    };
-    reader.onerror = () => {
+    } catch (err) {
       showToast({
         type: 'error',
-        message: 'Não foi possível ler o arquivo selecionado.',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'Formato de imagem inválido ou não permitido. Envie JPG, PNG ou WebP real.',
       });
-    };
-    reader.readAsDataURL(file);
+    } finally {
+      setOptimizingPhoto(false);
+    }
+  }
+
+  function updateFocalFromPointer(clientX: number, clientY: number, el: HTMLDivElement) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const x = Math.min(100, Math.max(0, Math.round(((clientX - rect.left) / rect.width) * 100)));
+    const y = Math.min(100, Math.max(0, Math.round(((clientY - rect.top) / rect.height) * 100)));
+    setForm((prev) => ({ ...prev, imageFocalPoint: { x, y } }));
   }
 
   async function handleSearchPhotos() {
@@ -279,6 +314,8 @@ export function ProductEditorDrawer({
         prazoOuDuracao: form.prazoOuDuracao.trim(),
       });
 
+    const resolvedActive = parsedStock === 0 ? false : form.active;
+
     const nextProduct: CatalogProduct = {
       id: internalCodes.id,
       sku: internalCodes.sku,
@@ -288,7 +325,11 @@ export function ProductEditorDrawer({
       priceCents: parsedPriceCents,
       variation: finalVariation,
       stock: parsedStock,
-      active: form.active,
+      lowStockThreshold: parsedLowStockThreshold,
+      autoPausedOutOfStock: parsedStock === 0 ? true : false,
+      imageFocalPoint: form.imageFocalPoint,
+      imageLowRes: form.imageLowRes,
+      active: resolvedActive,
       imageUrl: finalImageUrl,
       approvedAsset: true,
       itemType: form.itemType,
@@ -405,33 +446,84 @@ export function ProductEditorDrawer({
             </div>
           ) : null}
 
-          {/* Foto do Produto */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <img
-                src={previewUrl}
-                alt={cleanName || 'Prévia do produto'}
-                className="size-24 shrink-0 rounded-xl border border-slate-200 bg-white object-cover shadow-xs"
-              />
+          {/* Foto do Produto & Enquadramento Focal 1:1 */}
+          <div className="rounded-2xl border border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] p-4 space-y-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+              <div
+                data-testid="drawer-focal-point-box"
+                onClick={(e) => {
+                  updateFocalFromPointer(e.clientX, e.clientY, e.currentTarget);
+                }}
+                onPointerDown={(e) => {
+                  setDraggingFocal(true);
+                  updateFocalFromPointer(e.clientX, e.clientY, e.currentTarget);
+                }}
+                onPointerMove={(e) => {
+                  if (draggingFocal) {
+                    updateFocalFromPointer(e.clientX, e.clientY, e.currentTarget);
+                  }
+                }}
+                onPointerUp={() => setDraggingFocal(false)}
+                onPointerLeave={() => setDraggingFocal(false)}
+                title="Clique ou arraste para ajustar o ponto focal da foto na vitrine"
+                className="relative aspect-square size-28 shrink-0 cursor-crosshair select-none overflow-hidden rounded-xl border border-[var(--cg-border-strong)] bg-white dark:bg-[#090D16] shadow-xs"
+              >
+                <img
+                  src={previewUrl}
+                  alt={cleanName || 'Prévia do produto'}
+                  draggable={false}
+                  style={{
+                    objectPosition: `${form.imageFocalPoint.x}% ${form.imageFocalPoint.y}%`,
+                  }}
+                  className="size-full object-cover"
+                />
+                <span
+                  data-testid="drawer-focal-point-reticle"
+                  aria-hidden="true"
+                  style={{
+                    left: `${form.imageFocalPoint.x}%`,
+                    top: `${form.imageFocalPoint.y}%`,
+                  }}
+                  className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--cg-primary)] bg-white/90 shadow-md"
+                />
+              </div>
+
               <div className="min-w-0 flex-1 space-y-2">
-                <div>
-                  <p className="text-sm font-semibold text-[#0F172A]">Foto do Produto</p>
-                  <p className="text-xs text-slate-600">
-                    Envie uma foto real ou deixe a capa padrão automática da sua loja.
-                  </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--cg-text)]">
+                      Foto &amp; Ponto Focal 1:1
+                    </p>
+                    <p className="text-xs text-[var(--cg-text-secondary)]">
+                      Clique sobre a miniatura para centralizar o recorte ({form.imageFocalPoint.x}%, {form.imageFocalPoint.y}%).
+                    </p>
+                  </div>
+                  {form.imageLowRes ? (
+                    <span
+                      data-testid="drawer-low-res-warning"
+                      className="inline-flex items-center gap-1 rounded-full bg-[var(--cg-warning)]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#92400E] dark:text-[#FBBF24]"
+                    >
+                      <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
+                      Resolução baixa (&lt; 500px)
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
                   <input
                     ref={fileInputRef}
+                    data-testid="drawer-photo-file-input"
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif"
-                    onChange={handleLocalFileChange}
+                    onChange={(e) => void handleLocalFileChange(e)}
                     className="hidden"
                   />
                   <ActionButton
                     variant="secondary"
                     size={44}
+                    isLoading={optimizingPhoto}
+                    loadingText="Otimizando..."
+                    data-testid="drawer-upload-photo-btn"
                     leftIcon={<Upload className="size-4" />}
                     onClick={() => fileInputRef.current?.click()}
                   >
@@ -451,7 +543,14 @@ export function ProductEditorDrawer({
                       variant="secondary"
                       size={44}
                       leftIcon={<Sparkles className="size-4" />}
-                      onClick={() => setForm((prev) => ({ ...prev, imageUrl: '' }))}
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          imageUrl: '',
+                          imageLowRes: false,
+                          imageFocalPoint: { x: 50, y: 50 },
+                        }))
+                      }
                     >
                       Usar Capa Padrão
                     </ActionButton>
@@ -556,21 +655,43 @@ export function ProductEditorDrawer({
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="product-stock-input" className="block text-sm font-medium text-[#0F172A]">
+              <label htmlFor="product-stock-input" className="block text-sm font-medium text-[var(--cg-text)]">
                 Quantidade em Estoque
               </label>
-              <input
-                id="product-stock-input"
-                type="text"
-                inputMode="numeric"
-                value={form.stockText}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, stockText: e.target.value.replace(/\D/g, '') }))
-                }
-                placeholder="10"
-                className="min-h-[48px] w-full rounded-xl border border-slate-200 bg-white px-3.5 text-base text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-              />
-              <p className="text-xs text-slate-500">Unidades disponíveis para pronta entrega.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  id="product-stock-input"
+                  type="text"
+                  inputMode="numeric"
+                  value={form.stockText}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, stockText: e.target.value.replace(/\D/g, '') }))
+                  }
+                  placeholder="10"
+                  className="cg-tabular min-h-[48px] w-full rounded-xl border border-[var(--cg-border-strong)] bg-[var(--cg-surface)] px-3.5 text-base text-[var(--cg-text)] focus:outline-none focus:ring-2 focus:ring-[var(--cg-primary)]"
+                />
+                <div className="flex flex-col">
+                  <input
+                    id="product-low-stock-input"
+                    data-testid="product-low-stock-input"
+                    aria-label="Alerta de estoque mínimo"
+                    type="text"
+                    inputMode="numeric"
+                    value={form.lowStockThresholdText}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        lowStockThresholdText: e.target.value.replace(/\D/g, ''),
+                      }))
+                    }
+                    placeholder="Mín: 3"
+                    className="cg-tabular min-h-[48px] w-full rounded-xl border border-[var(--cg-border-strong)] bg-[var(--cg-surface)] px-3 text-sm text-[var(--cg-text)] focus:outline-none focus:ring-2 focus:ring-[var(--cg-primary)]"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-[var(--cg-text-muted)]">
+                Estoque atual e limite para alerta amarelo (zera = pausa automática).
+              </p>
             </div>
           </div>
 

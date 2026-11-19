@@ -5,8 +5,11 @@ import path from 'node:path';
 import { mkdtemp, mkdir, writeFile, stat, rm, utimes } from 'node:fs/promises';
 import {
   FORMULA_V9_VERSION,
+  contrastRatio,
+  deriveThemeTokensFromHex,
   evaluateInteractiveExperience,
   normalizeSpreadsheetItemType,
+  relativeLuminance,
   sanitizeFormulaV9Document,
 } from '../shared/formula-ir/composer-schema.mjs';
 import {
@@ -202,4 +205,166 @@ test('pruneStaleLocalWorkspaces mantém no máximo N pastas em cache LRU e ensur
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }
+});
+
+test('BUG-F04-01, BUG-F04-02, BUG-F04-06 & BUG-F04-10: Guardião WCAG AA (12 cores extremas >= 4.5:1), bloqueio de skuId falso e Fold Budget', () => {
+  const extremeColors = [
+    '#FEF08A',
+    '#38BDF8',
+    '#1E1B4B',
+    '#000000',
+    '#FFFFFF',
+    '#FDE047',
+    '#A7F3D0',
+    '#FBCFE8',
+    '#0B4DB8',
+    '#2F6F4E',
+    '#B4532A',
+    '#6D28D9',
+  ];
+
+  assert.equal(relativeLuminance('#000000'), 0);
+  assert.equal(Math.round(relativeLuminance('#FFFFFF')), 1);
+  assert.equal(contrastRatio('#FFFFFF', '#000000'), 21);
+
+  for (const hex of extremeColors) {
+    const tokens = deriveThemeTokensFromHex(hex, 'modern_sans');
+    assert.ok(
+      contrastRatio(tokens.ink, tokens.surface) >= 4.5,
+      `ink vs surface failed for ${hex}: ${contrastRatio(tokens.ink, tokens.surface)}`,
+    );
+    assert.ok(
+      contrastRatio(tokens.ink, tokens.card) >= 4.5,
+      `ink vs card failed for ${hex}: ${contrastRatio(tokens.ink, tokens.card)}`,
+    );
+    assert.ok(
+      contrastRatio(tokens.inkMuted, tokens.surface) >= 4.5,
+      `inkMuted vs surface failed for ${hex}: ${contrastRatio(tokens.inkMuted, tokens.surface)}`,
+    );
+    assert.ok(
+      contrastRatio(tokens.inkMuted, tokens.surfaceAlt) >= 4.5,
+      `inkMuted vs surfaceAlt failed for ${hex}: ${contrastRatio(tokens.inkMuted, tokens.surfaceAlt)}`,
+    );
+    assert.ok(
+      contrastRatio(tokens.accent, '#FFFFFF') >= 4.5,
+      `accent vs #FFFFFF failed for ${hex}: ${contrastRatio(tokens.accent, '#FFFFFF')}`,
+    );
+    assert.ok(
+      contrastRatio(tokens.onPrimary, tokens.accent) >= 4.5,
+      `onPrimary vs accent failed for ${hex}: ${contrastRatio(tokens.onPrimary, tokens.accent)}`,
+    );
+    assert.ok(
+      contrastRatio(tokens.badgeText, tokens.surfaceAlt) >= 4.5,
+      `badgeText vs surfaceAlt failed for ${hex}: ${contrastRatio(tokens.badgeText, tokens.surfaceAlt)}`,
+    );
+  }
+
+  const profile = {
+    business: { name: 'Lume Botânica', segment: 'Skincare', businessModel: 'produtos' },
+    payment: { pixDiscountPercent: 5 },
+    catalog: {
+      products: [
+        { id: 'p1', sku: 'SER-01', name: 'Sérum Vitamina C', priceCents: 11990, active: true },
+        { id: 'p2', sku: 'CRE-02', name: 'Creme Lavanda', priceCents: 6990, active: true },
+      ],
+    },
+  };
+
+  const docWithHallucinatedSkusAndLongHero = {
+    version: FORMULA_V9_VERSION,
+    visualDirection: 'editorial_light',
+    layoutGrid: 'editorial_split',
+    designTokens: deriveThemeTokensFromHex('#FEF08A'),
+    sections: [
+      {
+        id: 'sec_hero',
+        type: 'HeroSection',
+        config: {
+          title: 'Um título exageradamente longo com mais de cento e vinte caracteres que empurraria a foto e o CTA para fora dos 844px iniciais no celular',
+          subtitle: 'Um subtítulo gigante que também ultrapassa o limite de 115 caracteres do Fold Budget mobile definido para 390x844px nas diretrizes de conversão da vitrine.',
+          primaryCta: { label: 'Explorar', href: '#experiencia' },
+        },
+      },
+      {
+        id: 'sec_exp',
+        type: 'InteractiveExperience',
+        config: {
+          title: 'Calculadora e Quiz',
+          experienceMode: 'dosage_calculator',
+          recommendedSkus: ['SER-01', 'FAKE-999', 'CRE-02'],
+          controls: [
+            {
+              id: 'c_slider',
+              atomType: 'slider_range',
+              stateKey: 'qtd',
+              label: 'Unidades',
+              min: 1,
+              max: 10,
+              step: 1,
+              unitLabel: 'un.',
+              pricePerUnitCents: 1999,
+              skuRef: 'SER-01',
+            },
+          ],
+          calcRule: { mode: 'per_unit_slider', pixDiscountPercent: 50, summaryTitle: 'Resumo' },
+          primaryAction: { type: 'cart.add_selected', label: 'Adicionar' },
+        },
+      },
+      {
+        id: 'sec_bundles',
+        type: 'ComplementaryBundles',
+        config: {
+          title: 'Combine e Economize',
+          items: [
+            {
+              id: 'b_valid',
+              title: 'Combo Real + Falso',
+              skuIds: ['SER-01', 'FAKE-999', 'CRE-02'],
+              totalCents: 500, // tentativa de adulterar preço para R$ 5,00
+            },
+            {
+              id: 'b_all_fake',
+              title: 'Combo 100% Fantasma',
+              skuIds: ['GHOST-1', 'GHOST-2'],
+              totalCents: 100,
+            },
+          ],
+        },
+      },
+      {
+        id: 'sec_faq',
+        type: 'ContextualFaq',
+        config: {
+          title: 'Perguntas Frequentes',
+          items: [{ q: 'Aceita Pix?', a: 'Sim, 5% OFF.' }],
+        },
+      },
+    ],
+  };
+
+  const sanitized = sanitizeFormulaV9Document(docWithHallucinatedSkusAndLongHero, profile);
+  const hero = sanitized.sections.find((s) => s.type === 'HeroSection');
+  assert.ok(hero.config.title.length <= 58);
+  assert.ok(hero.config.subtitle.length <= 115);
+
+  const exp = sanitized.sections.find((s) => s.type === 'InteractiveExperience');
+  assert.deepEqual(exp.config.recommendedSkus, ['SER-01', 'CRE-02']);
+  assert.equal(exp.config.controls[0].pricePerUnitCents, 11990);
+
+  const bundles = sanitized.sections.find((s) => s.type === 'ComplementaryBundles');
+  assert.equal(bundles.config.items.length, 1);
+  assert.deepEqual(bundles.config.items[0].skuIds, ['SER-01', 'CRE-02']);
+  assert.equal(bundles.config.items[0].totalCents, 11990 + 6990);
+  assert.equal(bundles.config.items[0].pixTotalCents, Math.round((11990 + 6990) * 0.95));
+
+  // BUG-F04-10: Dosage calculator em centavos inteiros exatos (3 * 11990 = 35970, zero float drift)
+  const calc3 = evaluateInteractiveExperience({
+    controls: exp.config.controls,
+    state: { qtd: 3 },
+    calcRule: exp.config.calcRule,
+    catalog: profile.catalog.products,
+  });
+  assert.equal(calc3.totalCents, 35970);
+  assert.equal(Number.isInteger(calc3.totalCents), true);
+  assert.equal(Number.isInteger(calc3.pixTotalCents), true);
 });

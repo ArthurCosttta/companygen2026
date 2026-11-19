@@ -149,6 +149,24 @@ test('Fase 4: Admin arthurpolarbuy@gmail.com, Suporte Tickets, QR Code /q/:slug 
     assert.equal(overview.ok, true);
     assert.equal(overview.qrCampaigns[0].scans_count, 1);
     assert.equal(overview.tickets[0].status, 'resolved');
+
+    // 5. Regressão BUG-F02-07: 12 chamadas dryRun=true em /api/access/validate não esgotam o rate-limit do submit real
+    for (let i = 0; i < 12; i++) {
+      const dryRes = await fetch(`${baseUrl}/api/access/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: 'AI10-FARM-LUME', dryRun: true }),
+      });
+      assert.equal(dryRes.status, 200);
+    }
+    const realValidateRes = await fetch(`${baseUrl}/api/access/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'AI10-FARM-LUME' }),
+    });
+    assert.equal(realValidateRes.status, 200);
+    const realValidateJson = await realValidateRes.json();
+    assert.equal(realValidateJson.valid, true);
   } finally {
     server.close();
     await api.close();

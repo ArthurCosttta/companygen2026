@@ -1,7 +1,13 @@
 export {
   WelcomeModal,
   type WelcomeModalProps,
+  type OnboardingPreferredTrack,
 } from './WelcomeModal';
+
+export {
+  OnboardingSplitStudio,
+  type OnboardingSplitStudioProps,
+} from './OnboardingSplitStudio';
 
 export {
   GuidedChecklistCard,

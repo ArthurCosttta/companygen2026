@@ -18,6 +18,7 @@ import {
   refundCredits,
 } from './access-and-checkout.mjs';
 import { recordSystemIncident } from './admin-console.mjs';
+import { runDesignCritic } from './design-critic.mjs';
 import { generateRunPodImage } from './runpod-media.mjs';
 import {
   isCloudStorageEnabled,
@@ -589,7 +590,9 @@ async function persistIrIntoProfile({
     updatedAt: new Date().toISOString(),
   };
 
-  return saveProfileFn(user, directory, Number(current?.revision || 0), baseData);
+  return saveProfileFn(user, directory, Number(current?.revision || 0), baseData, {
+    preserveRevision: true,
+  });
 }
 
 const STORE_MOLDE_JOBS = new Map();
@@ -727,6 +730,7 @@ export async function generateFullStorefrontMolde({
               const runpodKind = job.tier === 'flux-dev' ? 'hero_dev' : 'schnell';
               const generated = await generateRunPodImage({
                 prompt: job.promptEn,
+                artDirectionBible: doc.artDirectionBible,
                 kind: runpodKind,
                 width: dims.width,
                 height: dims.height,
@@ -1207,34 +1211,59 @@ export async function handleStorefrontMoldeRoutes(req, res, ctx) {
           }
 
           const candidate =
-            sectionType === 'FaqAccordion'
+            sectionType === 'FaqAccordion' || sectionType === 'ContextualFaq'
               ? {
                   id: `sec_faq_${Date.now().toString(36)}`,
-                  type: 'FaqAccordion',
+                  type: sectionType === 'ContextualFaq' ? 'ContextualFaq' : 'FaqAccordion',
                   config: {
                     title,
+                    ...(sectionType === 'ContextualFaq' ? { subtitle } : {}),
                     items: cfg.items || [{ q: subtitle || 'Como funciona o atendimento?', a: 'Envie sua dúvida direta pelo WhatsApp.' }],
                   },
                 }
-              : {
-                  id: `sec_${sectionType.toLowerCase()}_${Date.now().toString(36)}`,
-                  type: sectionType === 'EditorialMediaSplit' ? 'EditorialMediaSplit' : 'HighlightsGrid',
-                  config:
-                    sectionType === 'EditorialMediaSplit'
-                      ? {
-                          variant: 'media_right',
-                          eyebrow: 'Destaque',
-                          title,
-                          body: subtitle || title,
-                          bullets: [],
-                        }
-                      : {
-                          title,
-                          subtitle,
-                          columns: 2,
-                          cards: cfg.cards || [{ eyebrow: 'Destaque', title, description: subtitle, ctaLabel: 'Ver catálogo', href: '#catalogo' }],
-                        },
-                };
+              : sectionType === 'ComplementaryBundles'
+                ? {
+                    id: `sec_bundles_${Date.now().toString(36)}`,
+                    type: 'ComplementaryBundles',
+                    config: {
+                      title: title || 'Combine e Economize',
+                      subtitle: subtitle || 'Seleções do catálogo prontas para adicionar juntas.',
+                      items:
+                        Array.isArray(cfg.items) && cfg.items.length > 0
+                          ? cfg.items
+                          : [
+                              {
+                                id: 'combo_1',
+                                title: 'Combo Recomendado',
+                                description: 'Seleção completa da loja.',
+                                skuIds: (profile?.catalog?.products || [])
+                                  .filter((p) => p && p.active !== false)
+                                  .slice(0, 2)
+                                  .map((p) => String(p.sku || p.id)),
+                                totalCents: 0,
+                              },
+                            ],
+                    },
+                  }
+                : {
+                    id: `sec_${sectionType.toLowerCase()}_${Date.now().toString(36)}`,
+                    type: sectionType === 'EditorialMediaSplit' ? 'EditorialMediaSplit' : 'HighlightsGrid',
+                    config:
+                      sectionType === 'EditorialMediaSplit'
+                        ? {
+                            variant: 'media_right',
+                            eyebrow: 'Destaque',
+                            title,
+                            body: subtitle || title,
+                            bullets: [],
+                          }
+                        : {
+                            title,
+                            subtitle,
+                            columns: 2,
+                            cards: cfg.cards || [{ eyebrow: 'Destaque', title, description: subtitle, ctaLabel: 'Ver catálogo', href: '#catalogo' }],
+                          },
+                  };
 
           const sanitizedDoc = sanitizeFormulaV9Document({ ...formulasIr, sections: [candidate] }, profile);
           const checkNode = SectionNodeSchema.safeParse(sanitizedDoc.sections[0] || candidate);
@@ -1309,6 +1338,239 @@ export async function handleStorefrontMoldeRoutes(req, res, ctx) {
         atomicWriteJson,
       }).catch(() => {});
       throw err;
+    }
+  }
+
+  // 4b. POST /api/store-molde/patch-section (-5 cr — Patch Cirúrgico isolado na seção alvo + Design Critic)
+  if (pathname === '/api/store-molde/patch-section') {
+    if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
+    const body = await readJson(req, 1024 * 1024);
+
+    const { current } = await loadProfileState(user, directory);
+    const profile = body?.profile || current?.data || {};
+    const targetId = String(body?.sectionId || body?.blockId || '').trim();
+    const instruction = String(body?.instruction || '').trim();
+    const experienceMode = body?.experienceMode;
+    const cost = Math.max(1, Math.min(20, Math.round(Number(body?.costCredits ?? 5))));
+    const pageFilename = String(body?.pageFilename || '').trim().replace(/^\/+/, '');
+    if (pageFilename && (pageFilename.includes('..') || pageFilename.includes('\\'))) {
+      throw new ApiError(400, 'pageFilename inválido.');
+    }
+    if (!targetId) {
+      throw new ApiError(400, 'Informe a seção que deseja ajustar.');
+    }
+    if (!instruction && !experienceMode && !body?.config) {
+      throw new ApiError(400, 'Descreva o ajuste desejado para esta seção.');
+    }
+
+    const isSubpage = Boolean(pageFilename && pageFilename !== 'index.html');
+    const debit = await debitCredits({
+      user,
+      bearer: user?.bearer,
+      directory,
+      action: 'patch_section',
+      amount: cost,
+      metadata: {
+        sectionId: targetId,
+        instruction: instruction.slice(0, 120),
+        pageFilename: pageFilename || 'index.html',
+        phase: 'reserve',
+      },
+      readJsonFile,
+      atomicWriteJson,
+    });
+    if (!debit.ok) return send(res, 402, debit);
+
+    try {
+      if (body?.simulateGlmFailure === true) {
+        throw new Error('O motor visual IA não respondeu a tempo (timeout simulado).');
+      }
+
+      const stateSnapshot = await readStorefrontMoldeState(directory);
+      const baseIr = stateSnapshot.formulasIr || buildNeutralFallbackV9Document(profile);
+      const baseSections = isSubpage
+        ? Array.isArray(baseIr.pages?.find((p) => p?.filename === pageFilename)?.sections)
+          ? [...baseIr.pages.find((p) => p?.filename === pageFilename).sections]
+          : []
+        : Array.isArray(baseIr.sections)
+          ? [...baseIr.sections]
+          : [];
+
+      const sIdx = baseSections.findIndex((s) => s.id === targetId);
+      if (sIdx < 0) {
+        throw new ApiError(404, 'Seção não encontrada na página atual.');
+      }
+      const existingBeforeEdit = baseSections[sIdx];
+
+      let glmResult = null;
+      if (instruction && body?.useGlm !== false) {
+        glmResult = await callGlm53Json({
+          systemPrompt:
+            'Você realiza um Patch Cirúrgico em UMA única seção Formula-IR v9.0 em Português do Brasil. Responda APENAS JSON válido com os campos atualizados (title, subtitle, eyebrow, body) respeitando o Fold Budget mobile (title <= 58 chars, subtitle <= 115 chars) e sem alterar preços do catálogo.',
+          userPrompt: JSON.stringify({
+            loja: profile?.business?.name || 'Minha Loja',
+            secaoAlvo: existingBeforeEdit.type,
+            configAtual: existingBeforeEdit.config,
+            instrucaoDoLojista: instruction,
+          }),
+          timeoutMs: 22000,
+        });
+        if (!glmResult.ok && glmResult.error && glmResult.error !== 'GLM_NOT_CONFIGURED' && body?.strictGlm === true) {
+          throw new Error(`Falha no motor GLM (${glmResult.error}).`);
+        }
+      }
+
+      const { resultingSection, nextIr, criticTips } = await serializeMoldeMutation(directory, async () => {
+        const state = await readStorefrontMoldeState(directory);
+        const formulasIr = state.formulasIr || buildNeutralFallbackV9Document(profile);
+        const pagesList = Array.isArray(formulasIr.pages) ? formulasIr.pages.map((p) => ({ ...p })) : [];
+        const pageIdx = isSubpage ? pagesList.findIndex((p) => p?.filename === pageFilename) : -1;
+        if (isSubpage && pageIdx < 0) throw new ApiError(404, 'Página não encontrada nesta loja.');
+        const sections = isSubpage
+          ? Array.isArray(pagesList[pageIdx].sections)
+            ? [...pagesList[pageIdx].sections]
+            : []
+          : Array.isArray(formulasIr.sections)
+            ? [...formulasIr.sections]
+            : [];
+
+        const idx = sections.findIndex((s) => s.id === targetId);
+        if (idx < 0) throw new ApiError(404, 'Seção não encontrada na página atual.');
+
+        const existing = JSON.parse(JSON.stringify(sections[idx]));
+        existing.config = existing.config || {};
+
+        if (body?.config && typeof body.config === 'object') {
+          existing.config = { ...existing.config, ...body.config };
+        }
+        if (
+          existing.type === 'InteractiveExperience' &&
+          ['quiz_recommendation', 'dosage_calculator', 'bundle_builder'].includes(experienceMode)
+        ) {
+          existing.config.experienceMode = experienceMode;
+        }
+
+        if (instruction) {
+          if (glmResult?.ok && glmResult.data && typeof glmResult.data === 'object') {
+            const d = glmResult.data.config && typeof glmResult.data.config === 'object'
+              ? glmResult.data.config
+              : glmResult.data;
+            if (typeof d.title === 'string' && d.title.trim()) {
+              existing.config.title = d.title.trim().slice(0, existing.type === 'HeroSection' ? 58 : 95);
+            }
+            if (typeof d.subtitle === 'string' && d.subtitle.trim()) {
+              existing.config.subtitle = d.subtitle.trim().slice(0, existing.type === 'HeroSection' ? 115 : 190);
+            }
+            if (typeof d.eyebrow === 'string' && d.eyebrow.trim() && 'eyebrow' in existing.config) {
+              existing.config.eyebrow = d.eyebrow.trim().slice(0, 58);
+            }
+            if (typeof d.body === 'string' && d.body.trim() && 'body' in existing.config) {
+              existing.config.body = d.body.trim().slice(0, 440);
+            }
+          } else {
+            // Deterministic intelligent patch when GLM is offline or useGlm=false
+            const cleanInst = instruction.slice(0, existing.type === 'HeroSection' ? 115 : 180);
+            if (/t[ií]tulo|chamada|headline/i.test(instruction) && 'title' in existing.config) {
+              const extracted = instruction
+                .replace(/^(?:mudar|alterar|deixar|trocar)\s+(?:o\s+)?(?:t[ií]tulo|chamada|headline)\s*(?:para|:)?\s*/i, '')
+                .trim();
+              existing.config.title = (extracted || cleanInst).slice(
+                0,
+                existing.type === 'HeroSection' ? 58 : 95,
+              );
+            } else if ('subtitle' in existing.config) {
+              existing.config.subtitle = cleanInst;
+            } else if ('body' in existing.config) {
+              existing.config.body = cleanInst;
+            } else if ('tagline' in existing.config) {
+              existing.config.tagline = cleanInst;
+            } else if ('title' in existing.config) {
+              existing.config.title = cleanInst.slice(0, 58);
+            }
+          }
+        }
+
+        const sanitizedSingle = sanitizeFormulaV9Document({ ...formulasIr, sections: [existing] }, profile);
+        const checkNode = SectionNodeSchema.safeParse(sanitizedSingle.sections[0] || existing);
+        if (!checkNode.success) {
+          throw new ApiError(
+            400,
+            checkNode.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(' '),
+          );
+        }
+
+        const updatedSection = checkNode.data;
+        // Merge cirúrgico: preserva 100% das outras seções intactas (BUG-F04-04)
+        sections[idx] = updatedSection;
+
+        const nextDocBase = isSubpage
+          ? {
+              ...formulasIr,
+              pages: pagesList.map((p, pIdx) => (pIdx === pageIdx ? { ...p, sections } : p)),
+              updatedAt: new Date().toISOString(),
+            }
+          : { ...formulasIr, sections, updatedAt: new Date().toISOString() };
+
+        const updatedIr = attachStoreSnapshotToDoc(nextDocBase, profile);
+        await writeStorefrontMoldeToDisk({
+          directory,
+          formulasIr: updatedIr,
+          imageJobs: state.imageJobs,
+        });
+        await persistIrIntoProfile({
+          user,
+          directory,
+          formulasIr: updatedIr,
+          imageJobs: state.imageJobs,
+          loadProfileState,
+          saveProfileFn: saveProfileState,
+        }).catch(() => null);
+
+        const tips = runDesignCritic(profile, updatedIr);
+        return { resultingSection: updatedSection, nextIr: updatedIr, criticTips: tips };
+      });
+
+      return send(res, 200, {
+        ok: true,
+        section: resultingSection,
+        formulaIr: nextIr,
+        formulasIr: nextIr,
+        criticTips,
+        debited: debit.debited,
+        balanceAfter: debit.balanceAfter,
+      });
+    } catch (err) {
+      const refunded = await refundCredits({
+        user,
+        bearer: user?.bearer,
+        directory,
+        action: 'patch_section',
+        amount: cost,
+        metadata: {
+          sectionId: targetId,
+          reason: err instanceof Error ? err.message : 'patch_section_failed',
+          referenceId: debit?.entry?.id,
+        },
+        readJsonFile,
+        atomicWriteJson,
+      }).catch(() => null);
+
+      const balanceAfterRefund =
+        refunded?.balanceAfter ??
+        (await getCreditBalance({ user, bearer: user?.bearer, directory, readJsonFile }).catch(
+          () => debit.balanceAfter + cost,
+        ));
+      const status = err && typeof err.status === 'number' ? err.status : 502;
+      return send(res, status, {
+        ok: false,
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Não foi possível concluir o ajuste com IA agora.',
+        refunded: true,
+        refundedCredits: cost,
+        balanceAfter: balanceAfterRefund,
+      });
     }
   }
 

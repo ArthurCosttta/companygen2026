@@ -37,6 +37,12 @@ export function formatCurrencyBRL(cents: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safe / 100);
 }
 
+export const ProductFocalPointSchema = z.object({
+  x: z.number().min(0).max(100).default(50),
+  y: z.number().min(0).max(100).default(50),
+});
+export type ProductFocalPoint = z.infer<typeof ProductFocalPointSchema>;
+
 export const CatalogProductSchema = z.object({
   id: z.string().min(1),
   sku: z.string().min(1),
@@ -46,6 +52,10 @@ export const CatalogProductSchema = z.object({
   priceCents: z.number().int().min(0),
   variation: z.string().default('Padrão'),
   stock: z.number().int().min(0).default(0),
+  lowStockThreshold: z.number().int().min(0).default(3).optional(),
+  autoPausedOutOfStock: z.boolean().default(false).optional(),
+  imageFocalPoint: ProductFocalPointSchema.default({ x: 50, y: 50 }).optional(),
+  imageLowRes: z.boolean().default(false).optional(),
   active: z.boolean().default(true),
   imageUrl: z.string().default(''),
   approvedAsset: z.boolean().default(false),
@@ -109,6 +119,22 @@ export function hydrateMensagemMolde(
   return `${resolved}${qtySuffix}${noteSuffix}`.trim();
 }
 
+export const StoreShippingConfigSchema = z.object({
+  fixedFeeCents: z.number().int().min(0).default(0),
+  freeShippingThresholdCents: z.number().int().min(0).default(0),
+  pickupAvailable: z.boolean().default(true),
+});
+export type StoreShippingConfig = z.infer<typeof StoreShippingConfigSchema>;
+
+export const StoreCouponSchema = z.object({
+  code: z.string().min(3).max(20),
+  discountPercent: z.number().int().min(1).max(90),
+  active: z.boolean().default(true),
+  expiresAt: z.string().nullable().optional(),
+  usageCount: z.number().int().min(0).default(0).optional(),
+});
+export type StoreCoupon = z.infer<typeof StoreCouponSchema>;
+
 export const BusinessProfileSchema = z.object({
   schemaVersion: z.literal(1).default(1),
   onboarding: z.object({
@@ -116,11 +142,15 @@ export const BusinessProfileSchema = z.object({
     whatsappConfirmed: z.boolean().default(false),
     fichaCompleted: z.boolean().default(false),
     storeGenerated: z.boolean().default(false),
+    preferredTrack: z.enum(['store_first', 'whatsapp_first', 'full_guided']).default('full_guided').optional(),
+    completedFirstSimulatedOrder: z.boolean().default(false).optional(),
   }).default({
     whatsappConnected: false,
     whatsappConfirmed: false,
     fichaCompleted: false,
     storeGenerated: false,
+    preferredTrack: 'full_guided',
+    completedFirstSimulatedOrder: false,
   }),
   business: z.object({
     name: z.string().default(''),
@@ -134,6 +164,7 @@ export const BusinessProfileSchema = z.object({
     mapsUrl: z.string().default(''),
     hours: z.string().default('Seg a Sáb · 09h às 19h'),
     email: z.string().default(''),
+    deliveryModes: z.array(z.enum(['pickup', 'local', 'national'])).default(['pickup', 'local']).optional(),
   }).default({
     name: '',
     segment: 'Geral',
@@ -146,6 +177,7 @@ export const BusinessProfileSchema = z.object({
     mapsUrl: '',
     hours: 'Seg a Sáb · 09h às 19h',
     email: '',
+    deliveryModes: ['pickup', 'local'],
   }),
   whatsapp: z.object({
     connected: z.boolean().default(false),
@@ -168,10 +200,12 @@ export const BusinessProfileSchema = z.object({
     pixKey: z.string().default(''),
     pixDiscountPercent: z.number().min(0).max(90).default(0),
     acceptedMethods: z.array(z.enum(['pix', 'credit_card', 'debit_card', 'cash'])).default(['pix', 'credit_card', 'debit_card', 'cash']),
+    paymentPolicy: z.enum(['on_delivery', 'pix_discount', 'deposit_50']).default('pix_discount').optional(),
   }).default({
     pixKey: '',
     pixDiscountPercent: 0,
     acceptedMethods: ['pix', 'credit_card', 'debit_card', 'cash'],
+    paymentPolicy: 'pix_discount',
   }),
   delivery: z.object({
     pickupEnabled: z.boolean().default(true),
@@ -208,6 +242,7 @@ export const BusinessProfileSchema = z.object({
     primaryColor: z.string().default('#111827'),
     accentColor: z.string().default('#10b981'),
     fontStyle: z.enum(['modern_sans', 'editorial_serif', 'clean_geometric']).default('modern_sans'),
+    visualMood: z.enum(['boutique', 'direct', 'warm']).default('boutique').optional(),
     generateAiLogo: z.boolean().default(false),
     themePreset: z.string().default('minimal-luxury'),
   }).default({
@@ -221,6 +256,7 @@ export const BusinessProfileSchema = z.object({
     primaryColor: '#111827',
     accentColor: '#10b981',
     fontStyle: 'modern_sans',
+    visualMood: 'boutique',
     generateAiLogo: false,
     themePreset: 'minimal-luxury',
   }),
@@ -229,6 +265,8 @@ export const BusinessProfileSchema = z.object({
   }).default({
     products: [],
   }),
+  shipping: StoreShippingConfigSchema.optional(),
+  coupons: z.array(StoreCouponSchema).default([]).optional(),
   publishedStore: z.object({
     published: z.boolean().default(false),
     publishedAt: z.string().nullable().default(null),
@@ -267,6 +305,13 @@ export const BusinessProfileSchema = z.object({
     faq: [],
     updatedAt: '',
   }),
+  desktopPrefs: z.object({
+    minimizeToTray: z.boolean().default(true),
+    soundNewOrder: z.boolean().default(true),
+    soundHumanAlert: z.boolean().default(true),
+    lowCreditEmailAlert: z.boolean().default(true),
+    offlineEmailAlert: z.boolean().default(true),
+  }).optional(),
 });
 
 export type BusinessProfile = z.infer<typeof BusinessProfileSchema>;
@@ -289,16 +334,60 @@ export interface BusinessOrder {
   subtotal_cents: number;
   shipping_cents: number;
   total_cents: number;
+  discount_cents?: number;
+  coupon_code?: string;
   payment_method: string;
   delivery_address: Record<string, string>;
-  status: 'aguardando_dados' | 'aguardando_pagamento' | 'confirmado' | 'cancelado' | 'concluido';
+  status:
+    | 'aguardando_dados'
+    | 'aguardando_pagamento'
+    | 'confirmado'
+    | 'em_preparo'
+    | 'enviado'
+    | 'entregue'
+    | 'cancelado'
+    | 'concluido';
+  isSimulation?: boolean;
+  is_simulation?: boolean;
+  manual?: boolean;
+  channel?: string;
+  source_channel?: string;
   source_revision: number;
   created_at: string;
   updated_at: string;
 }
 
+export interface DashboardCrmSummary {
+  totalRevenueCents: number;
+  orderCount: number;
+  avgTicketCents: number;
+  byChannel: {
+    storefront: number;
+    whatsapp: number;
+    counter: number;
+  };
+  topProducts: Array<{
+    sku: string;
+    name: string;
+    storefrontQty: number;
+    whatsappQty: number;
+    counterQty: number;
+    totalQty: number;
+    revenueCents: number;
+  }>;
+  repeatCustomers: Array<{
+    customerKey: string;
+    customerName: string;
+    phone: string;
+    orderCount: number;
+    totalCents: number;
+    lastOrderAt: string;
+  }>;
+}
+
 export interface DashboardMetricsProjection {
   sourceRevision: number;
+  periodDays?: number | 'all';
   businessName: string;
   whatsappConnected: boolean;
   displayPhone: string;
@@ -310,6 +399,7 @@ export interface DashboardMetricsProjection {
   catalogCount: number;
   stockUnits: number;
   recentOrders: BusinessOrder[];
+  crmSummary?: DashboardCrmSummary;
 }
 
 export function createEmptyProfile(partial?: Partial<BusinessProfile>): BusinessProfile {

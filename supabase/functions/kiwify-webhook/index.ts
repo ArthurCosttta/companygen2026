@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.119.0";
 import {
+  classifyKiwifyError,
   firstString,
   generateAccessCode,
   hmacSha1Hex,
@@ -11,6 +12,7 @@ import {
 } from "./core.mjs";
 
 export {
+  classifyKiwifyError,
   generateAccessCode,
   hmacSha1Hex,
   maskAccessCode,
@@ -160,26 +162,70 @@ export async function handleKiwifyRequest(req: Request): Promise<Response> {
   });
 
   if (error) {
+    const classification = classifyKiwifyError(error.message, 500);
+    await supabase
+      .from("cg_webhook_dlq")
+      .upsert(
+        {
+          order_id: orderId,
+          webhook_event_type: eventType,
+          classification,
+          error_message: error.message,
+          payload: event as JsonRecord,
+        },
+        { onConflict: "order_id,webhook_event_type" },
+      )
+      .then(() => undefined, () => undefined);
     console.error("cg_process_kiwify_event falhou", {
       orderId,
       eventType,
+      classification,
       error: error.message,
     });
-    return json({ ok: false, error: "processing_failed" }, 500);
+    return json({ ok: false, error: "processing_failed", classification }, 500);
   }
 
   const result = (data ?? {}) as ProcessResult;
   if (result.status === "needs_review") {
-    console.error("evento requer revisão", { orderId, eventType, error: result.error });
-    return json({ ok: true, order_id: orderId, ...result });
+    const classification = classifyKiwifyError(result.error || "needs_review", 400);
+    await supabase
+      .from("cg_webhook_dlq")
+      .upsert(
+        {
+          order_id: orderId,
+          webhook_event_type: eventType,
+          classification,
+          error_message: result.error || "needs_review",
+          payload: event as JsonRecord,
+        },
+        { onConflict: "order_id,webhook_event_type" },
+      )
+      .then(() => undefined, () => undefined);
+    console.error("evento requer revisão", { orderId, eventType, classification, error: result.error });
+    return json({ ok: true, order_id: orderId, classification, ...result });
   }
   if (!result.success || result.status === "failed") {
+    const classification = classifyKiwifyError(result.error || "failed", 500);
+    await supabase
+      .from("cg_webhook_dlq")
+      .upsert(
+        {
+          order_id: orderId,
+          webhook_event_type: eventType,
+          classification,
+          error_message: result.error || "failed",
+          payload: event as JsonRecord,
+        },
+        { onConflict: "order_id,webhook_event_type" },
+      )
+      .then(() => undefined, () => undefined);
     console.error("evento falhou e poderá ser retentado", {
       orderId,
       eventType,
+      classification,
       error: result.error,
     });
-    return json({ ok: false, order_id: orderId, ...result }, 500);
+    return json({ ok: false, order_id: orderId, classification, ...result }, 500);
   }
   if (result.duplicate || result.action === "noop") {
     return json({ ok: true, order_id: orderId, ...result });

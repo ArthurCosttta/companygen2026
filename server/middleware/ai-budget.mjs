@@ -86,8 +86,65 @@ export function setCachedSynthesis(cacheKey, payload, ttlMs = CACHE_TTL_MS) {
   });
 }
 
+export const TIER_LIMITS = Object.freeze({
+  standard: { maxPerHour: 120, maxPerMinute: 30, label: 'Padrão' },
+  vip: { maxPerHour: 600, maxPerMinute: 120, label: 'VIP' },
+  restricted: { maxPerHour: 15, maxPerMinute: 5, label: 'Restrito' },
+});
+
+const tierUsageBuckets = new Map();
+
+/**
+ * Checks per-user hourly/minute AI call quota based on configured account tier.
+ * @param {string} userId
+ * @param {'standard'|'vip'|'restricted'} [tier='standard']
+ * @param {number} [nowMs]
+ */
+export function checkUserAiTierLimit(userId, tier = 'standard', nowMs = Date.now()) {
+  const safeUser = String(userId || '').trim() || 'anon';
+  const limits = TIER_LIMITS[tier] || TIER_LIMITS.standard;
+  const entry = tierUsageBuckets.get(safeUser) || {
+    hourTimestamps: [],
+    minuteTimestamps: [],
+  };
+  const oneHourAgo = nowMs - 60 * 60 * 1000;
+  const oneMinuteAgo = nowMs - 60 * 1000;
+  entry.hourTimestamps = entry.hourTimestamps.filter((ts) => ts > oneHourAgo);
+  entry.minuteTimestamps = entry.minuteTimestamps.filter((ts) => ts > oneMinuteAgo);
+
+  if (entry.minuteTimestamps.length >= limits.maxPerMinute) {
+    tierUsageBuckets.set(safeUser, entry);
+    return {
+      allowed: false,
+      tier: tier in TIER_LIMITS ? tier : 'standard',
+      reason: `Limite por minuto (${limits.maxPerMinute}/min) excedido para sua conta.`,
+      retryAfterSeconds: 60,
+    };
+  }
+  if (entry.hourTimestamps.length >= limits.maxPerHour) {
+    tierUsageBuckets.set(safeUser, entry);
+    return {
+      allowed: false,
+      tier: tier in TIER_LIMITS ? tier : 'standard',
+      reason: `Limite por hora (${limits.maxPerHour}/h) excedido para sua conta.`,
+      retryAfterSeconds: 300,
+    };
+  }
+
+  entry.minuteTimestamps.push(nowMs);
+  entry.hourTimestamps.push(nowMs);
+  tierUsageBuckets.set(safeUser, entry);
+  return {
+    allowed: true,
+    tier: tier in TIER_LIMITS ? tier : 'standard',
+    remainingHour: limits.maxPerHour - entry.hourTimestamps.length,
+    remainingMinute: limits.maxPerMinute - entry.minuteTimestamps.length,
+  };
+}
+
 export function clearAiBudgetCache() {
   synthesisCache.clear();
+  tierUsageBuckets.clear();
   preferCpuUntil = 0;
 }
 

@@ -164,9 +164,18 @@ export const DesignTokensSchema = z.object({
   card: z.string().regex(SAFE_CSS_HEX_RE).default('#FFFFFF'),
   ink: z.string().regex(SAFE_CSS_HEX_RE).default('#0F172A'),
   inkMuted: z.string().regex(SAFE_CSS_HEX_RE).default('#475569'),
+  onPrimary: z.string().regex(SAFE_CSS_HEX_RE).default('#FFFFFF'),
+  badgeText: z.string().regex(SAFE_CSS_HEX_RE).default('#065F46'),
   footerBg: z.string().regex(SAFE_CSS_HEX_RE),
   fontStyle: z.enum(['modern_sans', 'editorial_serif', 'clean_geometric']).default('modern_sans'),
   radiusPx: z.number().int().min(8).max(28).default(20),
+});
+
+export const ArtDirectionBibleSchema = z.object({
+  lighting: z.string().min(1).max(160).default('Warm natural daylight, soft diffused shadows'),
+  surfaceMaterial: z.string().min(1).max(160).default('Matte stone and natural wood accents'),
+  backdropTone: z.string().min(1).max(160).default('Clean neutral editorial backdrop'),
+  cameraFraming: z.string().min(1).max(160).default('50mm editorial product and lifestyle framing'),
 });
 
 export const SectionNodeSchema = z.discriminatedUnion('type', [
@@ -216,6 +225,10 @@ export const SectionNodeSchema = z.discriminatedUnion('type', [
       eyebrow: z.string().max(60).default(''),
       title: z.string().min(1).max(100),
       subtitle: z.string().max(220).default(''),
+      experienceMode: z
+        .enum(['quiz_recommendation', 'dosage_calculator', 'bundle_builder'])
+        .optional(),
+      recommendedSkus: z.array(z.string().max(64)).max(12).default([]),
       layoutVariant: z.enum(['workbench_split', 'stacked_cards', 'compact_panel']).default('workbench_split'),
       stateDefaults: z.record(z.string(), z.union([z.string(), z.number(), z.array(z.string())])).default({}),
       controls: z.array(AtomControlSchema).min(1).max(5),
@@ -282,10 +295,39 @@ export const SectionNodeSchema = z.discriminatedUnion('type', [
     type: z.literal('FaqAccordion'),
     config: z.object({
       title: z.string().min(1).max(100),
+      subtitle: z.string().max(200).optional(),
       items: z.array(z.object({
         q: z.string().min(1).max(140),
         a: z.string().min(1).max(360),
       })).min(1).max(8),
+    }),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('ContextualFaq'),
+    config: z.object({
+      title: z.string().min(1).max(100),
+      subtitle: z.string().max(200).default(''),
+      items: z.array(z.object({
+        q: z.string().min(1).max(140),
+        a: z.string().min(1).max(360),
+      })).min(1).max(8),
+    }),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('ComplementaryBundles'),
+    config: z.object({
+      title: z.string().min(1).max(100).default('Combine e Economize'),
+      subtitle: z.string().max(200).default('Seleções completas prontas para adicionar à sacola em 1 clique.'),
+      items: z.array(z.object({
+        id: z.string().max(48).optional(),
+        title: z.string().min(1).max(90),
+        description: z.string().max(180).default(''),
+        skuIds: z.array(z.string().min(1).max(64)).min(1).max(4),
+        totalCents: z.number().int().min(0).default(0),
+        pixTotalCents: z.number().int().min(0).default(0),
+      })).min(1).max(4),
     }),
   }),
   z.object({
@@ -373,6 +415,9 @@ export const FormulaV9DocumentSchema = z.object({
   generatedAt: z.string().optional(),
   generatedBy: z.string().optional(),
   modelUsed: z.string().optional(),
+  visualDirection: z.enum(['editorial_light', 'luxury_dark', 'vibrant_retail', 'clean_craft']).optional(),
+  layoutGrid: z.enum(['bento_asymmetric', 'editorial_split', 'compact_dense']).optional(),
+  artDirectionBible: ArtDirectionBibleSchema.optional(),
   analysis: AnalysisSchema.default({ factsConfirmed: [], dependencies: [], mainExperienceSummary: '' }),
   designTokens: DesignTokensSchema,
   imagePlan: z.array(ImagePlanItemSchema).max(5).default([]),
@@ -409,37 +454,105 @@ function mixHex(hexA, hexB, weightB) {
 }
 
 /**
- * Derives an accessible cohesive token palette dynamically from any chosen brand hex color.
+ * WCAG 2.1 sRGB relative luminance in [0, 1].
+ */
+export function relativeLuminance(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  const toLinear = (channel) => {
+    const c = channel / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+/**
+ * WCAG 2.1 contrast ratio between two hex colors in [1, 21].
+ */
+export function contrastRatio(fgHex, bgHex) {
+  const l1 = relativeLuminance(fgHex);
+  const l2 = relativeLuminance(bgHex);
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return Number(((lighter + 0.05) / (darker + 0.05)).toFixed(2));
+}
+
+function ensureAccessibleFgOnBg(fgHex, bgHex, minRatio = 4.5) {
+  let candidate = safeCssHex(fgHex, '#0B1D52').toUpperCase();
+  if (contrastRatio(candidate, bgHex) >= minRatio) return candidate;
+  const bgLum = relativeLuminance(bgHex);
+  const target = bgLum > 0.42 ? '#0B1D52' : '#FFFFFF';
+  for (let step = 1; step <= 20; step += 1) {
+    const mixed = mixHex(candidate, target, step / 20);
+    if (contrastRatio(mixed, bgHex) >= minRatio) {
+      return mixed;
+    }
+  }
+  return contrastRatio('#0B1D52', bgHex) >= contrastRatio('#FFFFFF', bgHex) ? '#0B1D52' : '#FFFFFF';
+}
+
+/**
+ * Derives an accessible cohesive token palette dynamically from any chosen brand hex color,
+ * enforcing WCAG AA (contrastRatio >= 4.5) on all text/surface pairs.
  */
 export function deriveThemeTokensFromHex(primaryHex = '#0B4DB8', fontStyle = 'modern_sans') {
   const normalizedHex = safeCssHex(primaryHex, '#0B4DB8').toUpperCase();
-  const safeAccent = normalizedHex.length === 4
+  const rawAccent = normalizedHex.length === 4
     ? '#' + normalizedHex.slice(1).split('').map((c) => c + c).join('')
     : normalizedHex.slice(0, 7);
   const safeFont = ['modern_sans', 'editorial_serif', 'clean_geometric'].includes(fontStyle)
     ? fontStyle
     : 'modern_sans';
 
-  const rgb = hexToRgb(safeAccent);
-  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
-  const isVeryDark = luminance < 0.18;
+  const surface = mixHex(rawAccent, '#FFFFFF', 0.96);
+  const surfaceAlt = mixHex(rawAccent, '#FFFFFF', 0.90);
+  const card = '#FFFFFF';
 
-  const accent = isVeryDark ? '#2563EB' : safeAccent;
-  const accentDeep = mixHex(accent, '#070F1C', 0.34);
-  const footerBg = mixHex(accent, '#050C17', 0.62);
-  const surface = mixHex(accent, '#FFFFFF', 0.95);
-  const surfaceAlt = mixHex(accent, '#FFFFFF', 0.88);
-  const ink = mixHex(accent, '#0A1322', 0.86);
-  const inkMuted = '#475569';
+  // Ensure accent has >= 4.5 contrast against white (#FFFFFF), surface, and surfaceAlt
+  let accent = rawAccent;
+  if (relativeLuminance(accent) < 0.03) {
+    accent = '#1E3A8A';
+  }
+  for (let step = 1; step <= 25; step += 1) {
+    if (
+      contrastRatio(accent, '#FFFFFF') >= 4.55 &&
+      contrastRatio(accent, surface) >= 4.55 &&
+      contrastRatio(accent, surfaceAlt) >= 4.55
+    ) {
+      break;
+    }
+    accent = mixHex(rawAccent, '#0B1D52', step / 25);
+  }
+  if (
+    contrastRatio(accent, '#FFFFFF') < 4.5 ||
+    contrastRatio(accent, surface) < 4.5 ||
+    contrastRatio(accent, surfaceAlt) < 4.5
+  ) {
+    accent = '#0B4DB8';
+  }
+
+  const accentDeep = ensureAccessibleFgOnBg(mixHex(accent, '#070F1C', 0.34), '#FFFFFF', 4.5);
+  const footerBg = mixHex(accent, '#050C17', 0.68);
+  let ink = ensureAccessibleFgOnBg(mixHex(accent, '#0A1322', 0.88), surface, 7.0);
+  if (contrastRatio(ink, surfaceAlt) < 4.5 || contrastRatio(ink, card) < 4.5) {
+    ink = '#0B1D52';
+  }
+  let inkMuted = ensureAccessibleFgOnBg('#475569', surfaceAlt, 4.55);
+  if (contrastRatio(inkMuted, surface) < 4.5 || contrastRatio(inkMuted, card) < 4.5) {
+    inkMuted = '#334155';
+  }
+  const onPrimary = contrastRatio('#FFFFFF', accent) >= 4.5 ? '#FFFFFF' : '#0B1D52';
+  const badgeText = ensureAccessibleFgOnBg('#065F46', surfaceAlt, 4.55);
 
   return {
     accent,
     accentDeep,
     surface,
     surfaceAlt,
-    card: '#FFFFFF',
+    card,
     ink,
     inkMuted,
+    onPrimary,
+    badgeText,
     footerBg,
     fontStyle: safeFont,
     radiusPx: safeFont === 'clean_geometric' ? 14 : 22,
@@ -525,9 +638,18 @@ export function evaluateInteractiveExperience({ controls = [], state = {}, calcR
     } else if (ctrl.atomType === 'slider_range') {
       const minVal = Number(ctrl.min ?? 1);
       const maxVal = Number(ctrl.max ?? 10);
-      const qty = Math.max(minVal, Math.min(maxVal, Number(val ?? minVal)));
-      totalCents += qty * Number(ctrl.pricePerUnitCents || 0);
+      const qty = Math.max(minVal, Math.min(maxVal, Math.round(Number(val ?? minVal))));
+      const realSku = ctrl.skuRef
+        ? catalogByRef.get(String(ctrl.skuRef).toUpperCase()) || catalogByRef.get(String(ctrl.skuRef))
+        : null;
+      const unitCents = realSku
+        ? Math.max(0, Math.round(Number(realSku.priceCents || 0)))
+        : Math.max(0, Math.round(Number(ctrl.pricePerUnitCents || 0)));
+      totalCents += qty * unitCents;
       chosenSummaryLines.push(`${ctrl.label}: ${qty} ${ctrl.unitLabel}`);
+      if (realSku) {
+        selectedProducts.push({ ...realSku, quantity: qty });
+      }
     } else if (ctrl.atomType === 'slot_time_picker' && val) {
       chosenSummaryLines.push(`${ctrl.label}: ${String(val)}`);
     }
@@ -571,39 +693,130 @@ export function sanitizeFormulaV9Document(rawDoc, profile = {}) {
     if (!rawSec || typeof rawSec !== 'object') continue;
     const cloned = JSON.parse(JSON.stringify(rawSec));
 
-    if (cloned.type === 'InteractiveExperience' && Array.isArray(cloned?.config?.controls)) {
-      const defaults = { ...(cloned.config.stateDefaults || {}) };
-      cloned.config.controls = cloned.config.controls
-        .slice(0, 5)
-        .map((ctrl, cIdx) => {
-          if (!ctrl || typeof ctrl !== 'object') return null;
-          const id = String(ctrl.id || `ctrl_${cIdx + 1}`);
-          const stateKey = String(ctrl.stateKey || `key_${cIdx + 1}`).replace(/[^a-z0-9_]/gi, '_').slice(0, 40) || `key_${cIdx + 1}`;
-          if (Array.isArray(ctrl.options)) {
-            ctrl.options = ctrl.options.map((opt) => {
-              const found = opt?.skuRef
-                ? catalogByRef.get(String(opt.skuRef).toUpperCase()) || catalogByRef.get(String(opt.skuRef))
-                : null;
-              return found ? { ...opt, label: found.name, priceCents: Math.max(0, Number(found.priceCents || 0)) } : opt;
-            });
-            if (ctrl.atomType === 'checklist_addons') {
-              if (!Array.isArray(defaults[stateKey])) defaults[stateKey] = [];
-            } else if (!defaults[stateKey] || !ctrl.options.some((o) => o.value === defaults[stateKey])) {
-              defaults[stateKey] = ctrl.options[0]?.value || '';
-            }
-          } else if (ctrl.atomType === 'slider_range') {
-            defaults[stateKey] = Number.isFinite(Number(defaults[stateKey])) ? Number(defaults[stateKey]) : Number(ctrl.min || 1);
-          } else if (ctrl.atomType === 'slot_time_picker' && Array.isArray(ctrl.slots)) {
-            if (!defaults[stateKey]) defaults[stateKey] = ctrl.slots[0] || '';
-          }
-          return { ...ctrl, id, stateKey };
-        })
-        .filter(Boolean);
-
-      cloned.config.stateDefaults = defaults;
-      if (cloned.config.calcRule) {
-        cloned.config.calcRule.pixDiscountPercent = pixDiscountPercent;
+    if (cloned.type === 'InteractiveExperience' && cloned?.config) {
+      if (Array.isArray(cloned.config.recommendedSkus)) {
+        cloned.config.recommendedSkus = cloned.config.recommendedSkus
+          .map((sku) => {
+            const found = catalogByRef.get(String(sku || '').toUpperCase()) || catalogByRef.get(String(sku || ''));
+            return found ? String(found.sku || found.id) : null;
+          })
+          .filter(Boolean);
+      } else {
+        cloned.config.recommendedSkus = [];
       }
+
+      if (Array.isArray(cloned.config.controls)) {
+        const defaults = { ...(cloned.config.stateDefaults || {}) };
+        cloned.config.controls = cloned.config.controls
+          .slice(0, 5)
+          .map((ctrl, cIdx) => {
+            if (!ctrl || typeof ctrl !== 'object') return null;
+            const id = String(ctrl.id || `ctrl_${cIdx + 1}`);
+            const stateKey = String(ctrl.stateKey || `key_${cIdx + 1}`).replace(/[^a-z0-9_]/gi, '_').slice(0, 40) || `key_${cIdx + 1}`;
+            if (Array.isArray(ctrl.options)) {
+              const sanitizedOpts = ctrl.options
+                .map((opt) => {
+                  if (!opt || typeof opt !== 'object') return null;
+                  if (opt.skuRef) {
+                    const found =
+                      catalogByRef.get(String(opt.skuRef).toUpperCase()) ||
+                      catalogByRef.get(String(opt.skuRef));
+                    if (!found && safeCatalog.length > 0) {
+                      return null;
+                    }
+                    if (found) {
+                      const realCents = Math.max(0, Math.round(Number(found.priceCents || 0)));
+                      return {
+                        ...opt,
+                        skuRef: String(found.sku || found.id),
+                        label: found.name,
+                        priceCents: realCents,
+                        ...(opt.priceDeltaCents !== undefined ? { priceDeltaCents: realCents } : {}),
+                      };
+                    }
+                  }
+                  return opt;
+                })
+                .filter(Boolean);
+
+              if (sanitizedOpts.length === 0 && safeCatalog.length > 0) {
+                const fallbackSku = safeCatalog[0];
+                sanitizedOpts.push({
+                  value: 'item_1',
+                  label: fallbackSku.name,
+                  skuRef: String(fallbackSku.sku || fallbackSku.id),
+                  priceCents: Math.max(0, Math.round(Number(fallbackSku.priceCents || 0))),
+                });
+              }
+              ctrl.options = sanitizedOpts;
+              if (ctrl.atomType === 'checklist_addons') {
+                if (!Array.isArray(defaults[stateKey])) defaults[stateKey] = [];
+              } else if (!defaults[stateKey] || !ctrl.options.some((o) => o.value === defaults[stateKey])) {
+                defaults[stateKey] = ctrl.options[0]?.value || '';
+              }
+            } else if (ctrl.atomType === 'slider_range') {
+              if (ctrl.skuRef) {
+                const found =
+                  catalogByRef.get(String(ctrl.skuRef).toUpperCase()) ||
+                  catalogByRef.get(String(ctrl.skuRef));
+                if (found) {
+                  ctrl.skuRef = String(found.sku || found.id);
+                  ctrl.pricePerUnitCents = Math.max(0, Math.round(Number(found.priceCents || 0)));
+                } else if (safeCatalog.length > 0) {
+                  ctrl.skuRef = String(safeCatalog[0].sku || safeCatalog[0].id);
+                  ctrl.pricePerUnitCents = Math.max(0, Math.round(Number(safeCatalog[0].priceCents || 0)));
+                }
+              }
+              defaults[stateKey] = Number.isFinite(Number(defaults[stateKey])) ? Number(defaults[stateKey]) : Number(ctrl.min || 1);
+            } else if (ctrl.atomType === 'slot_time_picker' && Array.isArray(ctrl.slots)) {
+              if (!defaults[stateKey]) defaults[stateKey] = ctrl.slots[0] || '';
+            }
+            return { ...ctrl, id, stateKey };
+          })
+          .filter(Boolean);
+
+        cloned.config.stateDefaults = defaults;
+        if (cloned.config.calcRule) {
+          cloned.config.calcRule.pixDiscountPercent = pixDiscountPercent;
+        }
+      }
+    }
+
+    if (cloned.type === 'ComplementaryBundles' && Array.isArray(cloned?.config?.items)) {
+      const validBundles = [];
+      for (const rawBundle of cloned.config.items.slice(0, 4)) {
+        if (!rawBundle || typeof rawBundle !== 'object') continue;
+        const matchedSkus = [];
+        for (const rawSkuId of Array.isArray(rawBundle.skuIds) ? rawBundle.skuIds : []) {
+          const found =
+            catalogByRef.get(String(rawSkuId || '').toUpperCase()) ||
+            catalogByRef.get(String(rawSkuId || ''));
+          if (found) {
+            matchedSkus.push(found);
+          }
+        }
+        if (matchedSkus.length === 0) continue;
+        const sumCents = matchedSkus.reduce(
+          (acc, item) => acc + Math.max(0, Math.round(Number(item.priceCents || 0))),
+          0,
+        );
+        const pixCents =
+          pixDiscountPercent > 0
+            ? Math.max(0, sumCents - Math.round((sumCents * pixDiscountPercent) / 100))
+            : sumCents;
+        validBundles.push({
+          id: String(rawBundle.id || `bundle_${validBundles.length + 1}`).slice(0, 48),
+          title: String(rawBundle.title || matchedSkus.map((s) => s.name).join(' + ')).slice(0, 90),
+          description: String(rawBundle.description || '').slice(0, 180),
+          skuIds: matchedSkus.map((s) => String(s.sku || s.id)),
+          totalCents: sumCents,
+          pixTotalCents: pixCents,
+        });
+      }
+      if (validBundles.length === 0) {
+        continue;
+      }
+      cloned.config.items = validBundles;
     }
 
     if (cloned.type === 'DifferentialsStrip' && Array.isArray(cloned?.config?.items)) {
@@ -620,11 +833,19 @@ export function sanitizeFormulaV9Document(rawDoc, profile = {}) {
       }));
     }
 
-    if (cloned.type === 'HeroSection' && cloned?.config?.primaryCta && typeof cloned.config.primaryCta === 'object') {
-      cloned.config.primaryCta = {
-        ...cloned.config.primaryCta,
-        href: sanitizeSafeHref(cloned.config.primaryCta.href, '#'),
-      };
+    if (cloned.type === 'HeroSection' && cloned?.config) {
+      if (typeof cloned.config.title === 'string' && cloned.config.title.length > 58) {
+        cloned.config.title = cloned.config.title.slice(0, 58).trim();
+      }
+      if (typeof cloned.config.subtitle === 'string' && cloned.config.subtitle.length > 115) {
+        cloned.config.subtitle = cloned.config.subtitle.slice(0, 115).trim();
+      }
+      if (cloned.config.primaryCta && typeof cloned.config.primaryCta === 'object') {
+        cloned.config.primaryCta = {
+          ...cloned.config.primaryCta,
+          href: sanitizeSafeHref(cloned.config.primaryCta.href, '#'),
+        };
+      }
     }
 
     if (cloned.type === 'EditorialMediaSplit' && cloned?.config && cloned.config.ctaHref !== undefined) {
@@ -694,6 +915,8 @@ export function sanitizeFormulaV9Document(rawDoc, profile = {}) {
         card: safeCssHex(tokenSrc.card, fallbackTokens.card),
         ink: safeCssHex(tokenSrc.ink, fallbackTokens.ink),
         inkMuted: safeCssHex(tokenSrc.inkMuted, fallbackTokens.inkMuted),
+        onPrimary: safeCssHex(tokenSrc.onPrimary, fallbackTokens.onPrimary),
+        badgeText: safeCssHex(tokenSrc.badgeText, fallbackTokens.badgeText),
         footerBg: safeCssHex(tokenSrc.footerBg, fallbackTokens.footerBg),
         fontStyle: ['modern_sans', 'editorial_serif', 'clean_geometric'].includes(requestedFont)
           ? requestedFont
@@ -705,6 +928,9 @@ export function sanitizeFormulaV9Document(rawDoc, profile = {}) {
     : fallbackTokens;
 
   const safeAnalysis = AnalysisSchema.safeParse(rawDoc?.analysis);
+  const safeBible = ArtDirectionBibleSchema.safeParse(rawDoc?.artDirectionBible);
+  const allowedDirections = new Set(['editorial_light', 'luxury_dark', 'vibrant_retail', 'clean_craft']);
+  const allowedGrids = new Set(['bento_asymmetric', 'editorial_split', 'compact_dense']);
 
   const sanitizedCatalog = Array.isArray(rawDoc?.catalog)
     ? rawDoc.catalog
@@ -722,6 +948,9 @@ export function sanitizeFormulaV9Document(rawDoc, profile = {}) {
     generatedAt: String(rawDoc?.generatedAt || new Date().toISOString()),
     generatedBy: String(rawDoc?.generatedBy || 'glm-architect-v9'),
     modelUsed: String(rawDoc?.modelUsed || 'zai-org/GLM-5.3'),
+    ...(allowedDirections.has(rawDoc?.visualDirection) ? { visualDirection: rawDoc.visualDirection } : {}),
+    ...(allowedGrids.has(rawDoc?.layoutGrid) ? { layoutGrid: rawDoc.layoutGrid } : {}),
+    ...(safeBible.success ? { artDirectionBible: safeBible.data } : {}),
     analysis: safeAnalysis.success
       ? safeAnalysis.data
       : { factsConfirmed: [], dependencies: [], mainExperienceSummary: '' },

@@ -672,4 +672,91 @@ test.describe('Opção 1 — WhatsApp WebView Auto-Responder (DOM + Ponte Electr
     expect(p4.selectorHealth).toBe('degraded');
     expect(p4.missingSelector).toBe('sidebar_rows');
   });
+
+  test('7. FILA 05 (C55 / BUG-F05-03): .message-out manual sem hash da Sofia emite manual_human_takeover isolado ao customerKey', async ({
+    page,
+  }) => {
+    const scriptMod = (await import(
+      pathToFileURL(path.resolve(process.cwd(), 'desktop', 'whatsapp-webview-script.mjs')).href
+    )) as WebviewScriptModule;
+    const { buildWebviewPollScript, buildWebviewSendScript } = scriptMod;
+
+    await page.route('https://web.whatsapp.com/', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html; charset=utf-8',
+        body: `
+          <!doctype html>
+          <html>
+            <body>
+              <div id="app">
+                <div id="pane-side">
+                  <div role="listitem">
+                    <span title="Carla Mendes" dir="auto">Carla Mendes</span>
+                    <span>Boa tarde</span>
+                  </div>
+                </div>
+                <div id="main">
+                  <header>
+                    <span title="Carla Mendes" dir="auto">Carla Mendes</span>
+                  </header>
+                  <div id="messages">
+                    <div data-id="false_5511999990001@c.us_IN1" class="message-in">
+                      <span class="selectable-text">Oi, queria ver o sérum</span>
+                    </div>
+                  </div>
+                  <footer>
+                    <div contenteditable="true" data-lexical-editor="true" data-tab="10" role="textbox" id="composer"></div>
+                    <button type="button" aria-label="Enviar" id="send-btn">Enviar</button>
+                  </footer>
+                </div>
+              </div>
+              <script>
+                localStorage.setItem('last-wid-md', '"556193742091:22@c.us"');
+                document.getElementById('send-btn').addEventListener('click', () => {
+                  const composer = document.getElementById('composer');
+                  const txt = composer.textContent.trim();
+                  if (!txt) return;
+                  const div = document.createElement('div');
+                  div.setAttribute('data-id', 'true_5511999990001@c.us_SOFIA_' + Date.now());
+                  div.className = 'message-out';
+                  const span = document.createElement('span');
+                  span.className = 'selectable-text';
+                  span.textContent = txt;
+                  div.appendChild(span);
+                  document.getElementById('messages').appendChild(div);
+                  composer.textContent = '';
+                });
+              </script>
+            </body>
+          </html>
+        `,
+      });
+    });
+
+    await page.goto('https://web.whatsapp.com/', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(buildWebviewPollScript());
+
+    // 1. Mensagem enviada pela Sofia é registrada em sentSofiaHashes e NÃO gera manual_human_takeover
+    await page.evaluate(buildWebviewSendScript({ chatTitle: 'Carla Mendes', text: 'Olá Carla, o Sérum custa R$ 119,90!' }));
+    const afterSofia = (await page.evaluate(buildWebviewPollScript())) as PollOutcome & { customerKey?: string; snippet?: string };
+    expect(afterSofia.action).toBe('idle');
+
+    // 2. Resposta manual digitada pelo dono (.message-out sem assinatura da Sofia) dispara manual_human_takeover
+    await page.evaluate(() => {
+      const div = document.createElement('div');
+      div.setAttribute('data-id', 'true_5511999990001@c.us_HUMAN_MANUAL');
+      div.className = 'message-out';
+      const span = document.createElement('span');
+      span.className = 'selectable-text';
+      span.textContent = 'Oi Carla, sou o dono falando agora com você!';
+      div.appendChild(span);
+      document.getElementById('messages')!.appendChild(div);
+    });
+
+    const takeover = (await page.evaluate(buildWebviewPollScript())) as PollOutcome & { customerKey?: string; snippet?: string };
+    expect(takeover.action).toBe('manual_human_takeover');
+    expect(takeover.customerKey).toBe('5511999990001');
+    expect(takeover.snippet).toContain('sou o dono falando agora');
+  });
 });

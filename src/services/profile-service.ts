@@ -20,6 +20,9 @@ export const ORDER_STATUS_UI_MAP: Record<BackendOrderStatus, string> = {
   aguardando_dados: 'Novo',
   aguardando_pagamento: 'Aguardando Pagamento',
   confirmado: 'Pago',
+  em_preparo: 'Em Preparo',
+  enviado: 'Enviado',
+  entregue: 'Entregue',
   concluido: 'Entregue',
   cancelado: 'Cancelado',
 };
@@ -31,7 +34,10 @@ export const UI_LABEL_TO_ORDER_STATUS: Record<string, BackendOrderStatus> = {
   aguardando_pagamento: 'aguardando_pagamento',
   pago: 'confirmado',
   confirmado: 'confirmado',
-  entregue: 'concluido',
+  'em preparo': 'em_preparo',
+  em_preparo: 'em_preparo',
+  enviado: 'enviado',
+  entregue: 'entregue',
   concluido: 'concluido',
   cancelado: 'cancelado',
 };
@@ -57,6 +63,24 @@ export const ORDER_STATUS_META: Record<
     label: 'Pago',
     tone: 'green',
     badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  },
+  em_preparo: {
+    status: 'em_preparo',
+    label: 'Em Preparo',
+    tone: 'blue',
+    badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
+  },
+  enviado: {
+    status: 'enviado',
+    label: 'Enviado',
+    tone: 'blue',
+    badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
+  },
+  entregue: {
+    status: 'entregue',
+    label: 'Entregue',
+    tone: 'blue',
+    badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
   },
   concluido: {
     status: 'concluido',

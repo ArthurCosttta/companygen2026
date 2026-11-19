@@ -351,6 +351,118 @@ export function resolveActionCost(action, amount) {
   return Math.max(0, Number(CREDIT_ACTION_COSTS[action] ?? 0));
 }
 
+export async function getCreditLockState({
+  user,
+  directory,
+  readJsonFile = defaultReadJsonFile,
+}) {
+  if (!directory) return { locked: false, reviewFlag: null, shortfallCredits: 0, note: '' };
+  const lockPath = path.join(directory, 'cg_credit_lock.json');
+  const lockRaw = await readJsonFile(lockPath, null);
+  if (lockRaw && typeof lockRaw === 'object' && lockRaw.reviewFlag === 'NEGATIVE_BALANCE_REVIEW') {
+    return {
+      locked: true,
+      reviewFlag: 'NEGATIVE_BALANCE_REVIEW',
+      shortfallCredits: Math.max(0, Number(lockRaw.shortfallCredits || 0)),
+      note: String(lockRaw.note || 'Saldo em revisão após estorno/chargeback.'),
+      userId: user?.id || lockRaw.userId || '',
+    };
+  }
+  return { locked: false, reviewFlag: null, shortfallCredits: 0, note: '' };
+}
+
+export async function applyKiwifyReversalLocal({
+  userId,
+  directory,
+  creditsToReverse,
+  orderId,
+  eventType = 'chargeback',
+  readJsonFile = defaultReadJsonFile,
+  atomicWriteJson,
+}) {
+  const reversal = Math.max(0, Math.round(Number(creditsToReverse) || 0));
+  const refId = `kiwify:${String(orderId || '').trim()}:${String(eventType || 'chargeback').trim()}`;
+  return serializeCreditOp(directory, async () => {
+    const ledgerPath = path.join(directory, 'credits_ledger.json');
+    const lockPath = path.join(directory, 'cg_credit_lock.json');
+    const rawLedger = await readJsonFile(ledgerPath, []);
+    const ledger = Array.isArray(rawLedger) ? [...rawLedger] : [];
+    const existing = ledger.find((entry) => entry?.reference_id === refId);
+    if (existing) {
+      const lockState = await getCreditLockState({ user: { id: userId }, directory, readJsonFile });
+      return {
+        ok: true,
+        duplicate: true,
+        balance: Math.max(0, Number(existing.balance_after || 0)),
+        appliedDelta: 0,
+        shortfallCredits: lockState.shortfallCredits,
+        reviewFlag: lockState.reviewFlag,
+      };
+    }
+
+    const prevBalance = ledger.length > 0 ? Math.max(0, Number(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
+    const prevLock = await readJsonFile(lockPath, null);
+    let shortfall = Math.max(0, Number(prevLock?.shortfallCredits || 0));
+    let nextBalance = 0;
+    let appliedDelta = 0;
+    if (prevBalance >= reversal) {
+      appliedDelta = -reversal;
+      nextBalance = prevBalance - reversal;
+    } else {
+      appliedDelta = -prevBalance;
+      nextBalance = 0;
+      shortfall += reversal - prevBalance;
+    }
+
+    const now = new Date().toISOString();
+    ledger.push({
+      id: randomUUID(),
+      user_id: userId || 'local-user',
+      delta: appliedDelta,
+      balance_after: nextBalance,
+      operation_type: eventType === 'order_refunded' ? 'order_refunded' : 'chargeback',
+      reference_id: refId,
+      metadata: {
+        orderId,
+        requested_credits: reversal,
+        shortfall_credits: shortfall,
+      },
+      created_at: now,
+    });
+
+    const writeAtomic = async (targetPath, payload) => {
+      if (typeof atomicWriteJson === 'function') {
+        await atomicWriteJson(targetPath, payload);
+      } else {
+        const { mkdir, rename, writeFile } = await import('node:fs/promises');
+        await mkdir(directory, { recursive: true });
+        const tmp = `${targetPath}.${randomUUID()}.tmp`;
+        await writeFile(tmp, JSON.stringify(payload, null, 2), 'utf8');
+        await rename(tmp, targetPath);
+      }
+    };
+
+    await writeAtomic(ledgerPath, ledger);
+    const reviewFlag = shortfall > 0 ? 'NEGATIVE_BALANCE_REVIEW' : null;
+    await writeAtomic(lockPath, {
+      userId,
+      reviewFlag,
+      shortfallCredits: shortfall,
+      note: shortfall > 0 ? `Chargeback ${orderId} excedeu saldo em ${shortfall} cr.` : '',
+      updatedAt: now,
+    });
+
+    return {
+      ok: true,
+      duplicate: false,
+      balance: nextBalance,
+      appliedDelta,
+      shortfallCredits: shortfall,
+      reviewFlag,
+    };
+  });
+}
+
 export async function ensureSufficientCredits({
   user,
   bearer,
@@ -360,6 +472,17 @@ export async function ensureSufficientCredits({
   readJsonFile = defaultReadJsonFile,
   fetchImpl = globalThis.fetch,
 }) {
+  const lockState = await getCreditLockState({ user, directory, readJsonFile });
+  if (lockState.locked) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'NEGATIVE_BALANCE_REVIEW',
+      message: lockState.note || 'Conta em revisão por estorno/chargeback.',
+      shortfallCredits: lockState.shortfallCredits,
+      balance: 0,
+    };
+  }
   const required = resolveActionCost(action, amount);
   const balance = await getCreditBalance({ user, bearer, directory, readJsonFile, fetchImpl });
   if (required <= 0) {
@@ -377,6 +500,98 @@ export async function ensureSufficientCredits({
   return { ok: true, required, balance };
 }
 
+const ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+async function writeAlertDispatchUnsafe({
+  userId,
+  directory,
+  alertType,
+  details = {},
+  readJsonFile,
+  atomicWriteJson,
+  nowMs = Date.now(),
+  cooldownHours = 24,
+}) {
+  if (!directory || !alertType) return { dispatched: false, reason: 'missing_params' };
+  const filePath = path.join(directory, 'cg_alert_dispatches.json');
+  const existingRaw = typeof readJsonFile === 'function' ? await readJsonFile(filePath, {}) : {};
+  const state =
+    existingRaw && typeof existingRaw === 'object' && !Array.isArray(existingRaw)
+      ? { ...existingRaw }
+      : { byType: {}, dispatches: [] };
+  const byType = state.byType && typeof state.byType === 'object' ? { ...state.byType } : {};
+  const dispatches = Array.isArray(state.dispatches) ? [...state.dispatches] : [];
+  const prevMs = byType[alertType] ? Date.parse(String(byType[alertType])) : 0;
+  const windowMs = Math.max(1, Number(cooldownHours || 24)) * 60 * 60 * 1000;
+
+  if (Number.isFinite(prevMs) && prevMs > 0 && nowMs - prevMs < windowMs) {
+    return {
+      dispatched: false,
+      suppressedByCooldown: true,
+      alertType,
+      cooldownRemainingMs: windowMs - (nowMs - prevMs),
+      totalDispatchesForType: dispatches.filter((d) => d?.alertType === alertType).length,
+    };
+  }
+
+  const nowIso = new Date(nowMs).toISOString();
+  const record = {
+    id: randomUUID(),
+    userId: userId || 'local-user',
+    alertType,
+    details,
+    sentAt: nowIso,
+  };
+  byType[alertType] = nowIso;
+  dispatches.unshift(record);
+
+  const nextState = {
+    byType,
+    dispatches: dispatches.slice(0, 100),
+  };
+  if (typeof atomicWriteJson === 'function') {
+    await atomicWriteJson(filePath, nextState);
+  } else {
+    const { mkdir, rename, writeFile } = await import('node:fs/promises');
+    await mkdir(directory, { recursive: true });
+    const tmp = `${filePath}.${randomUUID()}.tmp`;
+    await writeFile(tmp, JSON.stringify(nextState, null, 2), 'utf8');
+    await rename(tmp, filePath);
+  }
+
+  return {
+    dispatched: true,
+    suppressedByCooldown: false,
+    alertType,
+    record,
+    totalDispatchesForType: dispatches.filter((d) => d?.alertType === alertType).length,
+  };
+}
+
+export async function checkAndRecordOperationalAlert({
+  user,
+  directory,
+  alertType,
+  details = {},
+  readJsonFile,
+  atomicWriteJson,
+  nowMs = Date.now(),
+  cooldownHours = 24,
+}) {
+  return serializeCreditOp(directory, () =>
+    writeAlertDispatchUnsafe({
+      userId: user?.id || 'local-user',
+      directory,
+      alertType,
+      details,
+      readJsonFile,
+      atomicWriteJson,
+      nowMs,
+      cooldownHours: Math.max(1, cooldownHours || ALERT_COOLDOWN_MS / (60 * 60 * 1000)),
+    }),
+  );
+}
+
 export async function debitCredits({
   user,
   bearer,
@@ -388,6 +603,17 @@ export async function debitCredits({
   atomicWriteJson,
   fetchImpl = globalThis.fetch,
 }) {
+  const lockState = await getCreditLockState({ user, directory, readJsonFile });
+  if (lockState.locked) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'NEGATIVE_BALANCE_REVIEW',
+      message: lockState.note || 'Conta em revisão por estorno/chargeback.',
+      shortfallCredits: lockState.shortfallCredits,
+      balance: 0,
+    };
+  }
   const cost = resolveActionCost(action, amount);
   if (cost <= 0) {
     const balance = await getCreditBalance({ user, bearer, directory, readJsonFile, fetchImpl });
@@ -445,12 +671,24 @@ export async function debitCredits({
         metadata,
         created_at: new Date().toISOString(),
       };
+      let lowCreditAlert = null;
+      if (balanceAfter < 15) {
+        lowCreditAlert = await writeAlertDispatchUnsafe({
+          userId: user.id,
+          directory,
+          alertType: 'low_credits_15',
+          details: { balanceAfter, action },
+          readJsonFile,
+          atomicWriteJson,
+        }).catch(() => null);
+      }
       return {
         ok: true,
         debited: Number(res.payload.debited ?? cost),
         balanceBefore,
         balanceAfter,
         entry,
+        lowCreditAlert,
       };
     });
   }
@@ -491,12 +729,24 @@ export async function debitCredits({
       await writeFile(tmp, JSON.stringify(ledger, null, 2), 'utf8');
       await rename(tmp, ledgerPath);
     }
+    let lowCreditAlert = null;
+    if (balanceAfter < 15) {
+      lowCreditAlert = await writeAlertDispatchUnsafe({
+        userId: user?.id || 'local-user',
+        directory,
+        alertType: 'low_credits_15',
+        details: { balanceAfter, action },
+        readJsonFile,
+        atomicWriteJson,
+      }).catch(() => null);
+    }
     return {
       ok: true,
       debited: cost,
       balanceBefore,
       balanceAfter,
       entry,
+      lowCreditAlert,
     };
   });
 }
@@ -602,12 +852,11 @@ export async function refundCredits({
   });
 }
 
-// Rate Limiter em memória por workspace + IP (5 tentativas por minuto)
+// Rate Limiter em memória por workspace + IP (5 tentativas reais por minuto; dryRun com balde dedicado)
 const rateLimitMap = new Map();
-function checkRateLimit(bucketKey) {
+function checkRateLimit(bucketKey, maxAttempts = 5) {
   const now = Date.now();
   const windowMs = 60 * 1000;
-  const maxAttempts = 5;
 
   const entry = rateLimitMap.get(bucketKey) || { count: 0, resetAt: now + windowMs };
   if (now > entry.resetAt) {
@@ -741,18 +990,21 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
     });
   }
 
-  // 1. POST /api/access/validate (Público, Rate Limited)
+  // 1. POST /api/access/validate (Público, Rate Limited; dryRun usa balde isolado para não bloquear digitação)
   if (pathname === '/api/access/validate') {
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
 
+    const body = await readJson(req, 4096);
+    const isDryRun = Boolean(body?.dryRun);
     const clientIp = req.socket?.remoteAddress || '127.0.0.1';
-    const rate = checkRateLimit(`${path.dirname(directory)}:${clientIp}`);
+    const rate = isDryRun
+      ? checkRateLimit(`dry:${path.dirname(directory)}:${clientIp}`, 30)
+      : checkRateLimit(`${path.dirname(directory)}:${clientIp}`, 5);
     if (!rate.allowed) {
       res.setHeader('Retry-After', String(rate.retryAfterSeconds));
       throw new ApiError(429, `Muitas tentativas. Aguarde ${rate.retryAfterSeconds} segundos.`);
     }
 
-    const body = await readJson(req, 4096);
     const rawCode = String(body?.code || '').trim();
     if (!rawCode) throw new ApiError(400, 'Informe o código de acesso.');
 
@@ -958,6 +1210,28 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         };
       }),
     );
+
+    // Record invite redemption metadata (IP hash + prefix) for multi-account abuse detection
+    if (redeemResult?.success && !redeemResult?.alreadyRedeemed) {
+      const clientIp = String(
+        req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1',
+      )
+        .split(',')[0]
+        .trim();
+      const eventsPath = path.join(path.dirname(directory), '_access_redemption_events.json');
+      await serializeCreditOp(eventsPath, async () => {
+        const prev = await readJsonFile(eventsPath, []);
+        const list = Array.isArray(prev) ? [...prev] : [];
+        list.push({
+          userId: user?.id || 'unknown',
+          ipHash: computeSha256(clientIp),
+          codePrefix: rawCode.slice(0, 9).toUpperCase(),
+          codeMasked: redeemResult.codeMasked || '',
+          at: new Date().toISOString(),
+        });
+        await atomicWriteJson(eventsPath, list.slice(-500));
+      }).catch(() => {});
+    }
 
     return send(res, 200, redeemResult);
   }

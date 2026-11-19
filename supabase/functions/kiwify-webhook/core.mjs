@@ -116,3 +116,24 @@ export function maskAccessCode(code) {
   const suffix = code.split("-").at(-1) ?? "****";
   return `AI10-****-${suffix}`;
 }
+
+export function classifyKiwifyError(errorMessage = "", httpStatus = 0) {
+  const msg = String(errorMessage || "").toLowerCase();
+  if (
+    httpStatus === 401 ||
+    httpStatus === 403 ||
+    /signature|hmac|unauthorized|forbidden|auth|token/i.test(msg)
+  ) {
+    return "AUTH";
+  }
+  if (
+    /unknown_plan|missing_customer_email|original_credit_not_found|invalid_format|permanent|bad request|22023|missing_access_code/i.test(
+      msg,
+    ) ||
+    httpStatus === 400 ||
+    httpStatus === 404
+  ) {
+    return "PERMANENT";
+  }
+  return "TRANSIENT";
+}

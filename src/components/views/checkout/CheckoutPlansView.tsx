@@ -8,11 +8,13 @@ import {
   Zap,
   BarChart3,
   ReceiptText,
+  X,
 } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { authenticatedFetch } from '@/services/supabase-client';
 import { getBrandHorizontalLogo, useDocumentDarkMode } from '@/utils/themeLogos';
+import { CreditDurationSimulator } from './CreditDurationSimulator';
 
 export interface CreditLedgerEntry {
   id: string;
@@ -65,9 +67,15 @@ const OP_LABELS: Record<string, { label: string; category: 'credit' | 'debit' | 
   order_refunded: { label: 'Estorno / Reembolso Kiwify', category: 'refund' },
   failure_refund: { label: 'Estorno automático de falha', category: 'credit' },
   generate_storefront: { label: 'Geração de Vitrine com IA', category: 'debit' },
+  debit_generate_full_storefront: { label: 'Geração de Vitrine com IA', category: 'debit' },
   edit_storefront: { label: 'Edição / Nova página na Vitrine', category: 'debit' },
+  debit_create_subpage: { label: 'Edição / Nova página na Vitrine', category: 'debit' },
+  debit_edit_block: { label: 'Ajuste cirúrgico na Vitrine', category: 'debit' },
   generate_image: { label: 'Geração / Busca de Imagem IA', category: 'debit' },
+  debit_generate_image_schnell: { label: 'Geração de Imagem Produto IA', category: 'debit' },
+  debit_generate_hero_dev: { label: 'Geração de Capa Hero IA', category: 'debit' },
   whatsapp_reply_consumed: { label: 'Atendimento WhatsApp (Sofia IA)', category: 'debit' },
+  debit_glm_whatsapp: { label: 'Atendimento WhatsApp (Sofia IA)', category: 'debit' },
 };
 
 function sanitizePlanPriceLabel(raw: string): string {
@@ -84,6 +92,8 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
   const [ledgerEntries, setLedgerEntries] = useState<CreditLedgerEntry[]>([]);
   const [awaitingKiwifyPlan, setAwaitingKiwifyPlan] = useState<string | null>(null);
   const [confirmedCreditsDelta, setConfirmedCreditsDelta] = useState<number | null>(null);
+  const [selectedOperationType, setSelectedOperationType] = useState<string | null>(null);
+  const [hoveredEntry, setHoveredEntry] = useState<CreditLedgerEntry | null>(null);
   const pollingIntervalRef = useRef<number | null>(null);
   const baselineBalanceRef = useRef<number>(0);
 
@@ -184,6 +194,35 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[0];
   const projectedBalance = selectedPlan ? currentBalance + selectedPlan.credits : currentBalance;
+  const [animatedProjectedBalance, setAnimatedProjectedBalance] = useState<number>(projectedBalance);
+  const prevProjectedRef = useRef<number>(projectedBalance);
+
+  useEffect(() => {
+    const startVal = prevProjectedRef.current;
+    const endVal = projectedBalance;
+    if (startVal === endVal) {
+      setAnimatedProjectedBalance(endVal);
+      return;
+    }
+    const startMs = performance.now();
+    const durationMs = 260;
+    let rafId = 0;
+    const tick = (nowMs: number) => {
+      const t = Math.min(1, (nowMs - startMs) / durationMs);
+      const eased = 1 - (1 - t) * (1 - t);
+      setAnimatedProjectedBalance(Math.round(startVal + (endVal - startVal) * eased));
+      if (t < 1) {
+        rafId = window.requestAnimationFrame(tick);
+      } else {
+        prevProjectedRef.current = endVal;
+      }
+    };
+    rafId = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      prevProjectedRef.current = endVal;
+    };
+  }, [projectedBalance]);
 
   const resolveKiwifyUrl = (plan?: CreditPlan): string => {
     if (plan?.kiwifyUrl) return plan.kiwifyUrl;
@@ -255,7 +294,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
   };
 
   const telemetry = useMemo(() => {
-    const byOp = new Map<string, { label: string; total: number; count: number }>();
+    const byOp = new Map<string, { opType: string; label: string; total: number; count: number }>();
     let totalSpent = 0;
     let totalLoaded = 0;
     for (const entry of ledgerEntries) {
@@ -266,7 +305,12 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
         const abs = Math.abs(delta);
         totalSpent += abs;
         const meta = OP_LABELS[entry.operation_type] || { label: entry.operation_type || 'Outro uso', category: 'debit' };
-        const prev = byOp.get(entry.operation_type) || { label: meta.label, total: 0, count: 0 };
+        const prev = byOp.get(entry.operation_type) || {
+          opType: entry.operation_type,
+          label: meta.label,
+          total: 0,
+          count: 0,
+        };
         prev.total += abs;
         prev.count += 1;
         byOp.set(entry.operation_type, prev);
@@ -274,12 +318,15 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
     }
     const bars = Array.from(byOp.values()).sort((a, b) => b.total - a.total);
     const maxBar = Math.max(1, ...bars.map((b) => b.total));
+    const filteredLedger = selectedOperationType
+      ? ledgerEntries.filter((e) => e.operation_type === selectedOperationType)
+      : ledgerEntries;
     const paymentHistory = ledgerEntries.filter((e) =>
       ['purchase_kiwify', 'order_refunded', 'welcome_invite', 'redeem_code', 'failure_refund'].includes(e.operation_type) ||
       Number(e.delta || 0) > 0,
     );
-    return { totalSpent, totalLoaded, bars, maxBar, paymentHistory };
-  }, [ledgerEntries]);
+    return { totalSpent, totalLoaded, bars, maxBar, filteredLedger, paymentHistory };
+  }, [ledgerEntries, selectedOperationType]);
 
   return (
     <div
@@ -457,26 +504,53 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                   <p>Nenhum consumo registrado ainda nesta conta. Ao gerar vitrines, imagens ou responder no WhatsApp, o gráfico aparecerá aqui.</p>
                 </div>
               ) : (
-                <div className="space-y-3 pt-2">
+                <div
+                  className="space-y-2.5 pt-2"
+                  style={{
+                    backgroundImage:
+                      'repeating-linear-gradient(to bottom, transparent 0, transparent 42px, rgba(100,116,139,0.12) 42px, rgba(100,116,139,0.12) 43px)',
+                  }}
+                >
                   {telemetry.bars.map((bar) => {
                     const pct = Math.max(6, Math.round((bar.total / telemetry.maxBar) * 100));
+                    const isPressed = selectedOperationType === bar.opType;
                     return (
-                      <div key={bar.label} className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className={`font-semibold ${isDark ? 'text-slate-200' : 'text-[var(--cg-text)]'}`}>
+                      <button
+                        key={bar.opType}
+                        type="button"
+                        role="button"
+                        aria-pressed={isPressed}
+                        data-testid={`checkout-chart-bar-${bar.opType}`}
+                        onClick={() =>
+                          setSelectedOperationType((cur) => (cur === bar.opType ? null : bar.opType))
+                        }
+                        className={`w-full rounded-xl border p-2.5 text-left space-y-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
+                          isPressed
+                            ? 'border-[#2563EB] bg-blue-500/10 ring-1 ring-[#2563EB]/30'
+                            : isDark
+                              ? 'border-transparent hover:bg-slate-800/60'
+                              : 'border-transparent hover:bg-slate-100/80'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs gap-2">
+                          <span className={`font-semibold truncate ${isDark ? 'text-slate-200' : 'text-[var(--cg-text)]'}`}>
                             {bar.label}
                           </span>
-                          <span className="cg-tabular font-mono text-[#38BDF8]">
+                          <span className="cg-tabular shrink-0 font-mono text-[#38BDF8]">
                             -{bar.total.toLocaleString('pt-BR')} cr ({bar.count}x)
                           </span>
                         </div>
                         <div className={`h-3 w-full overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
                           <div
-                            className="h-full rounded-full bg-gradient-to-r from-[#2563EB] to-[#38BDF8]"
+                            className={`h-full rounded-full transition-all ${
+                              isPressed
+                                ? 'bg-[#2563EB]'
+                                : 'bg-gradient-to-r from-[#2563EB] to-[#38BDF8]'
+                            }`}
                             style={{ width: `${pct}%` }}
                           />
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -491,7 +565,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                   : 'border-[var(--cg-border)] bg-[var(--cg-surface)] shadow-sm'
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2
                     className={`text-sm font-bold flex items-center gap-2 ${
@@ -501,28 +575,59 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                     <ReceiptText className="size-4 text-emerald-500" />
                     Histórico de Pagamentos & Movimentações
                   </h2>
-                  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
-                    Recargas Kiwify, códigos resgatados, estornos e lançamentos recentes.
+                  <p className={`text-xs ${isDark ? 'text-slate-300' : 'text-[var(--cg-text-muted)]'}`}>
+                    Clique em qualquer barra ao lado para filtrar ou passe o mouse/foque para detalhes.
                   </p>
                 </div>
-                <span className="cg-tabular rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-300">
-                  Recargas: +{telemetry.totalLoaded.toLocaleString('pt-BR')} cr
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedOperationType && (
+                    <button
+                      type="button"
+                      data-testid="checkout-clear-ledger-filter"
+                      onClick={() => setSelectedOperationType(null)}
+                      className="inline-flex min-h-[30px] items-center gap-1 rounded-full border border-[#2563EB]/40 bg-blue-500/10 px-2.5 text-xs font-bold text-[#2563EB] dark:text-[#38BDF8] hover:bg-blue-500/20"
+                    >
+                      <X className="size-3" />
+                      Limpar filtro
+                    </button>
+                  )}
+                  <span className="cg-tabular rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-300">
+                    Recargas: +{telemetry.totalLoaded.toLocaleString('pt-BR')} cr
+                  </span>
+                </div>
               </div>
 
-              {ledgerEntries.length === 0 ? (
+              {/* Tooltip Camada 2 ao focar / passar mouse em item do extrato */}
+              {hoveredEntry && (
+                <div
+                  data-testid="checkout-ledger-tooltip"
+                  role="status"
+                  className="cg-tabular rounded-xl border border-blue-200 dark:border-blue-500/40 bg-blue-50/80 dark:bg-blue-500/10 px-3.5 py-2 text-xs text-[#0F172A] dark:text-blue-100 flex flex-wrap items-center justify-between gap-2"
+                >
+                  <span>
+                    <strong>{(OP_LABELS[hoveredEntry.operation_type] || { label: hoveredEntry.operation_type }).label}</strong> ·{' '}
+                    {new Date(hoveredEntry.created_at).toLocaleString('pt-BR')}
+                  </span>
+                  <span className="font-mono font-bold">
+                    {Number(hoveredEntry.delta) >= 0 ? `+${hoveredEntry.delta}` : hoveredEntry.delta} cr ·{' '}
+                    {Number(hoveredEntry.balance_after) - Number(hoveredEntry.delta)} → {hoveredEntry.balance_after} cr
+                  </span>
+                </div>
+              )}
+
+              {telemetry.filteredLedger.length === 0 ? (
                 <div
                   className={`rounded-2xl border border-dashed p-6 text-center text-xs ${
                     isDark
-                      ? 'border-slate-700 bg-slate-900/50 text-slate-400'
+                      ? 'border-slate-700 bg-slate-900/50 text-slate-300'
                       : 'border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-muted)]'
                   }`}
                 >
-                  Nenhuma movimentação registrada ainda nesta conta.
+                  Nenhuma movimentação registrada para este filtro.
                 </div>
               ) : (
                 <ul className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
-                  {ledgerEntries.slice(0, 40).map((entry) => {
+                  {telemetry.filteredLedger.slice(0, 40).map((entry) => {
                     const meta = OP_LABELS[entry.operation_type] || {
                       label: entry.operation_type || 'Movimentação',
                       category: entry.delta >= 0 ? 'credit' : 'debit',
@@ -532,7 +637,11 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                     return (
                       <li
                         key={entry.id}
-                        className={`flex items-center justify-between gap-3 rounded-2xl border px-3.5 py-2.5 text-xs ${
+                        tabIndex={0}
+                        data-testid={`checkout-ledger-row-${entry.operation_type}`}
+                        onMouseEnter={() => setHoveredEntry(entry)}
+                        onFocus={() => setHoveredEntry(entry)}
+                        className={`flex items-center justify-between gap-3 rounded-2xl border px-3.5 py-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
                           isDark
                             ? 'border-slate-800 bg-slate-900/60'
                             : 'border-[var(--cg-border)] bg-[var(--cg-surface-elevated)]'
@@ -571,10 +680,18 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
           </div>
         ) : (
         /* Conteúdo Principal de Planos */
-        <div className="mt-6 grid gap-8 lg:grid-cols-3">
+        <div className="mt-6 space-y-6">
+          <CreditDurationSimulator
+            plans={plans}
+            selectedPlanId={selectedPlanId}
+            onSelectPlan={setSelectedPlanId}
+            isDark={isDark}
+          />
+
+        <div className="grid gap-8 lg:grid-cols-3">
           {/* Coluna 1 & 2: Seleção de Planos */}
           <div className="lg:col-span-2 space-y-4">
-            <h2 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-[var(--cg-text-muted)]'}`}>
+            <h2 className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-[var(--cg-text-muted)]'}`}>
               Escolha seu Pacote de Créditos (Sem Validade)
             </h2>
 
@@ -585,10 +702,13 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                 return (
                   <div
                     key={plan.id}
+                    data-testid={`checkout-plan-card-${plan.id}`}
                     onClick={() => {
                       setSelectedPlanId(plan.id);
                     }}
                     className={`relative flex flex-col justify-between rounded-3xl border p-5 cursor-pointer transition-all ${
+                      plan.popular ? 'order-first sm:order-none sm:-translate-y-1' : ''
+                    } ${
                       isSelected
                         ? isDark
                           ? 'border-[#3B82F6] bg-[#182034] shadow-xl ring-2 ring-[#3B82F6]/40'
@@ -596,7 +716,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                         : isDark
                           ? 'border-slate-800 bg-[#111726]/90 hover:border-slate-700 hover:bg-[#182034]'
                           : 'border-[var(--cg-border)] bg-[var(--cg-surface)] hover:border-[var(--cg-border-strong)] hover:bg-[var(--cg-surface-elevated)] shadow-xs'
-                    } ${plan.popular ? 'sm:-translate-y-1' : ''}`}
+                    }`}
                   >
                     {/* Tag de Destaque */}
                     {plan.popular && (
@@ -701,8 +821,11 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                   </div>
                   <div className={`flex justify-between ${isDark ? 'text-slate-300' : 'text-[var(--cg-text-secondary)]'}`}>
                     <span>Novo Saldo Estimado:</span>
-                    <span className="cg-tabular font-bold text-emerald-600 dark:text-emerald-400">
-                      {projectedBalance.toLocaleString('pt-BR')} créditos
+                    <span
+                      data-testid="checkout-projected-balance"
+                      className="cg-tabular font-bold text-emerald-600 dark:text-emerald-400"
+                    >
+                      {animatedProjectedBalance.toLocaleString('pt-BR')} créditos
                     </span>
                   </div>
                   <div
@@ -765,6 +888,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
               </ActionButton>
             </div>
           </div>
+        </div>
         </div>
         )}
       </div>

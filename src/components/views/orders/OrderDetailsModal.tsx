@@ -6,6 +6,7 @@ import {
   MapPin,
   MessageSquare,
   Package,
+  Printer,
   RotateCcw,
 } from 'lucide-react';
 import {
@@ -192,15 +193,15 @@ export function OrderDetailsModal({
         mobileHeight="90%"
         preventCloseWhileSubmitting={isUpdating}
       >
-        <div className="space-y-5">
+        <div className="cg-print-comanda-root space-y-5">
           {/* Customer card + primary WhatsApp CTA */}
-          <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <section className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-slate-50/70 dark:bg-[#090D16] p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 space-y-1">
-                <h3 className="text-base font-bold text-[#0F172A] truncate">
+                <h3 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC] truncate">
                   {order.customer_name}
                 </h3>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-[#94A3B8]">
                   <span>
                     {customerPhone
                       ? `WhatsApp: ${formatPhoneBR(customerPhone)}`
@@ -212,24 +213,35 @@ export function OrderDetailsModal({
                   </span>
                 </div>
                 {addressSummary ? (
-                  <p className="flex items-start gap-1.5 pt-1 text-xs text-slate-600">
+                  <p className="flex items-start gap-1.5 pt-1 text-xs text-slate-600 dark:text-[#CBD5E1]">
                     <MapPin className="mt-0.5 size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
                     <span>{addressSummary}</span>
                   </p>
                 ) : null}
               </div>
 
-              <ActionButton
-                variant="success"
-                size={44}
-                leftIcon={<MessageSquare className="size-4" />}
-                disabled={!customerPhone}
-                onClick={handleWhatsAppContact}
-                className="sm:w-[220px]"
-                data-testid="order-details-whatsapp-btn"
-              >
-                Chamar Cliente no WhatsApp
-              </ActionButton>
+              <div className="no-print flex flex-col gap-2 sm:flex-row sm:items-center">
+                <ActionButton
+                  variant="secondary"
+                  size={44}
+                  leftIcon={<Printer className="size-4" />}
+                  onClick={() => window.print()}
+                  data-testid="order-details-print-btn"
+                >
+                  Imprimir Comanda
+                </ActionButton>
+                <ActionButton
+                  variant="success"
+                  size={44}
+                  leftIcon={<MessageSquare className="size-4" />}
+                  disabled={!customerPhone}
+                  onClick={handleWhatsAppContact}
+                  className="sm:w-[210px]"
+                  data-testid="order-details-whatsapp-btn"
+                >
+                  Chamar no WhatsApp
+                </ActionButton>
+              </div>
             </div>
           </section>
 
@@ -254,7 +266,7 @@ export function OrderDetailsModal({
           ) : null}
 
           {/* Reversible status selector */}
-          <section className="space-y-2.5" aria-label="Alterar status do pedido">
+          <section className="no-print space-y-2.5" aria-label="Alterar status do pedido">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-[#0F172A]">Status do Pedido</h4>
               <span className="text-xs text-slate-500">Toque para atualizar</span>

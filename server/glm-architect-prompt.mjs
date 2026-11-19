@@ -15,7 +15,22 @@ import {
 
 export { buildNeutralFallbackV9Document, ensureFormulaV9 };
 
-function summarizeCatalogForPrompt(profile) {
+export function normalizeDisplayTitle(rawName = '') {
+  const cleaned = String(rawName || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[-_•*#\s]+|[-_•*\s]+$/g, '')
+    .trim();
+  if (!cleaned) return 'Item do Catálogo';
+  if (cleaned === cleaned.toUpperCase() && cleaned.length > 4) {
+    return cleaned
+      .toLowerCase()
+      .replace(/(?:^|\s)\S/g, (ch) => ch.toUpperCase())
+      .slice(0, 90);
+  }
+  return cleaned.slice(0, 90);
+}
+
+export function summarizeCatalogForPrompt(profile) {
   const products = Array.isArray(profile?.catalog?.products)
     ? profile.catalog.products.filter((p) => p && p.active !== false)
     : [];
@@ -37,13 +52,41 @@ function summarizeCatalogForPrompt(profile) {
 
   return picked.map((p) => ({
     sku: String(p.sku || p.id || '').slice(0, 48),
-    name: String(p.name || '').slice(0, 90),
+    name: normalizeDisplayTitle(p.name || ''),
     category: String(p.category || 'Geral').slice(0, 48),
     itemType: String(p.itemType || 'produto_fisico'),
-    priceCents: Math.max(0, Number(p.priceCents || 0)),
+    priceCents: Math.max(0, Math.round(Number(p.priceCents || 0))),
     variation: String(p.variation || 'Padrão').slice(0, 48),
     description: String(p.description || '').slice(0, 70),
   }));
+}
+
+export function computeCatalogMetricsForPrompt(profile) {
+  const products = Array.isArray(profile?.catalog?.products)
+    ? profile.catalog.products.filter((p) => p && p.active !== false)
+    : [];
+  const validPrices = products
+    .map((p) => Math.max(0, Math.round(Number(p.priceCents || 0))))
+    .filter((c) => c > 0);
+  const avgPriceCents =
+    validPrices.length > 0
+      ? Math.round(validPrices.reduce((acc, c) => acc + c, 0) / validPrices.length)
+      : 0;
+  const serviceCount = products.filter((p) => p.itemType === 'servico_agendado').length;
+  const physicalCount = products.length - serviceCount;
+  const ticketTier =
+    avgPriceCents >= 50000
+      ? 'high_ticket_consultative'
+      : avgPriceCents > 0 && avgPriceCents < 8000
+        ? 'low_ticket_impulse_pix'
+        : 'mid_ticket_balanced';
+  return {
+    totalActiveSkus: products.length,
+    avgPriceCents,
+    serviceCount,
+    physicalCount,
+    ticketTier,
+  };
 }
 
 /**
@@ -73,6 +116,7 @@ export function buildGlmArchitectMessages(profile = {}) {
   const wantsAiLogo = Boolean(brand.generateAiLogo) && !hasUserLogo;
   const hasUserStorefront = Boolean(String(brand.storefrontPhotoUrl || '').trim());
   const skus = summarizeCatalogForPrompt(profile);
+  const catalogMetrics = computeCatalogMetricsForPrompt(profile);
 
   const systemPrompt = `Você é responsável pela estratégia de produto, pelo design de interação e pela direção visual de uma loja ou site de serviços.
 Analise o catálogo e as entradas do lojista e proponha uma experiência específica para esse negócio, emitindo EXCLUSIVAMENTE um JSON válido no formato Formula-IR v9.0 (sem markdown, sem comentários fora do JSON).
@@ -80,11 +124,15 @@ Analise o catálogo e as entradas do lojista e proponha uma experiência especí
 <skill_01_entender_o_negocio>
 - Identifique o que realmente é vendido (produtos físicos, serviços agendáveis, kits/combos ou sob medida) a partir dos itens reais do catálogo.
 - Diferencie fatos confirmados no catálogo, diferenciais informados pelo lojista e o que depende de confirmação humana pelo WhatsApp.
-- PROIBIDO inventar avaliações, depoimentos, certificados, prêmios ou descontos inexistentes.
+- PROIBIDO inventar avaliações, depoimentos, certificados, prêmios, garantias ou descontos inexistentes.
+- REGRA DE TICKET MÉDIO (avgPriceCents = ${catalogMetrics.avgPriceCents}):
+  - Se avgPriceCents < 8000 (baixo ticket): use copy curta, direta, foco em Pix imediato e adição rápida à sacola.
+  - Se avgPriceCents >= 50000 (alto ticket): use copy consultiva, destaque especificações técnicas, confiança e atendimento pelo WhatsApp.
 </skill_01_entender_o_negocio>
 
 <skill_02_escolher_a_experiencia>
 - Escolha UMA experiência interativa principal concreta que resolva uma decisão real do visitante usando SKUs/preços reais do catálogo.
+- Define "experienceMode": "quiz_recommendation" | "dosage_calculator" | "bundle_builder" e "recommendedSkus": lista de SKUs reais do catálogo.
 - Avalie pela pergunta: "Que ação interessante o visitante consegue realizar aqui e o que ele recebe depois?"
 - Evite frases vagas ("experiência inteligente/personalizada"); mostre utilidade prática no componente InteractiveExperience.
 </skill_02_escolher_a_experiencia>
@@ -101,11 +149,21 @@ Analise o catálogo e as entradas do lojista e proponha uma experiência especí
 </skill_03_especificar_controles_e_estados>
 
 <skill_04_direcao_visual_e_imagens>
-- Monte ATÉ 7 seções principais em "sections[]" (escolhendo a ordem e variedade mais adequada ao negócio — NÃO repita sempre o mesmo roteiro).
+- Monte ATÉ 7 seções principais em "sections[]" seguindo a REGRA DE ORDENAÇÃO GOAL-DRIVEN:
+  - Se modeloDeVenda === "servicos" e <= 6 itens: abra com HeroSection -> DifferentialsStrip -> InteractiveExperience -> CatalogGrid -> ContextualFaq -> ClosingScheduleSplit.
+  - Se >= 12 produtos físicos: priorize HeroSection -> HighlightsGrid -> ComplementaryBundles -> CatalogGrid -> InteractiveExperience -> ContextualFaq -> ClosingScheduleSplit.
+- REGRA OBRIGATÓRIA 390x844 FOLD BUDGET:
+  - Em HeroSection: "title" DEVE ter no máximo 58 caracteres (<= 58 chars) e "subtitle" no máximo 115 caracteres (<= 115 chars) para que título, foto e CTA caibam na primeira dobra mobile de 390x844px!
+- Defina no topo do documento:
+  - "visualDirection": "editorial_light" | "luxury_dark" | "vibrant_retail" | "clean_craft"
+  - "layoutGrid": "bento_asymmetric" | "editorial_split" | "compact_dense"
+  - "artDirectionBible": { "lighting": "...", "surfaceMaterial": "...", "backdropTone": "...", "cameraFraming": "..." }
 - Tipos permitidos de seção em "sections[]":
-  - HeroSection (imageSlotId opcional) { variant:"split"|"full_bleed", eyebrow, title, subtitle, primaryCta:{label,href}, secondaryCta?:{label,action:"whatsapp.send_summary"|"scroll"} }
+  - HeroSection (imageSlotId opcional) { variant:"split"|"full_bleed", eyebrow, title (<=58 chars), subtitle (<=115 chars), primaryCta:{label,href}, secondaryCta?:{label,action:"whatsapp.send_summary"|"scroll"} }
   - DifferentialsStrip { items:[{ icon (use apenas ${WHITELISTED_ICONS.slice(0, 12).join('|')}), title, text }] }
-  - InteractiveExperience (imageSlotId opcional) { eyebrow, title, subtitle, layoutVariant:"workbench_split"|"stacked_cards"|"compact_panel", stateDefaults, controls, calcRule, primaryAction, secondaryAction? }
+  - InteractiveExperience (imageSlotId opcional) { eyebrow, title, subtitle, experienceMode:"quiz_recommendation"|"dosage_calculator"|"bundle_builder", recommendedSkus:string[], layoutVariant:"workbench_split"|"stacked_cards"|"compact_panel", stateDefaults, controls, calcRule, primaryAction, secondaryAction? }
+  - ComplementaryBundles { title:"Combine e Economize", subtitle, items:[{ title, description, skuIds:string[] }] }
+  - ContextualFaq { title:"Perguntas Frequentes", subtitle, items:[{ q, a }] } (cite APENAS address, hours, pixDiscountPercent e shipping reais)
   - EditorialMediaSplit (imageSlotId opcional) { variant:"media_left"|"media_right", eyebrow, title, body, bullets[], ctaLabel?, ctaHref? }
   - StepsTimeline { title, subtitle, tabs:[{ id, label, steps:[{ time, title, detail }] }] }
   - HighlightsGrid { title, subtitle, columns:2|3, cards:[{ eyebrow, title, description, ctaLabel, href, imageSlotId? }] }

@@ -206,7 +206,7 @@ export function AuthFlowView() {
   }
 
   return (
-    <main className="min-h-dvh bg-[#F8FAFC] text-[#0F172A] md:grid md:grid-cols-2 md:items-stretch">
+    <main className="min-h-dvh bg-[#F8FAFC] text-[#0F172A] dark:bg-[#090D16] dark:text-slate-100 md:grid md:grid-cols-2 md:items-stretch">
       {/* Left Brand Panel (Desktop Royal Blue & Slate Highlight) */}
       <section
         aria-label="Apresentação CompanyGen"
@@ -221,9 +221,37 @@ export function AuthFlowView() {
           <p className="text-xs font-medium text-blue-200">
             Vitrine Online & Atendimento WhatsApp
           </p>
+
+          {/* Diagrama visual de 5s (Web 24h -> Sofia .exe -> Pedidos) */}
+          <div
+            data-testid="auth-flow-5s-diagram"
+            aria-label="Como o sistema funciona em 3 passos"
+            className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2.5"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-blue-200 ring-1 ring-white/20">
+                <Store className="size-4" aria-hidden="true" />
+              </span>
+              <span className="text-xs font-semibold text-white">Vitrine 24h Web</span>
+            </div>
+            <ArrowRight className="hidden sm:block size-3.5 shrink-0 text-blue-300" aria-hidden="true" />
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-emerald-300 ring-1 ring-white/20">
+                <MessageSquare className="size-4" aria-hidden="true" />
+              </span>
+              <span className="text-xs font-semibold text-white">Sofia no PC (.exe)</span>
+            </div>
+            <ArrowRight className="hidden sm:block size-3.5 shrink-0 text-blue-300" aria-hidden="true" />
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-amber-300 ring-1 ring-white/20">
+                <ShoppingBag className="size-4" aria-hidden="true" />
+              </span>
+              <span className="text-xs font-semibold text-white">Pedidos no Painel</span>
+            </div>
+          </div>
         </div>
 
-        <div className="my-8 space-y-6">
+        <div className="hidden md:block my-8 space-y-6">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-blue-100">
             <Sparkles className="size-3.5 text-[#F59E0B]" aria-hidden="true" />
             <span>Pronto para vender em minutos</span>
@@ -258,7 +286,7 @@ export function AuthFlowView() {
           </ul>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-300">
+        <div className="hidden md:flex items-center gap-2 text-xs text-slate-300">
           <ShieldCheck className="size-4 text-emerald-400" aria-hidden="true" />
           <span>Dados isolados por conta e backup automático seguro</span>
         </div>

@@ -75,8 +75,26 @@ export async function tryConvertBufferToWebp(buffer, currentExt) {
   };
 }
 
+export function applyArtDirectionBibleToPrompt(prompt, artDirectionBible) {
+  const basePrompt = String(prompt || 'Clean minimalist studio photograph, natural lighting').trim();
+  if (!artDirectionBible || typeof artDirectionBible !== 'object') {
+    return basePrompt.slice(0, 600);
+  }
+  const parts = [
+    artDirectionBible.lighting ? `Lighting: ${String(artDirectionBible.lighting).trim()}` : '',
+    artDirectionBible.surfaceMaterial
+      ? `Surface: ${String(artDirectionBible.surfaceMaterial).trim()}`
+      : '',
+    artDirectionBible.backdropTone ? `Backdrop: ${String(artDirectionBible.backdropTone).trim()}` : '',
+    artDirectionBible.cameraFraming ? `Camera: ${String(artDirectionBible.cameraFraming).trim()}` : '',
+  ].filter(Boolean);
+  if (parts.length === 0) return basePrompt.slice(0, 600);
+  return `[Art Direction Bible — ${parts.join(' | ')}] ${basePrompt}`.slice(0, 600);
+}
+
 export async function generateRunPodImage({
   prompt,
+  artDirectionBible = null,
   kind = 'schnell',
   width = 1024,
   height = 1024,
@@ -106,7 +124,7 @@ export async function generateRunPodImage({
 
   const effectiveTimeout = Math.max(60000, Number(timeoutMs) || 90000);
   const inputPayload = {
-    prompt: String(prompt || 'Clean minimalist studio photograph, natural lighting').slice(0, 600),
+    prompt: applyArtDirectionBibleToPrompt(prompt, artDirectionBible),
     width: Math.max(256, Math.min(1536, Number(width) || 1024)),
     height: Math.max(256, Math.min(1536, Number(height) || 1024)),
     output_format: 'webp',

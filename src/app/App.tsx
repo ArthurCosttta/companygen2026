@@ -38,9 +38,12 @@ import {
 import {
   authenticatedFetch,
   clearLocalShowcaseSession,
+  getSupportReadonlySession,
   readLocalShowcaseSession,
+  setSupportReadonlySession,
   supabase,
   toSupabaseUserFromShowcase,
+  type SupportReadonlySession,
 } from '@/services/supabase-client';
 import { syncConnectedWhatsappProfile } from '@/services/whatsapp-profile-sync';
 import { AuthFlowView } from '@/components/auth/AuthFlowView';
@@ -62,12 +65,14 @@ import {
   useToast,
 } from '@/components/ui';
 import {
+  buildDraftFromProfile,
   ContextualHelpModal,
   ExpressFichaWizardModal,
   GuidedChecklistCard,
   readExpressFichaDraft,
   StoreCreatedSuccessModal,
   WelcomeModal,
+  writeExpressFichaDraft,
   type OnboardingHelpTopic,
   type OnboardingWizardStep,
 } from '@/components/views/onboarding';
@@ -121,7 +126,17 @@ function readInitialRoute(): 'access' | 'checkout' | null {
     const params = new URLSearchParams(window.location.search);
     const route = params.get('route')?.toLowerCase();
     const codeParam = (params.get('code') || params.get('invite') || '').trim();
-    if (pathname === '/access' || route === 'access' || /^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(codeParam)) {
+    if (pathname === '/access' || route === 'access') {
+      return 'access';
+    }
+    if (/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(codeParam)) {
+      try {
+        const validatedRaw = sessionStorage.getItem('cg_validated_invite');
+        const validatedParsed = validatedRaw ? (JSON.parse(validatedRaw) as { code?: string }) : null;
+        if (validatedParsed?.code?.toUpperCase() === codeParam.toUpperCase()) {
+          return null;
+        }
+      } catch {}
       return 'access';
     }
     if (pathname === '/checkout' || route === 'checkout') return 'checkout';
@@ -433,14 +448,16 @@ export function App() {
   const preAuthMaturity = useClientMaturity(user ?? null, null);
 
   if (currentRoute === 'access') {
-    const clearAccessUrl = () => {
+    const clearAccessUrl = (preserveTracking = false) => {
       try {
         const url = new URL(window.location.href);
         url.pathname = '/';
         url.searchParams.delete('route');
-        url.searchParams.delete('code');
         url.searchParams.delete('invite');
         url.searchParams.delete('credits');
+        if (!preserveTracking) {
+          url.searchParams.delete('code');
+        }
         window.history.pushState({}, '', url.toString());
       } catch {}
     };
@@ -449,11 +466,11 @@ export function App() {
         <AccessCodeView
           onSuccess={() => {
             setCurrentRoute(null);
-            clearAccessUrl();
+            clearAccessUrl(true);
           }}
           onGoToLogin={() => {
             setCurrentRoute(null);
-            clearAccessUrl();
+            clearAccessUrl(true);
           }}
         />
       </ToastProvider>
@@ -578,6 +595,28 @@ function StudioApp({ user }: { user: User }) {
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [supportModalOpen, setSupportModalOpen] = useState(false);
+  const [supportReadonly, setSupportReadonly] = useState<SupportReadonlySession | null>(() =>
+    getSupportReadonlySession(),
+  );
+  const [updateReadyVersion, setUpdateReadyVersion] = useState<string>('');
+
+  useEffect(() => {
+    const handleReadonlyChanged = (event: Event) => {
+      const detail = (event as CustomEvent<SupportReadonlySession | null>).detail;
+      setSupportReadonly(detail || null);
+    };
+    window.addEventListener('companygen:support-readonly-changed', handleReadonlyChanged);
+    const bridge = getDesktopBridge();
+    const unsubUpdater = bridge?.onUpdaterStatus?.((payload) => {
+      if (payload?.status === 'downloaded') {
+        setUpdateReadyVersion(payload.version || 'nova');
+      }
+    });
+    return () => {
+      window.removeEventListener('companygen:support-readonly-changed', handleReadonlyChanged);
+      unsubUpdater?.();
+    };
+  }, []);
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
@@ -1229,6 +1268,11 @@ function StudioApp({ user }: { user: User }) {
             mode={previewKind}
             runtimeStatus={runtimeStatus}
             onBackToAdmin={exitPreview}
+            onGoToOrders={() => {
+              exitPreview();
+              setActiveTab('dashboard');
+            }}
+            onProfileUpdated={handleProfileUpdated}
             onOrderCreated={() => void refreshDashboard()}
             onUploadProductImage={
               previewKind === 'preview'
@@ -1316,6 +1360,10 @@ function StudioApp({ user }: { user: User }) {
             isDesktop,
             trayActive: isDesktop,
             soundEnabled: !notificationsState.isMuted,
+            updateReadyVersion,
+            onInstallUpdate: () => {
+              void getDesktopBridge()?.installDesktopUpdate?.();
+            },
           }}
         />
 
@@ -1353,6 +1401,30 @@ function StudioApp({ user }: { user: User }) {
           onOpenTour={() => setWelcomeOpen(true)}
         />
 
+        {/* Banner Sticky Modo Suporte Somente Leitura (40px --cg-error) */}
+        {supportReadonly ? (
+          <div
+            role="status"
+            data-testid="support-readonly-banner"
+            className="flex min-h-[40px] shrink-0 flex-wrap items-center justify-between gap-2 bg-[#E11D48] px-4 py-1.5 text-xs font-bold text-white"
+          >
+            <span className="truncate">
+              Modo Suporte Somente Leitura ativo para: {supportReadonly.businessName || supportReadonly.userId} — alterações estão bloqueadas
+            </span>
+            <button
+              type="button"
+              data-testid="support-readonly-exit-btn"
+              onClick={() => {
+                setSupportReadonlySession(null);
+                setActiveTab('admin');
+              }}
+              className="rounded-lg bg-white/20 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-white/30"
+            >
+              Sair do Modo Suporte
+            </button>
+          </div>
+        ) : null}
+
         {/* Banner Offline não-destrutivo (36px) */}
         {isOffline ? (
           <div
@@ -1388,24 +1460,33 @@ function StudioApp({ user }: { user: User }) {
               </div>
             ) : (
               <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
-                {maturity.maturityState !== 'ESTADO_4' ? (
-                  <GuidedChecklistCard
-                    profile={profile}
-                    maturityState={maturity.maturityState}
-                    connectionPhase={connectionPhaseInfo.phase}
-                    owner={user.id}
-                    hasDraft={hasDraft}
-                    isWizardOpen={wizardOpen}
-                    onOpenExpressWizard={openWizard}
-                    onOpenProductStep={() => openWizard(7)}
-                    onOpenPixStep={() => openWizard(8)}
-                    onPublishStore={handlePublishStore}
-                    onStorePublished={handleProfileUpdated}
-                    onConnectWhatsapp={() => setActiveTab('whatsapp')}
-                    onOpenStorefront={() => enterPreview('preview')}
-                    onOpenHelp={(topic) => setHelpTopic(topic ?? 'general')}
-                  />
-                ) : null}
+                <GuidedChecklistCard
+                  profile={profile}
+                  maturityState={maturity.maturityState}
+                  connectionPhase={connectionPhaseInfo.phase}
+                  owner={user.id}
+                  hasDraft={hasDraft}
+                  isWizardOpen={wizardOpen}
+                  onOpenExpressWizard={openWizard}
+                  onOpenProductStep={() => openWizard(7)}
+                  onOpenPixStep={() => openWizard(8)}
+                  onPublishStore={handlePublishStore}
+                  onStorePublished={(snap) => {
+                    handleProfileUpdated(snap);
+                    const activeCount = (snap.profile.catalog?.products ?? []).filter(
+                      (p) => p.active !== false,
+                    ).length;
+                    setSuccessModalState({
+                      open: true,
+                      storeName: snap.profile.business.name || 'Minha Loja',
+                      publicSlug: snap.profile.publishedStore?.publicSlug,
+                      productsCount: activeCount,
+                    });
+                  }}
+                  onConnectWhatsapp={() => setActiveTab('whatsapp')}
+                  onOpenStorefront={() => enterPreview('preview')}
+                  onOpenHelp={(topic) => setHelpTopic(topic ?? 'general')}
+                />
 
                 {isStoreOperationReady ? (
                   <ProductCatalogTable
@@ -1527,7 +1608,12 @@ function StudioApp({ user }: { user: User }) {
           {/* TAB 5: Admin Desktop */}
           {activeTab === 'admin' && isAdmin && (
             <div className="h-full overflow-y-auto p-4 sm:p-6">
-              <AdminConsoleView userId={user.id} />
+              <AdminConsoleView
+                userId={user.id}
+                onEnterSupportMode={() => {
+                  setActiveTab('store');
+                }}
+              />
             </div>
           )}
         </main>
@@ -1541,13 +1627,33 @@ function StudioApp({ user }: { user: User }) {
         storeName={profile.business.name}
         ownerEmail={user.email}
         hasDraft={hasDraft}
+        initialTrack={profile.onboarding?.preferredTrack ?? 'full_guided'}
+        onSelectTrack={(track) => {
+          dismissWelcomeRemember(false);
+          const existingDraft = readExpressFichaDraft(user.id) || buildDraftFromProfile(profile, 1);
+          writeExpressFichaDraft({ ...existingDraft, preferredTrack: track }, user.id);
+          void updateBusinessProfile(
+            (draft) => {
+              draft.onboarding.preferredTrack = track;
+            },
+            undefined,
+            user.id,
+          )
+            .then(handleProfileUpdated)
+            .catch(() => {});
+          if (track === 'whatsapp_first') {
+            setActiveTab('whatsapp');
+          } else {
+            setActiveTab('store');
+          }
+        }}
         onStartExpressWizard={() => {
           dismissWelcomeRemember(false);
-          openWizard(1);
+          setActiveTab('store');
         }}
         onContinueDraft={() => {
           dismissWelcomeRemember(false);
-          openWizard(1);
+          setActiveTab('store');
         }}
         onExploreFirst={() => dismissWelcomeRemember(false)}
         onOpenHelp={() => setHelpTopic('general')}
@@ -1594,7 +1700,14 @@ function StudioApp({ user }: { user: User }) {
         ownerId={user.id}
         whatsappConnected={connectionPhaseInfo.isLiveReady}
         productsCount={successModalState.productsCount}
+        primaryColor={profile.brand?.primaryColor}
+        accentColor={profile.brand?.accentColor}
+        logoUrl={profile.brand?.logoUrl}
         onOpenStorefront={() => {
+          setSuccessModalState((prev) => ({ ...prev, open: false }));
+          enterPreview('preview');
+        }}
+        onSimulateFirstOrder={() => {
           setSuccessModalState((prev) => ({ ...prev, open: false }));
           enterPreview('preview');
         }}

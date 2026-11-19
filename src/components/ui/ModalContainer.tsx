@@ -58,6 +58,28 @@ function findCancelElement(container: HTMLElement | null): HTMLElement | null {
   );
 }
 
+function isToastOutsideInteraction(event: {
+  target?: EventTarget | null;
+  detail?: { originalEvent?: Event | null } | null;
+}): boolean {
+  const original = event?.detail?.originalEvent as
+    | (Event & { __cgToastOrigin?: boolean; composedPath?: () => EventTarget[] })
+    | null
+    | undefined;
+  if (original?.__cgToastOrigin) return true;
+  const targets: EventTarget[] = [];
+  if (event?.target) targets.push(event.target);
+  if (original?.target) targets.push(original.target);
+  if (typeof original?.composedPath === "function") {
+    targets.push(...original.composedPath());
+  }
+  return targets.some(
+    (node) =>
+      node instanceof Element &&
+      Boolean(node.closest('[data-testid="toast-region"], [role="region"][aria-label="Notificações"]')),
+  );
+}
+
 export function ModalContainer({
   open,
   onOpenChange,
@@ -152,12 +174,12 @@ export function ModalContainer({
             }
           }}
           onPointerDownOutside={(event) => {
-            if (isCloseBlocked) {
+            if (isCloseBlocked || isToastOutsideInteraction(event)) {
               event.preventDefault();
             }
           }}
           onInteractOutside={(event) => {
-            if (isCloseBlocked) {
+            if (isCloseBlocked || isToastOutsideInteraction(event)) {
               event.preventDefault();
             }
           }}

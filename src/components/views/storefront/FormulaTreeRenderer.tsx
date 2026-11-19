@@ -3,6 +3,7 @@ import {
   Calendar,
   Check,
   Clock,
+  ChevronDown,
   Gift,
   Heart,
   ImagePlus,
@@ -31,6 +32,7 @@ import {
   type BusinessProfile,
   type CatalogProduct,
 } from '@/schemas/profile.schema';
+import { matchesProductQuery } from '@/utils/fuzzySearch';
 import { cn } from '@/lib/utils';
 import { safeHref } from './storefront-utils';
 import * as composerSchema from '../../../../shared/formula-ir/composer-schema.mjs';
@@ -110,12 +112,14 @@ function InteractiveExperienceBlock({
   section,
   products,
   storeName,
+  pixDiscountPercent = 0,
   onAddToCart,
   onDirectWhatsappSend,
 }: {
   section: Extract<SectionNode, { type: 'InteractiveExperience' }>;
   products: CatalogProduct[];
   storeName: string;
+  pixDiscountPercent?: number;
   onAddToCart: (product: CatalogProduct, qty?: number) => void;
   onDirectWhatsappSend?: (message: string) => void;
 }) {
@@ -123,19 +127,45 @@ function InteractiveExperienceBlock({
   const [state, setState] = useState<Record<string, unknown>>(() => ({
     ...(cfg.stateDefaults || {}),
   }));
+  const [quizStep, setQuizStep] = useState(0);
+  const [quizCompleted, setQuizCompleted] = useState(false);
   const [addedFlash, setAddedFlash] = useState(false);
   const [totalPulse, setTotalPulse] = useState(false);
+
+  const effectiveCalcRule = useMemo(
+    () => ({
+      ...cfg.calcRule,
+      pixDiscountPercent:
+        pixDiscountPercent > 0 ? pixDiscountPercent : Number(cfg.calcRule?.pixDiscountPercent || 0),
+    }),
+    [cfg.calcRule, pixDiscountPercent],
+  );
 
   const evalResult = useMemo(
     () =>
       evaluateInteractiveExperience({
         controls: cfg.controls,
         state,
-        calcRule: cfg.calcRule,
+        calcRule: effectiveCalcRule,
         catalog: products,
       }),
-    [cfg.controls, cfg.calcRule, state, products],
+    [cfg.controls, effectiveCalcRule, state, products],
   );
+
+  const recommendedProduct = useMemo(() => {
+    const recSkus = Array.isArray(cfg.recommendedSkus) ? cfg.recommendedSkus : [];
+    for (const ref of recSkus) {
+      const found = products.find((p) => p.sku === ref || p.id === ref);
+      if (found) return found;
+    }
+    if (evalResult.selectedProducts.length > 0) {
+      return evalResult.selectedProducts[0] as CatalogProduct;
+    }
+    return products[0];
+  }, [cfg.recommendedSkus, products, evalResult.selectedProducts]);
+
+  const isQuizMode = cfg.experienceMode === 'quiz_recommendation';
+  const totalQuizSteps = isQuizMode ? Math.max(1, Math.min(3, cfg.controls.length || 1)) : 1;
 
   const prevTotalRef = React.useRef<number | null>(null);
   const flashTimerRef = React.useRef<number | null>(null);
@@ -186,8 +216,15 @@ function InteractiveExperienceBlock({
 
     if (evalResult.selectedProducts.length > 0) {
       for (const item of evalResult.selectedProducts) {
-        onAddToCart(item as CatalogProduct, 1);
+        const qty = Math.max(1, Math.round(Number((item as { quantity?: number }).quantity || 1)));
+        onAddToCart(item as CatalogProduct, qty);
       }
+      flashAdded();
+      return;
+    }
+
+    if (isQuizMode && recommendedProduct) {
+      onAddToCart(recommendedProduct, 1);
       flashAdded();
       return;
     }
@@ -396,7 +433,76 @@ function InteractiveExperienceBlock({
         {cfg.subtitle ? <p className="mt-1.5 max-w-2xl text-sm text-[var(--cg-ink-muted)]">{cfg.subtitle}</p> : null}
 
         <div className="mt-6 grid grid-cols-1 gap-8 @min-[900px]/formula:grid-cols-12">
-          <div className="space-y-6 @min-[900px]/formula:col-span-7">{cfg.controls.map(renderControl)}</div>
+          <div className="space-y-6 @min-[900px]/formula:col-span-7">
+            {isQuizMode && cfg.controls.length > 1 ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5" role="tablist" aria-label="Etapas do simulador">
+                    {cfg.controls.slice(0, 3).map((ctrl, idx) => (
+                      <button
+                        key={ctrl.id}
+                        type="button"
+                        data-testid={`quiz-step-tab-${idx}`}
+                        onClick={() => {
+                          setQuizStep(idx);
+                          if (idx >= totalQuizSteps - 1) setQuizCompleted(true);
+                        }}
+                        className={cn(
+                          'min-h-[34px] rounded-full border px-3 py-1 text-xs font-extrabold transition-colors',
+                          quizStep === idx
+                            ? 'border-[var(--cg-accent)] bg-[var(--cg-accent)] text-white'
+                            : 'border-slate-200 bg-white text-[var(--cg-ink-muted)] hover:border-slate-300',
+                        )}
+                      >
+                        Etapa {idx + 1}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="cg-tabular text-xs font-bold text-[var(--cg-ink-muted)]">
+                    Passo {Math.min(quizStep + 1, totalQuizSteps)} de {totalQuizSteps}
+                  </span>
+                </div>
+
+                {cfg.controls[quizStep] ? renderControl(cfg.controls[quizStep]) : null}
+
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={quizStep === 0}
+                    onClick={() => setQuizStep((s) => Math.max(0, s - 1))}
+                    className="min-h-[38px] rounded-full border border-slate-300 bg-white px-4 text-xs font-bold text-[var(--cg-ink)] disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+                  {quizStep < totalQuizSteps - 1 ? (
+                    <button
+                      type="button"
+                      data-testid="quiz-next-step-btn"
+                      onClick={() => {
+                        const next = Math.min(totalQuizSteps - 1, quizStep + 1);
+                        setQuizStep(next);
+                        if (next === totalQuizSteps - 1) setQuizCompleted(true);
+                      }}
+                      className="min-h-[38px] rounded-full bg-[var(--cg-accent)] px-5 text-xs font-bold text-white hover:bg-[var(--cg-accent-deep)]"
+                    >
+                      Próxima etapa
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      data-testid="quiz-reveal-btn"
+                      onClick={() => setQuizCompleted(true)}
+                      className="min-h-[38px] rounded-full bg-[var(--cg-accent)] px-5 text-xs font-bold text-white hover:bg-[var(--cg-accent-deep)]"
+                    >
+                      Ver recomendação ideal
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              cfg.controls.map(renderControl)
+            )}
+          </div>
 
           <aside className="flex flex-col justify-between gap-5 rounded-2xl border border-slate-200/70 bg-[var(--cg-surface-alt)] p-5 @min-[900px]/formula:col-span-5">
             <div className="space-y-3">
@@ -408,6 +514,30 @@ function InteractiveExperienceBlock({
                   </div>
                 ) : null;
               })()}
+
+              {isQuizMode && recommendedProduct && (quizCompleted || cfg.controls.length <= 1 || quizStep >= totalQuizSteps - 1) ? (
+                <div
+                  data-testid="v9-quiz-recommended-card"
+                  className="rounded-xl border border-[var(--cg-accent)]/30 bg-[var(--cg-card)] p-3.5 shadow-2xs"
+                >
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--cg-accent)]">
+                    Recomendação para sua seleção
+                  </span>
+                  <div className="mt-1.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-extrabold text-[var(--cg-ink)]">
+                        {recommendedProduct.name}
+                      </div>
+                      <div className="text-xs text-[var(--cg-ink-muted)]">
+                        {recommendedProduct.category || 'Catálogo oficial'}
+                      </div>
+                    </div>
+                    <span className="cg-tabular shrink-0 text-sm font-black text-[var(--cg-ink)]">
+                      {formatCurrencyBRL(recommendedProduct.priceCents)}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
 
               <h3 className="text-sm font-extrabold uppercase tracking-wide text-[var(--cg-ink)]">
                 {cfg.calcRule?.summaryTitle || 'Resumo da sua seleção'}
@@ -425,7 +555,7 @@ function InteractiveExperienceBlock({
               <div className="border-t border-slate-200/80 pt-3">
                 <div
                   className={cn(
-                    'origin-left whitespace-nowrap text-2xl font-black text-[var(--cg-ink)] transition-all duration-200',
+                    'cg-tabular origin-left whitespace-nowrap text-2xl font-black text-[var(--cg-ink)] transition-all duration-200',
                     totalPulse && 'scale-[1.04] text-[var(--cg-accent)]',
                   )}
                   data-testid="v9-exp-total"
@@ -433,7 +563,7 @@ function InteractiveExperienceBlock({
                   {evalResult.totalCents > 0 ? formatCurrencyBRL(evalResult.totalCents) : 'Sob consulta'}
                 </div>
                 {evalResult.pixDiscountPercent > 0 && evalResult.totalCents > 0 ? (
-                  <p className="mt-0.5 text-xs font-bold text-emerald-700">
+                  <p className="cg-tabular mt-0.5 text-xs font-bold text-emerald-700">
                     No Pix ({evalResult.pixDiscountPercent}% OFF): {formatCurrencyBRL(evalResult.pixTotalCents)}
                   </p>
                 ) : null}
@@ -482,6 +612,173 @@ function InteractiveExperienceBlock({
   );
 }
 
+function ContextualFaqBlock({
+  title,
+  subtitle,
+  items,
+}: {
+  title: string;
+  subtitle?: string;
+  items: Array<{ q: string; a: string }>;
+}) {
+  const [openIdx, setOpenIdx] = useState<number | null>(0);
+  return (
+    <section data-testid="v9-contextual-faq" className="mx-auto max-w-6xl px-4 py-8 @min-[640px]/formula:px-6">
+      <h2 className="text-2xl font-extrabold text-[var(--cg-ink)]" style={{ fontFamily: 'var(--cg-heading-font)' }}>
+        {title || 'Perguntas frequentes'}
+      </h2>
+      {subtitle ? <p className="mt-1 text-sm text-[var(--cg-ink-muted)]">{subtitle}</p> : null}
+      <div className="mt-5 max-w-3xl space-y-2.5">
+        {items.map((it, idx) => {
+          const isOpen = openIdx === idx;
+          return (
+            <div
+              key={idx}
+              style={{ borderColor: isOpen ? 'var(--cg-accent)' : 'var(--cg-border, rgba(15,23,42,0.12))' }}
+              className="rounded-2xl border bg-[var(--cg-card)] transition-colors duration-200"
+            >
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                data-testid={`faq-toggle-${idx}`}
+                onClick={() => setOpenIdx((prev) => (prev === idx ? null : idx))}
+                className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left text-sm font-bold text-[var(--cg-ink)]"
+              >
+                <span>{it.q}</span>
+                <ChevronDown
+                  className={cn(
+                    'size-4 shrink-0 text-[var(--cg-ink-muted)] transition-transform duration-200',
+                    isOpen && 'rotate-180 text-[var(--cg-accent)]',
+                  )}
+                />
+              </button>
+              <div
+                className={cn(
+                  'grid transition-[grid-template-rows,opacity] duration-200 ease-out',
+                  isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+                )}
+              >
+                <div className="overflow-hidden">
+                  <p className="px-5 pb-4 text-sm leading-relaxed text-[var(--cg-ink-muted)]">{it.a}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ComplementaryBundlesBlock({
+  title,
+  subtitle,
+  items,
+  products,
+  pixDiscountPercent,
+  onAddToCart,
+}: {
+  title: string;
+  subtitle?: string;
+  items: Array<{ id?: string; title: string; description?: string; skuIds: string[] }>;
+  products: CatalogProduct[];
+  pixDiscountPercent: number;
+  onAddToCart: (product: CatalogProduct, qty?: number) => void;
+}) {
+  const [addedBundleIdx, setAddedBundleIdx] = useState<number | null>(null);
+  const timerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  const resolvedBundles = useMemo(() => {
+    return items
+      .map((bundle, idx) => {
+        const matched = (Array.isArray(bundle.skuIds) ? bundle.skuIds : [])
+          .map((ref) => products.find((p) => p.sku === ref || p.id === ref))
+          .filter((p): p is CatalogProduct => Boolean(p && p.active !== false));
+        if (matched.length === 0) return null;
+        const totalCents = matched.reduce((acc, p) => acc + Math.round(Number(p.priceCents || 0)), 0);
+        const pixSaveCents = pixDiscountPercent > 0 ? Math.round((totalCents * pixDiscountPercent) / 100) : 0;
+        return { idx, bundle, matched, totalCents, pixSaveCents };
+      })
+      .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  }, [items, products, pixDiscountPercent]);
+
+  if (resolvedBundles.length === 0) return null;
+
+  return (
+    <section id="combos" data-testid="v9-complementary-bundles" className="mx-auto max-w-6xl px-4 py-8 @min-[640px]/formula:px-6">
+      <h2 className="text-2xl font-extrabold text-[var(--cg-ink)]" style={{ fontFamily: 'var(--cg-heading-font)' }}>
+        {title || 'Combine e Economize'}
+      </h2>
+      {subtitle ? <p className="mt-1 text-sm text-[var(--cg-ink-muted)]">{subtitle}</p> : null}
+
+      <div className="mt-5 grid grid-cols-1 gap-4 @min-[640px]/formula:grid-cols-2 @min-[900px]/formula:grid-cols-3">
+        {resolvedBundles.map(({ idx, bundle, matched, totalCents, pixSaveCents }) => {
+          const isAdded = addedBundleIdx === idx;
+          return (
+            <article
+              key={bundle.id || idx}
+              data-testid={`v9-bundle-card-${idx}`}
+              className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200/80 bg-[var(--cg-card)] p-5 shadow-2xs"
+            >
+              <div className="space-y-1.5">
+                <h3 className="text-base font-extrabold text-[var(--cg-ink)]">{bundle.title}</h3>
+                <p className="text-xs font-medium text-[var(--cg-ink-muted)]">
+                  {matched.map((m) => m.name).join(' + ')}
+                </p>
+                {bundle.description ? (
+                  <p className="text-xs text-[var(--cg-ink-muted)]">{bundle.description}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2.5">
+                {pixSaveCents > 0 ? (
+                  <span className="cg-tabular inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-extrabold text-emerald-800">
+                    Economize {formatCurrencyBRL(pixSaveCents)} no Pix
+                  </span>
+                ) : null}
+                <div className="cg-tabular text-xl font-black text-[var(--cg-ink)]">
+                  {formatCurrencyBRL(totalCents)}
+                </div>
+                <button
+                  type="button"
+                  data-testid={`v9-add-bundle-${idx}`}
+                  onClick={() => {
+                    for (const item of matched) {
+                      onAddToCart(item, 1);
+                    }
+                    setAddedBundleIdx(idx);
+                    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+                    timerRef.current = window.setTimeout(() => setAddedBundleIdx(null), 1200);
+                  }}
+                  className={cn(
+                    'inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl px-4 text-xs font-bold text-white transition-colors',
+                    isAdded ? 'bg-emerald-600' : 'bg-[var(--cg-accent)] hover:bg-[var(--cg-accent-deep)]',
+                  )}
+                >
+                  {isAdded ? (
+                    <>
+                      <Check className="size-3.5" />
+                      <span>Combo adicionado</span>
+                    </>
+                  ) : (
+                    <span>Adicionar Combo</span>
+                  )}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function FormulaTreeRenderer({
   formulaV9,
   profile,
@@ -519,6 +816,10 @@ export function FormulaTreeRenderer({
   }, [products]);
 
   const tokens = formulaV9.designTokens;
+  const pixDiscountPercent = Math.max(
+    0,
+    Math.min(90, Number(profile.payment?.pixDiscountPercent || (formulaV9.storeInfo as { pixDiscountPercent?: number } | undefined)?.pixDiscountPercent || 0)),
+  );
   const storeName = profile.business?.name || 'Minha Loja';
   const logoUrl = sanitizeSafeAssetUrl(
     profile.brand?.logoUrl || (formulaV9.storeInfo as { logoUrl?: string } | undefined)?.logoUrl || '',
@@ -594,7 +895,7 @@ export function FormulaTreeRenderer({
     <div
       style={styleVars}
       data-preview-viewport={previewViewport}
-      className="@container/formula min-h-screen min-w-0 overflow-x-clip bg-[var(--cg-surface)] text-[var(--cg-ink)] antialiased"
+      className="cg-light-preview @container/formula min-h-screen min-w-0 overflow-x-clip bg-[var(--cg-surface)] text-[var(--cg-ink)] antialiased"
       data-formula-version="9.0"
     >
       {sectionsToRender.map((sec) => {
@@ -678,27 +979,28 @@ export function FormulaTreeRenderer({
 
           return wrapEditable(
             sec,
-            <section className="mx-auto max-w-6xl px-4 py-10 @min-[640px]/formula:px-6 @min-[900px]/formula:py-14">
-              <div className="grid grid-cols-1 items-center gap-8 @min-[900px]/formula:grid-cols-12">
-                <div className="space-y-4 @min-[900px]/formula:col-span-6">
+            <section className="mx-auto max-w-6xl px-4 py-4 @min-[640px]/formula:px-6 @min-[700px]/formula:py-10">
+              <div className="grid grid-cols-1 items-center gap-5 @min-[640px]/formula:gap-8 @min-[700px]/formula:grid-cols-12">
+                <div className="space-y-3 @min-[640px]/formula:space-y-4 @min-[700px]/formula:col-span-6">
                   {sec.config.eyebrow ? (
                     <span className="inline-block rounded-full bg-[var(--cg-surface-alt)] px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-[var(--cg-accent)]">
                       {sec.config.eyebrow}
                     </span>
                   ) : null}
                   <h1
-                    className="text-3xl font-black leading-[1.08] tracking-tight text-[var(--cg-ink)] @min-[640px]/formula:text-5xl"
+                    className="text-[clamp(1.65rem,4.5vw,3rem)] font-black leading-[1.08] tracking-tight text-[var(--cg-ink)]"
                     style={{ fontFamily: 'var(--cg-heading-font)' }}
                   >
                     {sec.config.title}
                   </h1>
                   {sec.config.subtitle ? (
-                    <p className="max-w-xl text-base leading-relaxed text-[var(--cg-ink-muted)]">{sec.config.subtitle}</p>
+                    <p className="max-w-xl text-sm leading-relaxed text-[var(--cg-ink-muted)] @min-[640px]/formula:text-base">{sec.config.subtitle}</p>
                   ) : null}
-                  <div className="flex flex-wrap gap-3 pt-2">
+                  <div className="flex flex-wrap gap-3 pt-1 @min-[640px]/formula:pt-2">
                     <a
                       href={safeHref(sec.config.primaryCta?.href, '#experiencia')}
-                      className="inline-flex min-h-[46px] items-center rounded-full bg-[var(--cg-accent)] px-6 text-sm font-bold text-white hover:bg-[var(--cg-accent-deep)]"
+                      data-testid="v9-hero-primary-cta"
+                      className="inline-flex min-h-[44px] items-center rounded-full bg-[var(--cg-accent)] px-6 text-sm font-bold text-white hover:bg-[var(--cg-accent-deep)]"
                     >
                       {sec.config.primaryCta?.label || 'Simular agora'}
                     </a>
@@ -706,7 +1008,7 @@ export function FormulaTreeRenderer({
                       <button
                         type="button"
                         onClick={() => onDirectWhatsappSend?.(`Olá ${storeName}! Vim pela vitrine.`)}
-                        className="inline-flex min-h-[46px] items-center gap-2 rounded-full border border-slate-300 bg-white px-5 text-sm font-bold text-[var(--cg-ink)] hover:bg-slate-50"
+                        className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-slate-300 bg-white px-5 text-sm font-bold text-[var(--cg-ink)] hover:bg-slate-50"
                       >
                         <MessageCircle className="size-4 text-emerald-600" />
                         <span>{sec.config.secondaryCta.label}</span>
@@ -715,8 +1017,8 @@ export function FormulaTreeRenderer({
                   </div>
                 </div>
 
-                <div className="@min-[900px]/formula:col-span-6">
-                  <div className="aspect-[4/3] w-full overflow-hidden rounded-3xl border border-slate-200/80 bg-[#F1F5F9]">
+                <div className="@min-[700px]/formula:col-span-6">
+                  <div className="aspect-[16/10] max-h-[210px] w-full overflow-hidden rounded-3xl border border-slate-200/80 bg-[#F1F5F9] @min-[640px]/formula:aspect-[4/3] @min-[640px]/formula:max-h-none">
                     {heroImg ? (
                       <img src={heroImg} alt={sec.config.title} className="size-full object-cover" />
                     ) : (
@@ -759,6 +1061,7 @@ export function FormulaTreeRenderer({
               section={sec}
               products={products}
               storeName={storeName}
+              pixDiscountPercent={pixDiscountPercent}
               onAddToCart={onAddToCart}
               onDirectWhatsappSend={onDirectWhatsappSend}
             />,
@@ -896,22 +1199,28 @@ export function FormulaTreeRenderer({
           );
         }
 
-        if (sec.type === 'FaqAccordion') {
+        if (sec.type === 'FaqAccordion' || sec.type === 'ContextualFaq') {
           return wrapEditable(
             sec,
-            <section className="mx-auto max-w-6xl px-4 py-10 @min-[640px]/formula:px-6">
-              <h2 className="text-2xl font-extrabold text-[var(--cg-ink)]" style={{ fontFamily: 'var(--cg-heading-font)' }}>
-                {sec.config.title}
-              </h2>
-              <div className="mt-5 max-w-3xl space-y-2.5">
-                {sec.config.items.map((it, idx) => (
-                  <details key={idx} className="rounded-2xl border border-slate-200/80 bg-[var(--cg-card)] px-5 py-3.5">
-                    <summary className="cursor-pointer text-sm font-bold text-[var(--cg-ink)]">{it.q}</summary>
-                    <p className="mt-2 text-sm text-[var(--cg-ink-muted)]">{it.a}</p>
-                  </details>
-                ))}
-              </div>
-            </section>,
+            <ContextualFaqBlock
+              title={sec.config.title}
+              subtitle={sec.config.subtitle}
+              items={sec.config.items}
+            />,
+          );
+        }
+
+        if (sec.type === 'ComplementaryBundles') {
+          return wrapEditable(
+            sec,
+            <ComplementaryBundlesBlock
+              title={sec.config.title}
+              subtitle={sec.config.subtitle}
+              items={sec.config.items}
+              products={products}
+              pixDiscountPercent={pixDiscountPercent}
+              onAddToCart={onAddToCart}
+            />,
           );
         }
 
@@ -922,12 +1231,7 @@ export function FormulaTreeRenderer({
           const filtered = products.filter((p) => {
             const cat = (p.category || 'Geral').trim() || 'Geral';
             if (activeCategory !== 'Todas' && cat !== activeCategory) return false;
-            if (!searchQuery.trim()) return true;
-            const q = searchQuery.toLowerCase();
-            return (
-              p.name.toLowerCase().includes(q) ||
-              cat.toLowerCase().includes(q)
-            );
+            return matchesProductQuery(p, searchQuery);
           });
 
           return wrapEditable(
@@ -1012,7 +1316,14 @@ export function FormulaTreeRenderer({
                           className="relative aspect-square w-full cursor-pointer overflow-hidden bg-[#F1F5F9]"
                         >
                           {hasRealImg ? (
-                            <img src={safeProdImg} alt={prod.name} className="size-full object-cover" />
+                            <img
+                              src={safeProdImg}
+                              alt={prod.name}
+                              style={{
+                                objectPosition: `${prod.imageFocalPoint?.x ?? 50}% ${prod.imageFocalPoint?.y ?? 50}%`,
+                              }}
+                              className="size-full object-cover"
+                            />
                           ) : (
                             <div
                               data-testid="v9-neutral-gray-thumb"
@@ -1066,29 +1377,48 @@ export function FormulaTreeRenderer({
                       </div>
 
                       <div className="space-y-2.5 px-4 pb-4">
-                        <div className="whitespace-nowrap text-lg font-black text-[var(--cg-ink)]">
+                        {pixDiscountPercent > 0 ? (
+                          <span
+                            data-testid={`v9-card-pix-pill-${prod.sku}`}
+                            className="cg-tabular inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-extrabold text-emerald-800"
+                          >
+                            Economize {formatCurrencyBRL(Math.round((prod.priceCents * pixDiscountPercent) / 100))} no Pix
+                          </span>
+                        ) : null}
+                        <div className="cg-tabular whitespace-nowrap text-lg font-black text-[var(--cg-ink)]">
                           {formatCurrencyBRL(prod.priceCents)}
                         </div>
-                        <button
-                          type="button"
-                          data-testid={`v9-add-cart-${prod.sku}`}
-                          onClick={() => handleCardAdd(prod)}
-                          className={cn(
-                            'inline-flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-xl px-3 text-center text-xs font-bold leading-tight text-white transition-colors',
-                            isAdded
-                              ? 'bg-emerald-600'
-                              : 'bg-[var(--cg-accent)] hover:bg-[var(--cg-accent-deep)]',
-                          )}
-                        >
-                          {isAdded ? (
-                            <>
-                              <Check className="size-3.5" />
-                              <span>Adicionado</span>
-                            </>
-                          ) : (
-                            <span>{sec.config.itemActionLabel || 'Adicionar à sacola'}</span>
-                          )}
-                        </button>
+                        {Number(prod.stock ?? 10) <= 0 ? (
+                          <button
+                            type="button"
+                            disabled
+                            data-testid={`v9-add-cart-${prod.sku}`}
+                            className="inline-flex min-h-[44px] w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-200 px-3 text-center text-xs font-bold text-slate-500"
+                          >
+                            Esgotado
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            data-testid={`v9-add-cart-${prod.sku}`}
+                            onClick={() => handleCardAdd(prod)}
+                            className={cn(
+                              'inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl px-3 text-center text-xs font-bold leading-tight text-white transition-colors',
+                              isAdded
+                                ? 'bg-emerald-600'
+                                : 'bg-[var(--cg-accent)] hover:bg-[var(--cg-accent-deep)]',
+                            )}
+                          >
+                            {isAdded ? (
+                              <>
+                                <Check className="size-3.5" />
+                                <span>Adicionado</span>
+                              </>
+                            ) : (
+                              <span>{sec.config.itemActionLabel || 'Adicionar à sacola'}</span>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </article>
                   );

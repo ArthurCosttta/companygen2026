@@ -8,6 +8,27 @@ export const supabase = createClient(
 
 const LOCAL_SHOWCASE_STORAGE_KEY = 'cg_local_showcase_session_v1';
 
+export interface SupportReadonlySession {
+  userId: string;
+  email?: string;
+  businessName?: string;
+}
+
+let activeSupportReadonlySession: SupportReadonlySession | null = null;
+
+export function setSupportReadonlySession(session: SupportReadonlySession | null): void {
+  activeSupportReadonlySession = session;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('companygen:support-readonly-changed', { detail: session }),
+    );
+  }
+}
+
+export function getSupportReadonlySession(): SupportReadonlySession | null {
+  return activeSupportReadonlySession;
+}
+
 export interface LocalShowcaseSession {
   token: string;
   user: { id: string; email: string };
@@ -119,6 +140,9 @@ export async function authenticatedFetch(input: string, init?: RequestInit, expe
   }
   const headers = new Headers(init?.headers);
   headers.set('Authorization', 'Bearer ' + accessToken);
+  if (activeSupportReadonlySession && !input.startsWith('/api/admin/')) {
+    headers.set('X-Support-Readonly', '1');
+  }
 
   const timeoutMs = resolveFetchTimeoutMs(input);
   let timeoutSignal: AbortSignal | undefined;

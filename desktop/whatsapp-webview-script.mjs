@@ -69,6 +69,16 @@ export function buildWebviewPollScript() {
 
     const extractDigits = (raw) => String(raw || '').replace(/\\D/g, '');
 
+    const hashTextSimple = (raw) => {
+      const s = normalizeText(raw);
+      let h = 2166136261;
+      for (let i = 0; i < s.length; i += 1) {
+        h ^= s.charCodeAt(i);
+        h = (h * 16777619) >>> 0;
+      }
+      return s ? (h.toString(16) + ':' + s.length) : '';
+    };
+
     const getState = () => {
       if (!window.__cgWaResponderState) {
         window.__cgWaResponderState = {
@@ -76,6 +86,7 @@ export function buildWebviewPollScript() {
           seenSignatures: {},
           processedMsgIds: {},
           botSentTexts: [],
+          sentSofiaHashes: [],
           lastMainChatKey: '',
           pendingOpenedTitle: '',
           pendingOpenedAt: 0,
@@ -84,6 +95,7 @@ export function buildWebviewPollScript() {
       const st = window.__cgWaResponderState;
       const cutoff = Date.now() - 10 * 60 * 1000;
       st.botSentTexts = (st.botSentTexts || []).filter((entry) => entry && entry.ts >= cutoff);
+      st.sentSofiaHashes = (Array.isArray(st.sentSofiaHashes) ? st.sentSofiaHashes : []).slice(-50);
       return st;
     };
 
@@ -137,7 +149,12 @@ export function buildWebviewPollScript() {
     const isBotSentMatch = (text) => {
       const norm = normalizeText(text);
       if (!norm) return false;
+      const h = hashTextSimple(text);
       const nowTs = Date.now();
+      const inHashQueue = (st.sentSofiaHashes || []).some(
+        (entry) => entry && entry.hash === h && nowTs - Number(entry.ts || 0) <= 10 * 60 * 1000,
+      );
+      if (inHashQueue) return true;
       return (st.botSentTexts || []).some((entry) => {
         if (!entry || nowTs - Number(entry.ts || 0) > 10 * 60 * 1000) return false;
         if (entry.norm === norm) return true;
@@ -442,6 +459,25 @@ export function buildWebviewPollScript() {
             st.processedMsgIds[msgKey] = Date.now();
             if (!st.processedTextHashes) st.processedTextHashes = {};
             st.processedTextHashes[textNormKey] = Date.now();
+
+            // Human Takeover Detection: .message-out manual sem assinatura em sentSofiaHashes fora de self-chat
+            if (isOutgoing && !isSelfChat && !isBotSentMatch(text)) {
+              const customerKey = chatPhone || chatKey;
+              return {
+                loggedIn: true,
+                connected: true,
+                phoneE164: selfPhone,
+                action: 'manual_human_takeover',
+                customerKey,
+                customerName: chatTitle,
+                chatTitle,
+                chatPhone: chatPhone || '',
+                msgKey,
+                snippet: text.slice(0, 140),
+                ts: Date.now(),
+              };
+            }
+
             if (!isBotSentMatch(text) && (isIncoming || (isSelfChat && !isBotSentMatch(text))) && (!isOutgoing || isSelfChat)) {
               for (const row of rows) {
                 const info = parseRowInfo(row);
@@ -543,6 +579,16 @@ export function buildWebviewSendScript({
         .trim()
         .toLowerCase();
 
+    const hashTextSimple = (raw) => {
+      const s = normalizeText(raw);
+      let h = 2166136261;
+      for (let i = 0; i < s.length; i += 1) {
+        h ^= s.charCodeAt(i);
+        h = (h * 16777619) >>> 0;
+      }
+      return s ? (h.toString(16) + ':' + s.length) : '';
+    };
+
     if (!window.__cgWaResponderState) {
       window.__cgWaResponderState = {
         baselineDone: true,
@@ -551,6 +597,7 @@ export function buildWebviewSendScript({
         processedTextHashes: {},
         sentJobIds: {},
         botSentTexts: [],
+        sentSofiaHashes: [],
         lastMainChatKey: '',
         pendingOpenedTitle: '',
         pendingOpenedAt: 0,
@@ -558,10 +605,13 @@ export function buildWebviewSendScript({
     }
     const st = window.__cgWaResponderState;
     if (!st.sentJobIds) st.sentJobIds = {};
+    if (!Array.isArray(st.sentSofiaHashes)) st.sentSofiaHashes = [];
     if (replyJobId && st.sentJobIds[replyJobId]) {
       return { ok: true, method: 'dedup_job_id' };
     }
     st.botSentTexts.push({ norm: normalizeText(replyText), raw: replyText, ts: Date.now() });
+    st.sentSofiaHashes.push({ hash: hashTextSimple(replyText), norm: normalizeText(replyText), ts: Date.now() });
+    if (st.sentSofiaHashes.length > 50) st.sentSofiaHashes = st.sentSofiaHashes.slice(-50);
 
     const mainEl = document.querySelector('#main');
     const getHeaderTitle = () => {

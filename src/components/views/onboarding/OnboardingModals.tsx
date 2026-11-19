@@ -10,12 +10,16 @@ import {
   Monitor,
   PartyPopper,
   QrCode,
+  Share2,
+  ShoppingBag,
   Smartphone,
   Sparkles,
   Store,
 } from 'lucide-react';
 import { ActionButton, ModalContainer, useToast } from '@/components/ui';
+import { authenticatedFetch } from '@/services/supabase-client';
 import { renderQrPngDataUrl } from '@/utils/qrPng';
+import { contrastRatio } from '@/utils/logoColorExtractor';
 import {
   buildPublicStoreShareUrl,
   type ExpressFichaDraft,
@@ -330,8 +334,8 @@ export function ContextualHelpModal({
       open={open}
       onOpenChange={onOpenChange}
       role="dialog"
-      maxWidth="md"
-      mobileHeight="85%"
+      maxWidth="lg"
+      mobileHeight="90%"
       title={
         <span className="inline-flex items-center gap-2">
           <HelpCircle className="size-5 text-[#2563EB]" aria-hidden="true" />
@@ -385,10 +389,21 @@ export interface StoreCreatedSuccessModalProps {
   storeUrl?: string;
   whatsappConnected?: boolean;
   productsCount?: number;
+  primaryColor?: string;
+  accentColor?: string;
+  logoUrl?: string;
   onOpenStorefront: () => void;
+  onSimulateFirstOrder?: () => void;
   onConnectWhatsapp?: () => void;
   onContinueToPanel?: () => void;
 }
+
+const STUCK_REASON_OPTIONS: ReadonlyArray<{ id: string; label: string; step: number }> = [
+  { id: 'whatsapp', label: 'WhatsApp', step: 1 },
+  { id: 'catalogo', label: 'Catálogo / Excel', step: 2 },
+  { id: 'fotos', label: 'Fotos / Cores', step: 2 },
+  { id: 'outro', label: 'Outro', step: 3 },
+];
 
 export function StoreCreatedSuccessModal({
   open,
@@ -399,18 +414,29 @@ export function StoreCreatedSuccessModal({
   storeUrl,
   whatsappConnected = false,
   productsCount = 1,
+  primaryColor = '#0867E8',
+  accentColor = '#24A677',
+  logoUrl,
   onOpenStorefront,
+  onSimulateFirstOrder,
   onConnectWhatsapp,
   onContinueToPanel,
 }: StoreCreatedSuccessModalProps) {
-  const { showToast } = useToast();
-  const [copied, setCopied] = React.useState(false);
   const [previewDevice, setPreviewDevice] = React.useState<'desktop' | 'mobile'>('desktop');
+  const [thermometerRating, setThermometerRating] = React.useState<'easy' | 'medium' | 'stuck' | null>(null);
+  const [stuckPickerOpen, setStuckPickerOpen] = React.useState(false);
+  const [stuckReasonLabel, setStuckReasonLabel] = React.useState('');
+  const [sendingFeedback, setSendingFeedback] = React.useState(false);
 
   const resolvedUrl = React.useMemo(() => {
     if (storeUrl) return storeUrl;
     return buildPublicStoreShareUrl(publicSlug, ownerId);
   }, [storeUrl, publicSlug, ownerId]);
+
+  const statusShareText = React.useMemo(() => {
+    const clean = storeName.trim() || 'minha loja';
+    return `Novidade no ar! Confira o catálogo atualizado da ${clean} e peça direto pelo WhatsApp: ${resolvedUrl}`;
+  }, [storeName, resolvedUrl]);
 
   const qrPngUrl = React.useMemo(() => {
     if (!resolvedUrl) return '';
@@ -419,32 +445,45 @@ export function StoreCreatedSuccessModal({
 
   React.useEffect(() => {
     if (!open) {
-      setCopied(false);
+      setThermometerRating(null);
+      setStuckPickerOpen(false);
+      setStuckReasonLabel('');
+      setSendingFeedback(false);
     }
   }, [open]);
 
-  React.useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 2500);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
+  const miniHeaderBg = primaryColor || '#0867E8';
+  const miniHeaderFg = contrastRatio(miniHeaderBg, '#FFFFFF') >= 4.5 ? '#FFFFFF' : '#0F172A';
+  const miniAccentBg = accentColor || '#24A677';
+  const miniAccentFg = contrastRatio(miniAccentBg, '#FFFFFF') >= 4.5 ? '#FFFFFF' : '#0F172A';
 
-  const handleCopyLink = async () => {
-    if (!resolvedUrl) return;
+  const handleRateOnboarding = async (
+    rating: 'easy' | 'medium' | 'stuck',
+    meta?: { stepStopped?: number; comment?: string },
+  ) => {
+    if (sendingFeedback) return;
+    setThermometerRating(rating);
+    setStuckPickerOpen(false);
+    if (meta?.comment) setStuckReasonLabel(meta.comment);
+    setSendingFeedback(true);
     try {
-      await navigator.clipboard.writeText(resolvedUrl);
-      setCopied(true);
-      showToast({
-        type: 'success',
-        message: 'Link da vitrine copiado! Compartilhe com seus clientes.',
-        durationMs: 2500,
-      });
+      await authenticatedFetch(
+        '/api/onboarding/feedback',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rating,
+            ...(meta?.stepStopped ? { stepStopped: meta.stepStopped } : {}),
+            ...(meta?.comment ? { comment: meta.comment } : {}),
+          }),
+        },
+        ownerId,
+      );
     } catch {
-      showToast({
-        type: 'amber',
-        message: 'Selecione e copie o endereço exibido no campo acima.',
-        durationMs: 3000,
-      });
+      // Optimistic UX per C20
+    } finally {
+      setSendingFeedback(false);
     }
   };
 
@@ -453,8 +492,8 @@ export function StoreCreatedSuccessModal({
       open={open}
       onOpenChange={onOpenChange}
       role="dialog"
-      maxWidth="md"
-      mobileHeight="85%"
+      maxWidth="lg"
+      mobileHeight="90%"
       title={
         <span className="inline-flex items-center gap-2 text-[#0F172A]">
           <PartyPopper className="size-5 text-[#16A34A]" aria-hidden="true" />
@@ -499,8 +538,8 @@ export function StoreCreatedSuccessModal({
         </div>
       }
     >
-      <div className="space-y-4">
-        <div className="flex items-center gap-3.5 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3">
           <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#16A34A] text-white shadow-sm">
             <Store className="size-6" aria-hidden="true" />
           </div>
@@ -517,12 +556,12 @@ export function StoreCreatedSuccessModal({
         {resolvedUrl ? (
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <label
-                htmlFor="onboarding-store-link"
-                className="block text-xs font-semibold uppercase tracking-wide text-slate-600"
-              >
-                Link da sua vitrine online
-              </label>
+              <div className="flex items-center gap-2">
+                <span className="inline-block size-2 rounded-full bg-[#16A34A]" aria-hidden="true" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Vitrine Online Publicada · Pronta para compartilhar
+                </span>
+              </div>
               <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[11px] font-bold">
                 <button
                   type="button"
@@ -549,52 +588,93 @@ export function StoreCreatedSuccessModal({
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                id="onboarding-store-link"
-                type="text"
-                readOnly
-                value={resolvedUrl}
-                onFocus={(e) => e.currentTarget.select()}
-                className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-              />
+            {/* Kit de 1ª Divulgação (Copiar Link + Texto Status + QR PNG + Simular Pedido) */}
+            <div className="flex flex-wrap gap-2">
               <ActionButton
-                variant={copied ? 'success' : 'secondary'}
+                variant="secondary"
                 size={44}
-                leftIcon={
-                  copied ? (
-                    <Check className="size-4" aria-hidden="true" />
-                  ) : (
-                    <Copy className="size-4" aria-hidden="true" />
-                  )
-                }
-                onClick={handleCopyLink}
+                copyText={resolvedUrl}
+                copySuccessLabel="Copiado"
+                data-testid="victory-copy-link-btn"
+                leftIcon={<Copy className="size-4" aria-hidden="true" />}
               >
-                {copied ? 'Copiado!' : 'Copiar Link'}
+                Copiar Link da Vitrine
+              </ActionButton>
+
+              <ActionButton
+                variant="softBlue"
+                size={44}
+                copyText={statusShareText}
+                copySuccessLabel="Copiado"
+                data-testid="victory-copy-status-btn"
+                leftIcon={<Share2 className="size-4" aria-hidden="true" />}
+              >
+                Copiar Texto p/ Status
+              </ActionButton>
+
+              <ActionButton
+                variant="primary"
+                size={44}
+                data-testid="victory-simulate-first-order-btn"
+                leftIcon={<ShoppingBag className="size-4" aria-hidden="true" />}
+                onClick={onSimulateFirstOrder ?? onOpenStorefront}
+              >
+                Simular meu 1º pedido agora
               </ActionButton>
             </div>
 
-            {/* Prévia responsiva + QR Code offline PNG */}
-            <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-12 sm:items-stretch">
-              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-3 sm:col-span-6">
+            {/* Prévia fiel responsiva + QR Code offline PNG */}
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-12 sm:items-stretch">
+              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-6">
                 <div
-                  className={`mx-auto rounded-lg border border-slate-200 bg-[#F8FAFC] p-2.5 text-center transition-all ${
-                    previewDevice === 'mobile' ? 'max-w-[180px]' : 'w-full'
+                  data-testid="victory-mini-preview-card"
+                  className={`mx-auto overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-xs transition-all ${
+                    previewDevice === 'mobile' ? 'max-w-[175px] w-full' : 'w-full'
                   }`}
                 >
-                  <p className="truncate text-xs font-extrabold text-[#0F172A]">{storeName.trim() || 'Sua Loja'}</p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
-                    {previewDevice === 'mobile' ? 'Visual Mobile 390px' : 'Visual Desktop Completo'}
-                  </p>
+                  <div
+                    className="flex items-center justify-between gap-1.5 px-2.5 py-1.5"
+                    style={{ backgroundColor: miniHeaderBg, color: miniHeaderFg }}
+                  >
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      {logoUrl ? (
+                        <img
+                          src={logoUrl}
+                          alt={storeName.trim() || 'Sua Loja'}
+                          className="size-4 shrink-0 rounded bg-white p-0.5 object-contain"
+                        />
+                      ) : null}
+                      <span className="truncate text-[11px] font-extrabold">
+                        {storeName.trim() || 'Sua Loja'}
+                      </span>
+                    </div>
+                    <span
+                      className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold"
+                      style={{ backgroundColor: miniAccentBg, color: miniAccentFg }}
+                    >
+                      {productsCount} {productsCount === 1 ? 'item' : 'itens'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 bg-[#F8FAFC] px-2.5 py-1.5">
+                    <span className="text-[10px] font-semibold text-slate-600">
+                      {previewDevice === 'mobile' ? 'Mobile 390px' : 'Desktop 1440px'}
+                    </span>
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[9px] font-bold"
+                      style={{ backgroundColor: miniAccentBg, color: miniAccentFg }}
+                    >
+                      Pedir
+                    </span>
+                  </div>
                 </div>
               </div>
               {qrPngUrl ? (
-                <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-slate-200 bg-white p-3 sm:col-span-6 sm:flex-col sm:items-center sm:justify-center">
+                <div className="flex items-center justify-between gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5 sm:col-span-6">
                   <img
                     src={qrPngUrl}
                     alt="QR Code da loja"
                     data-testid="victory-qr-img"
-                    className="size-16 shrink-0 rounded-lg border border-slate-100"
+                    className="size-12 shrink-0 rounded-lg border border-slate-100"
                   />
                   <a
                     href={qrPngUrl}
@@ -611,23 +691,93 @@ export function StoreCreatedSuccessModal({
           </div>
         ) : null}
 
+        {/* Termômetro de 1 Clique + Submotivo acionável em "Travou algo" */}
+        <div
+          data-testid="onboarding-thermometer"
+          className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-xs dark:border-slate-800 dark:bg-[#182034]"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-bold text-[#0F172A] dark:text-white">
+              Como foi configurar sua loja agora?
+            </p>
+            {thermometerRating ? (
+              <p
+                data-testid="thermometer-thanks"
+                className="font-bold text-emerald-700 dark:text-emerald-300"
+              >
+                Obrigado pelo retorno ✓{stuckReasonLabel ? ` (${stuckReasonLabel})` : ''}
+              </p>
+            ) : !stuckPickerOpen ? (
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  data-testid="thermometer-rate-easy"
+                  onClick={() => void handleRateOnboarding('easy')}
+                  className="inline-flex min-h-[32px] items-center rounded-xl border border-slate-300 bg-white px-2.5 font-semibold text-slate-700 hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-800"
+                >
+                  Fácil
+                </button>
+                <button
+                  type="button"
+                  data-testid="thermometer-rate-medium"
+                  onClick={() => void handleRateOnboarding('medium')}
+                  className="inline-flex min-h-[32px] items-center rounded-xl border border-slate-300 bg-white px-2.5 font-semibold text-slate-700 hover:border-amber-500 hover:bg-amber-50 hover:text-amber-800"
+                >
+                  Médio
+                </button>
+                <button
+                  type="button"
+                  data-testid="thermometer-rate-stuck"
+                  onClick={() => setStuckPickerOpen(true)}
+                  className="inline-flex min-h-[32px] items-center rounded-xl border border-slate-300 bg-white px-2.5 font-semibold text-slate-700 hover:border-rose-500 hover:bg-rose-50 hover:text-rose-800"
+                >
+                  Travou algo
+                </button>
+              </div>
+            ) : null}
+          </div>
+          {stuckPickerOpen && !thermometerRating ? (
+            <div data-testid="thermometer-stuck-reasons" className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-200 dark:border-slate-700">
+              <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 mr-1">
+                Onde travou?
+              </span>
+              {STUCK_REASON_OPTIONS.map((reason) => (
+                <button
+                  key={reason.id}
+                  type="button"
+                  data-testid={`thermometer-stuck-reason-${reason.id}`}
+                  onClick={() =>
+                    void handleRateOnboarding('stuck', {
+                      stepStopped: reason.step,
+                      comment: reason.label,
+                    })
+                  }
+                  className="inline-flex min-h-[30px] items-center rounded-lg border border-rose-200 bg-white px-2.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50"
+                >
+                  {reason.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
         {/* Trilha de lançamento 3 passos */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-3.5 text-xs">
-          <p className="font-bold text-[#0F172A] mb-2">Próximos 3 passos para vender hoje</p>
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 text-xs">
+          <p className="font-bold text-[#0F172A] mb-1.5">Próximos 3 passos para vender hoje</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 font-semibold text-emerald-900">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-1.5 font-semibold text-emerald-900">
               1. Página no ar ✓
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 font-semibold text-slate-700">
               2. Testar 3 msgs da Sofia
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 font-semibold text-slate-700">
               3. Baixar App Windows (.exe)
             </div>
           </div>
         </div>
 
-        <p className="text-xs leading-relaxed text-slate-500">
+        <p className="text-[11px] leading-relaxed text-slate-500">
           {whatsappConnected
             ? 'Seu WhatsApp está conectado e pronto para atender seus clientes.'
             : 'Seus clientes já podem finalizar compras enviando o pedido direto para o WhatsApp da loja. Se quiser, conecte também o WhatsApp automático quando preferir.'}

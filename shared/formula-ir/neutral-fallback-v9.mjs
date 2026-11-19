@@ -136,111 +136,257 @@ export function buildNeutralFallbackV9Document(profile = {}) {
           { icon: 'MessageCircle', title: 'Pedido direto no WhatsApp', text: 'Envie sua seleção organizada em um clique.' },
         ];
 
-  const sections = [
+  const shippingFeeCents = Math.max(
+    0,
+    Number(profile?.shipping?.fixedFeeCents ?? profile?.delivery?.defaultFeeCents ?? 0),
+  );
+  const freeShippingThresholdCents = Math.max(
+    0,
+    Number(profile?.shipping?.freeShippingThresholdCents ?? 0),
+  );
+  const faqItems = [
     {
-      id: 'sec_hero',
-      type: 'HeroSection',
-      imageSlotId: 'hero_main',
-      config: {
-        variant: 'split',
-        eyebrow: campaignTheme || segment,
-        title: storeName,
-        subtitle: description,
-        primaryCta: {
-          label: businessModel === 'servicos' ? 'Simular atendimento' : 'Explorar experiência',
-          href: '#experiencia',
-        },
-        secondaryCta: { label: 'Falar no WhatsApp', action: 'whatsapp.send_summary' },
-      },
+      q: 'Quais são os horários e formas de atendimento?',
+      a: business.hours
+        ? `Nosso atendimento funciona em: ${String(business.hours)}.${business.address ? ` Endereço: ${String(business.address)}.` : ''}`
+        : 'Confirmamos horários e disponibilidade diretamente pelo WhatsApp.',
     },
     {
-      id: 'sec_diff',
-      type: 'DifferentialsStrip',
-      config: { items: diffItems },
+      q: 'Quais formas de pagamento e descontos estão disponíveis?',
+      a:
+        pixDiscountPercent > 0
+          ? `Aceitamos Pix com ${pixDiscountPercent}% de desconto imediato, além das opções combinadas no fechamento.`
+          : 'Aceitamos Pix e cartões conforme confirmado no fechamento do pedido.',
     },
     {
-      id: 'sec_experiencia',
-      type: 'InteractiveExperience',
-      config: {
-        eyebrow: campaignTheme ? `Destaque: ${campaignTheme}` : 'Simulador da Loja',
-        title: businessModel === 'servicos' ? 'Monte sua solicitação' : 'Monte sua seleção',
-        subtitle: String(business.experienceGoal || 'Selecione opções abaixo e veja o resumo atualizado antes de finalizar.'),
-        layoutVariant: 'workbench_split',
-        stateDefaults,
-        controls,
-        calcRule: {
-          mode: 'base_plus_addons',
-          pixDiscountPercent,
-          summaryTitle: 'Resumo da sua escolha',
-          limitNote:
-            businessModel === 'servicos'
-              ? 'Disponibilidade exata de agenda confirmada pela equipe no WhatsApp.'
-              : 'Consulte prazos e combinações diretamente ao finalizar.',
-        },
-        primaryAction: {
-          type: 'cart.add_selected',
-          label: businessModel === 'servicos' ? 'Levar solicitação à sacola' : 'Adicionar seleção à sacola',
-        },
-        secondaryAction: {
-          type: 'whatsapp.send_summary',
-          label: 'Enviar resumo no WhatsApp',
-        },
-      },
-    },
-    {
-      id: 'sec_editorial',
-      type: 'EditorialMediaSplit',
-      imageSlotId: hasUserStorefront ? undefined : 'ambient_space',
-      config: {
-        variant: 'media_right',
-        eyebrow: 'Nosso espaço e jeito de trabalhar',
-        title: `Conheça ${storeName}`,
-        body: description,
-        bullets: differentials,
-        ctaLabel: 'Ver itens abaixo',
-        ctaHref: '#catalogo',
-        imageUrl: hasUserStorefront ? String(brand.storefrontPhotoUrl) : undefined,
-      },
-    },
-    {
-      id: 'sec_catalogo',
-      type: 'CatalogGrid',
-      config: {
-        title: businessModel === 'servicos' ? 'Serviços e itens disponíveis' : 'Catálogo completo',
-        subtitle: 'Adicione diretamente à sacola ou clique em um item para ver detalhes.',
-        itemActionLabel: 'Adicionar à sacola',
-        emptyImageMode: 'neutral_gray',
-      },
-    },
-    {
-      id: 'sec_closing',
-      type: 'ClosingScheduleSplit',
-      config: {
-        eyebrow: 'Atendimento',
-        title: String(business.hours || 'Atendimento ágil e organizado'),
-        subtitle: String(business.address || 'Combine entrega ou retirada diretamente com nossa equipe.'),
-        slots: ['Manhã', 'Tarde', 'Sob consulta'],
-        whatsappHeading: `Dúvidas sobre ${storeName}?`,
-        whatsappSubtext: 'Envie sua dúvida ou pedido montado direto no WhatsApp.',
-        ctaLabel: 'Chamar no WhatsApp',
-        imageUrl: hasUserStorefront ? String(brand.storefrontPhotoUrl) : undefined,
-      },
-    },
-    {
-      id: 'sec_footer',
-      type: 'RichFooter',
-      config: {
-        tagline: `${storeName} — ${description.slice(0, 140)}`,
-        showNewsletter: false,
-      },
+      q: 'Como funciona a entrega ou retirada?',
+      a:
+        freeShippingThresholdCents > 0
+          ? `Frete grátis para pedidos acima de R$ ${(freeShippingThresholdCents / 100).toFixed(2).replace('.', ',')}${shippingFeeCents > 0 ? ` (taxa padrão R$ ${(shippingFeeCents / 100).toFixed(2).replace('.', ',')})` : ''}.`
+          : shippingFeeCents > 0
+            ? `Taxa fixa de entrega local de R$ ${(shippingFeeCents / 100).toFixed(2).replace('.', ',')} ou retirada combinada.`
+            : 'Combinamos entrega local ou retirada diretamente pelo WhatsApp.',
     },
   ];
+
+  const heroSection = {
+    id: 'sec_hero',
+    type: 'HeroSection',
+    imageSlotId: 'hero_main',
+    config: {
+      variant: 'split',
+      eyebrow: (campaignTheme || segment).slice(0, 58),
+      title: storeName.slice(0, 58),
+      subtitle: description.slice(0, 115),
+      primaryCta: {
+        label: businessModel === 'servicos' ? 'Simular atendimento' : 'Explorar experiência',
+        href: '#experiencia',
+      },
+      secondaryCta: { label: 'Falar no WhatsApp', action: 'whatsapp.send_summary' },
+    },
+  };
+
+  const diffSection = {
+    id: 'sec_diff',
+    type: 'DifferentialsStrip',
+    config: { items: diffItems },
+  };
+
+  const expSection = {
+    id: 'sec_experiencia',
+    type: 'InteractiveExperience',
+    config: {
+      eyebrow: campaignTheme ? `Destaque: ${campaignTheme}` : 'Simulador da Loja',
+      title: businessModel === 'servicos' ? 'Monte sua solicitação' : 'Monte sua seleção',
+      subtitle: String(
+        business.experienceGoal ||
+          'Selecione opções abaixo e veja o resumo atualizado antes de finalizar.',
+      ).slice(0, 210),
+      experienceMode:
+        businessModel === 'servicos'
+          ? 'quiz_recommendation'
+          : activeItems.length >= 2
+            ? 'quiz_recommendation'
+            : 'dosage_calculator',
+      recommendedSkus: primaryPool.map((p) => String(p.sku || p.id || '')).filter(Boolean),
+      layoutVariant: 'workbench_split',
+      stateDefaults,
+      controls,
+      calcRule: {
+        mode: 'base_plus_addons',
+        pixDiscountPercent,
+        summaryTitle: 'Resumo da sua escolha',
+        limitNote:
+          businessModel === 'servicos'
+            ? 'Disponibilidade exata de agenda confirmada pela equipe no WhatsApp.'
+            : 'Consulte prazos e combinações diretamente ao finalizar.',
+      },
+      primaryAction: {
+        type: 'cart.add_selected',
+        label:
+          businessModel === 'servicos'
+            ? 'Levar solicitação à sacola'
+            : 'Adicionar seleção à sacola',
+      },
+      secondaryAction: {
+        type: 'whatsapp.send_summary',
+        label: 'Enviar resumo no WhatsApp',
+      },
+    },
+  };
+
+  const bundlesSection =
+    activeItems.length >= 2
+      ? {
+          id: 'sec_bundles',
+          type: 'ComplementaryBundles',
+          config: {
+            title: 'Combine e Economize',
+            subtitle:
+              pixDiscountPercent > 0
+                ? `Combinações curadas do catálogo com ${pixDiscountPercent}% OFF no Pix.`
+                : 'Combinações práticas do catálogo para adicionar juntas à sacola.',
+            items: [
+              {
+                id: 'combo_1',
+                title: `${activeItems[0].name} + ${activeItems[1].name}`.slice(0, 88),
+                description: 'Seleção completa pronta para levar em 1 clique.',
+                skuIds: [
+                  String(activeItems[0].sku || activeItems[0].id),
+                  String(activeItems[1].sku || activeItems[1].id),
+                ],
+                totalCents:
+                  Math.max(0, Number(activeItems[0].priceCents || 0)) +
+                  Math.max(0, Number(activeItems[1].priceCents || 0)),
+              },
+              ...(activeItems.length >= 3
+                ? [
+                    {
+                      id: 'combo_2',
+                      title: `${activeItems[0].name} + ${activeItems[2].name}`.slice(0, 88),
+                      description: 'Dupla complementar recomendada pela loja.',
+                      skuIds: [
+                        String(activeItems[0].sku || activeItems[0].id),
+                        String(activeItems[2].sku || activeItems[2].id),
+                      ],
+                      totalCents:
+                        Math.max(0, Number(activeItems[0].priceCents || 0)) +
+                        Math.max(0, Number(activeItems[2].priceCents || 0)),
+                    },
+                  ]
+                : []),
+            ],
+          },
+        }
+      : null;
+
+  const highlightsSection = {
+    id: 'sec_highlights',
+    type: 'HighlightsGrid',
+    config: {
+      title: `Destaques de ${storeName}`.slice(0, 90),
+      subtitle: 'Navegue pelas linhas mais procuradas do catálogo.',
+      columns: 2,
+      cards: activeItems.slice(0, 2).map((p) => ({
+        eyebrow: String(p.category || segment).slice(0, 40),
+        title: String(p.name || 'Destaque').slice(0, 75),
+        description: String(p.description || `${p.name} disponível no catálogo.`).slice(0, 180),
+        ctaLabel: 'Ver no catálogo',
+        href: '#catalogo',
+      })),
+    },
+  };
+
+  const catalogSection = {
+    id: 'sec_catalogo',
+    type: 'CatalogGrid',
+    config: {
+      title: businessModel === 'servicos' ? 'Serviços e itens disponíveis' : 'Catálogo completo',
+      subtitle: 'Adicione diretamente à sacola ou clique em um item para ver detalhes.',
+      itemActionLabel: 'Adicionar à sacola',
+      emptyImageMode: 'neutral_gray',
+    },
+  };
+
+  const faqSection = {
+    id: 'sec_faq',
+    type: 'ContextualFaq',
+    config: {
+      title: 'Perguntas Frequentes',
+      subtitle: 'Informações confirmadas sobre atendimento, pagamento e entrega.',
+      items: faqItems,
+    },
+  };
+
+  const closingSection = {
+    id: 'sec_closing',
+    type: 'ClosingScheduleSplit',
+    config: {
+      eyebrow: 'Atendimento',
+      title: String(business.hours || 'Atendimento ágil e organizado'),
+      subtitle: String(
+        business.address || 'Combine entrega ou retirada diretamente com nossa equipe.',
+      ),
+      slots: ['Manhã', 'Tarde', 'Sob consulta'],
+      whatsappHeading: `Dúvidas sobre ${storeName}?`,
+      whatsappSubtext: 'Envie sua dúvida ou pedido montado direto no WhatsApp.',
+      ctaLabel: 'Chamar no WhatsApp',
+      imageUrl: hasUserStorefront ? String(brand.storefrontPhotoUrl) : undefined,
+    },
+  };
+
+  const isServiceFocused =
+    (businessModel === 'servicos' || (serviceItems.length > 0 && serviceItems.length === activeItems.length)) &&
+    activeItems.length <= 6;
+  const isLargeRetailCatalog = businessModel !== 'servicos' && activeItems.length >= 12;
+
+  let sections;
+  if (isServiceFocused) {
+    // Goal-Driven Services (<= 6 items): Hero -> Agendamento/Diferenciais -> InteractiveExperience -> CatalogGrid -> ContextualFaq -> Horários
+    sections = [
+      heroSection,
+      diffSection,
+      expSection,
+      catalogSection,
+      faqSection,
+      closingSection,
+    ];
+  } else if (isLargeRetailCatalog) {
+    // Goal-Driven Large Catalog (>= 12 items): Hero -> Destaque -> ComplementaryBundles -> Grade Catálogo -> InteractiveExperience -> ContextualFaq -> Closing
+    sections = [
+      heroSection,
+      highlightsSection.config.cards.length > 0 ? highlightsSection : diffSection,
+      ...(bundlesSection ? [bundlesSection] : []),
+      catalogSection,
+      expSection,
+      faqSection,
+      closingSection,
+    ].slice(0, 7);
+  } else {
+    sections = [
+      heroSection,
+      diffSection,
+      expSection,
+      ...(bundlesSection ? [bundlesSection] : []),
+      catalogSection,
+      faqSection,
+      closingSection,
+    ].slice(0, 7);
+  }
 
   return sanitizeFormulaV9Document(
     {
       version: FORMULA_V9_VERSION,
       generatedBy: 'neutral-v9-fallback',
       modelUsed: 'structural-fallback',
+      visualDirection: fontStyle === 'editorial_serif' ? 'clean_craft' : 'editorial_light',
+      layoutGrid: isLargeRetailCatalog ? 'compact_dense' : 'editorial_split',
+      artDirectionBible: {
+        lighting: 'Warm natural daylight, soft diffused commercial studio shadows',
+        surfaceMaterial: 'Clean natural stone and warm organic textures',
+        backdropTone: `Cohesive neutral backdrop harmonized with ${primaryColor}`,
+        cameraFraming: '50mm editorial framing with sharp subject focus and negative space',
+      },
       analysis: {
         factsConfirmed: activeItems.slice(0, 4).map((p) => `${p.name}`),
         dependencies: ['Prazo final e disponibilidade exata confirmados no WhatsApp'],

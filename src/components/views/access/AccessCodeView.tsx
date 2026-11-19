@@ -4,6 +4,12 @@ import { ActionButton } from '@/components/ui/ActionButton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { saveLocalShowcaseSession } from '@/services/supabase-client';
 import { getBrandHorizontalLogo, useDocumentDarkMode } from '@/utils/themeLogos';
+import {
+  buildAccessCreditsSummary,
+  normalizeInviteCodeInput,
+} from '@/utils/inviteCode';
+
+export { normalizeInviteCodeInput };
 
 export interface AccessCodeViewProps {
   onSuccess?: (codeData: { code: string; credits: number }) => void;
@@ -19,20 +25,7 @@ export type AccessCodeState =
   | 'activated';
 
 export function formatAccessCodeInput(raw: string): string {
-  // Mantém apenas alfanuméricos, letras maiúsculas
-  const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
-  let formatted = '';
-
-  if (clean.length > 0) {
-    formatted = clean.slice(0, 4); // AI10
-  }
-  if (clean.length > 4) {
-    formatted += '-' + clean.slice(4, 8); // XXXX
-  }
-  if (clean.length > 8) {
-    formatted += '-' + clean.slice(8, 12); // XXXX
-  }
-  return formatted;
+  return normalizeInviteCodeInput(raw);
 }
 
 export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) {
@@ -41,7 +34,11 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
   const [code, setCode] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const q = (params.get('code') || params.get('invite') || '').trim().toUpperCase();
+      const qrParam = (params.get('qr') || '').trim();
+      if (qrParam) {
+        sessionStorage.setItem('cg_entry_qr', qrParam);
+      }
+      const q = normalizeInviteCodeInput(params.get('code') || params.get('invite') || '');
       if (/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(q)) return q;
     } catch {}
     return 'AI10-';
@@ -54,17 +51,39 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    const formatted = formatAccessCodeInput(val);
+    const formatted = normalizeInviteCodeInput(val);
     setCode(formatted);
+    if (formatted.length < 14 || formatted !== code) {
+      debounceAbortRef.current?.abort();
+      setCreditsAwarded(0);
+    }
     if (state !== 'idle') {
       setState('idle');
       setErrorMessage('');
     }
   };
 
+  const handleInputPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData?.getData('text');
+    if (typeof pasted === 'string' && pasted.trim()) {
+      e.preventDefault();
+      const formatted = normalizeInviteCodeInput(pasted);
+      setCode(formatted);
+      if (formatted.length < 14 || formatted !== code) {
+        debounceAbortRef.current?.abort();
+        setCreditsAwarded(0);
+      }
+      if (state !== 'idle') {
+        setState('idle');
+        setErrorMessage('');
+      }
+    }
+  };
+
   useEffect(() => {
     const cleanCode = code.trim();
     if (cleanCode.length !== 14 || !/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(cleanCode)) {
+      setCreditsAwarded(0);
       return;
     }
     if (submittingRef.current || state === 'activated') return;
@@ -82,11 +101,18 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
       })
         .then(async (res) => {
           const data = await res.json().catch(() => null);
-          if (!ctrl.signal.aborted && res.ok && data?.valid && Number(data.credits) > 0) {
+          if (ctrl.signal.aborted) return;
+          if (res.ok && data?.valid && Number(data.credits) > 0) {
             setCreditsAwarded(Number(data.credits));
+          } else {
+            setCreditsAwarded(0);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          if (!ctrl.signal.aborted) {
+            setCreditsAwarded(0);
+          }
+        });
     }, 150);
 
     return () => {
@@ -253,6 +279,7 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
                 maxLength={14}
                 value={code}
                 onChange={handleInputChange}
+                onPaste={handleInputPaste}
                 disabled={state === 'loading' || state === 'activated'}
                 placeholder="AI10-XXXX-XXXX"
                 className={`w-full rounded-2xl border px-4 py-3.5 text-center font-mono text-xl font-bold tracking-widest transition-all focus:outline-none focus:ring-2 ${
@@ -301,12 +328,26 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
                   <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
                     <CheckCircle2 className="size-4 shrink-0" />
                     <span>
-                      +{creditsAwarded} cr liberados (~{Math.max(1, Math.floor(creditsAwarded / 30))} Página + ~{Math.round(creditsAwarded * 2.5)} msgs Sofia).
+                      +{creditsAwarded} créditos liberados na sua conta.
                     </span>
                   </div>
                 )}
               </div>
             )}
+
+            {creditsAwarded > 0 ? (
+              <div
+                data-testid="access-credits-translation-card"
+                className={`mt-2 rounded-xl border px-3.5 py-2.5 text-center text-xs font-medium ${
+                  isDark
+                    ? 'border-blue-500/30 bg-blue-500/10 text-blue-200'
+                    : 'border-blue-200 bg-blue-50/80 text-[#0B1D52]'
+                }`}
+              >
+                <span className="font-bold">{creditsAwarded} cr:</span>{' '}
+                {buildAccessCreditsSummary(creditsAwarded)}
+              </div>
+            ) : null}
           </div>
 
           <ActionButton

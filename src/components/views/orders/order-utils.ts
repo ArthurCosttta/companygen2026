@@ -99,17 +99,37 @@ export function parseBRLInputToCents(raw: string): number {
     .replace(/\s+/g, '')
     .trim();
   if (!cleaned) return 0;
+  // M4: bloqueia notação científica (1e5), múltiplos separadores decimais (12,34,56) e negativos
+  if (/[eE\-+]/.test(cleaned)) return 0;
+  if ((cleaned.match(/,/g) || []).length > 1) return 0;
 
   let normalized = cleaned;
   if (cleaned.includes(',')) {
     normalized = cleaned.replace(/\./g, '').replace(',', '.');
   } else if (/^\d{1,3}(\.\d{3})+$/.test(cleaned)) {
     normalized = cleaned.replace(/\./g, '');
+  } else if ((cleaned.match(/\./g) || []).length > 1) {
+    return 0;
   }
 
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
   return Math.round(parsed * 100);
+}
+
+export function isSimulationOrder(order: Pick<BusinessOrder, 'isSimulation' | 'is_simulation' | 'order_ref'>): boolean {
+  return Boolean(order?.isSimulation || order?.is_simulation || String(order?.order_ref || '').startsWith('CG-SIM'));
+}
+
+export function isOrderDelayedOver2Hours(
+  order: Pick<BusinessOrder, 'status' | 'updated_at' | 'created_at' | 'isSimulation' | 'is_simulation' | 'order_ref'>,
+  nowMs: number = Date.now(),
+): boolean {
+  if (isSimulationOrder(order)) return false;
+  const st = normalizeOrderStatus(order.status);
+  if (st === 'concluido' || st === 'cancelado') return false;
+  const ts = Date.parse(order.updated_at || order.created_at || '');
+  return Number.isFinite(ts) && nowMs - ts > 7_200_000;
 }
 
 export function formatCentsForInput(cents: number): string {

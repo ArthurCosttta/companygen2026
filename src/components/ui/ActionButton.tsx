@@ -57,9 +57,9 @@ const VARIANT_CLASSES: Record<ActionButtonVariant, string> = {
   dark:
     "bg-[#0F172A] hover:bg-[#2563EB] active:bg-[#1D4ED8] text-white shadow-sm",
   softBlue:
-    "bg-[#EFF6FF] border border-[#BFDBFE] hover:bg-[#DBEAFE] active:bg-[#BFDBFE] text-[#1D4ED8]",
+    "bg-[#EFF6FF] border border-[#BFDBFE] hover:bg-[#DBEAFE] active:bg-[#BFDBFE] text-[#1D4ED8] dark:bg-[#1E3A8A]/40 dark:border-[#3B82F6]/40 dark:text-[#93C5FD] dark:hover:bg-[#1E3A8A]/60",
   secondary:
-    "bg-[#F1F5F9] hover:bg-[#E2E8F0] active:bg-[#CBD5E1] text-[#0F172A]",
+    "bg-[#F1F5F9] hover:bg-[#E2E8F0] active:bg-[#CBD5E1] text-[#0F172A] dark:bg-[var(--cg-surface-elevated)] dark:border dark:border-[var(--cg-border-strong)] dark:text-[var(--cg-text)] dark:hover:bg-[var(--cg-hover)]",
 };
 
 const SIZE_CLASSES: Record<string, string> = {

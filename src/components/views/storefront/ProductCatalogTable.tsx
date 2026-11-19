@@ -1,5 +1,18 @@
 import * as React from 'react';
 import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCenter,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  Archive,
   Check,
   CheckCircle2,
   Copy,
@@ -8,11 +21,16 @@ import {
   Edit3,
   Eye,
   FileSpreadsheet,
+  GripVertical,
   ImagePlus,
   LayoutGrid,
+  Megaphone,
   Monitor,
   Package,
+  Palette,
+  Pause,
   Percent,
+  Play,
   Plus,
   QrCode,
   Rocket,
@@ -20,6 +38,7 @@ import {
   Smartphone,
   Sparkles,
   Store as StoreIcon,
+  Tags,
   Trash2,
   Wand2,
   CheckSquare,
@@ -39,6 +58,8 @@ import {
   type CatalogItemType,
   type CatalogProduct,
 } from '@/schemas/profile.schema';
+import { matchesProductQuery } from '@/utils/fuzzySearch';
+import { validateAndOptimizeImageFile } from '@/utils/imageOptimize';
 import { ensureFormulaV9 } from '../../../../shared/formula-ir/neutral-fallback-v9.mjs';
 import {
   useConnectionPhaseInfo,
@@ -64,7 +85,9 @@ import {
   PublishBlockModal,
   StorePublishedModal,
 } from './CatalogGuardModals';
+import { MarketingHubTab } from './MarketingHubTab';
 import { ProductEditorDrawer } from './ProductEditorDrawer';
+import { ShippingQuickCard } from './ShippingQuickCard';
 import { CustomerStorefrontView } from './CustomerStorefrontView';
 import { UniversalCatalogXlsxModal } from './UniversalCatalogXlsxModal';
 
@@ -73,8 +96,9 @@ import {
   buildProductPlaceholderDataUri,
   buildStorePublicUrl,
   copyTextToClipboard,
+  formatCentsForInput,
   getPublishBlockers,
-  readImageFileAsDataUrl,
+  parseBRLInputToCents,
   resolveProductImageUrl,
   type PublishBlocker,
 } from './storefront-utils';
@@ -93,79 +117,54 @@ export interface ProductCatalogTableProps {
 }
 
 const PHASE_BADGE_CLASS: Record<string, string> = {
-  LIVE_READY: 'border-emerald-200 bg-emerald-50 text-[#16A34A]',
-  QR_PENDING: 'border-amber-200 bg-amber-50 text-amber-800',
-  STORE_NUMBER_ONLY: 'border-blue-200 bg-[#EFF6FF] text-[#1D4ED8]',
-  DISCONNECTED: 'border-slate-200 bg-slate-100 text-slate-700',
+  LIVE_READY: 'border-emerald-200 bg-emerald-50 text-[#24A677]',
+  QR_PENDING: 'border-amber-200 bg-amber-50 text-[#92400E] dark:text-[#FBBF24]',
+  STORE_NUMBER_ONLY: 'border-blue-200 bg-[var(--cg-hover)] text-[var(--cg-primary)]',
+  DISCONNECTED: 'border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-secondary)]',
 };
 
-const ITEM_TYPE_OPTIONS: Array<{ value: CatalogItemType; label: string }> = [
-  { value: 'produto_fisico', label: 'Produto Físico' },
-  { value: 'servico_agendado', label: 'Serviço Agendado' },
-  { value: 'kit_combo', label: 'Kit / Combo' },
-  { value: 'sob_medida', label: 'Sob Medida' },
-];
+type CatalogDensity = 'comfortable' | 'compact';
+type StoreSubTab = 'catalogo' | 'estudio' | 'divulgacao';
+type InlineEditField = 'price' | 'stock';
 
-interface ProductMoldeInputProps {
-  product: CatalogProduct;
-  brandName: string;
-  isSaving: boolean;
-  testId?: string;
-  ariaLabel: string;
-  className: string;
-  onSave: (product: CatalogProduct, nextMolde: string) => void | Promise<void>;
+const CATALOG_DENSITY_KEY = 'cg_catalog_density';
+
+function loadCatalogDensity(): CatalogDensity {
+  if (typeof window === 'undefined') return 'comfortable';
+  try {
+    return window.localStorage.getItem(CATALOG_DENSITY_KEY) === 'compact'
+      ? 'compact'
+      : 'comfortable';
+  } catch {
+    return 'comfortable';
+  }
 }
 
-const ProductMoldeInput = React.memo(function ProductMoldeInput({
-  product,
-  brandName,
-  isSaving,
-  testId,
-  ariaLabel,
-  className,
-  onSave,
-}: ProductMoldeInputProps) {
-  const defaultValue = React.useMemo(
-    () => product.mensagemMolde?.trim() || buildDefaultMensagemMolde(product, brandName),
-    [product, brandName],
-  );
-  const [value, setValue] = React.useState(defaultValue);
-
-  React.useEffect(() => {
-    setValue(defaultValue);
-  }, [defaultValue]);
-
-  return (
-    <div className="flex items-center gap-1.5">
-      <input
-        type="text"
-        data-testid={testId}
-        aria-label={ariaLabel}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={(e) => void onSave(product, e.target.value)}
-        className={className}
-      />
-      {isSaving ? (
-        <span className="text-[11px] font-medium text-[#2563EB]">...</span>
-      ) : null}
-    </div>
-  );
-});
+function reorderList<T>(list: T[], fromIndex: number, toIndex: number): T[] {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return list;
+  const next = [...list];
+  const [moved] = next.splice(fromIndex, 1);
+  if (moved === undefined) return list;
+  next.splice(toIndex, 0, moved);
+  return next;
+}
 
 interface DesktopProductRowProps {
   product: CatalogProduct;
-  brandName: string;
   brandPrimaryColor: string;
+  density: CatalogDensity;
   isSelected: boolean;
   isUploading: boolean;
-  isSavingMold: boolean;
-  isToggling: boolean;
-  onToggleSelect: (id: string) => void;
+  canReorder: boolean;
+  editingField: InlineEditField | null;
+  inlineDraft: string;
+  onStartInlineEdit: (field: InlineEditField, product: CatalogProduct) => void;
+  onInlineDraftChange: (value: string) => void;
+  onCommitInlineEdit: (fromBlur?: boolean) => void;
+  onCancelInlineEdit: () => void;
+  onToggleSelect: (id: string, shiftKey?: boolean) => void;
   onUploadPhoto: (product: CatalogProduct, file: File | null) => void;
   onZoomPhoto: (item: { id: string; name: string; imageUrl: string }) => void;
-  onUpdateItemType: (product: CatalogProduct, nextType: CatalogItemType) => void;
-  onSaveMolde: (product: CatalogProduct, nextMolde: string) => Promise<void>;
   onToggleActive: (product: CatalogProduct) => void;
   onEdit: (product: CatalogProduct) => void;
   onDelete: (product: CatalogProduct) => void;
@@ -173,22 +172,50 @@ interface DesktopProductRowProps {
 
 const DesktopProductRow = React.memo(function DesktopProductRow({
   product,
-  brandName,
   brandPrimaryColor,
+  density,
   isSelected,
   isUploading,
-  isSavingMold,
-  isToggling,
+  canReorder,
+  editingField,
+  inlineDraft,
+  onStartInlineEdit,
+  onInlineDraftChange,
+  onCommitInlineEdit,
+  onCancelInlineEdit,
   onToggleSelect,
   onUploadPhoto,
   onZoomPhoto,
-  onUpdateItemType,
-  onSaveMolde,
   onToggleActive,
   onEdit,
   onDelete,
 }: DesktopProductRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDragRef,
+    isDragging,
+  } = useDraggable({ id: product.id, disabled: !canReorder });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: product.id,
+    disabled: !canReorder,
+  });
+
+  const setRowRef = React.useCallback(
+    (node: HTMLTableRowElement | null) => {
+      setDragRef(node);
+      setDropRef(node);
+    },
+    [setDragRef, setDropRef],
+  );
+
   const isActive = product.active !== false;
+  const lowThreshold = Math.max(0, Number(product.lowStockThreshold ?? 3));
+  const isOutOfStock = product.stock === 0;
+  const isLowStock = product.stock > 0 && product.stock <= lowThreshold;
+  const focalX = product.imageFocalPoint?.x ?? 50;
+  const focalY = product.imageFocalPoint?.y ?? 50;
+
   const imgSrc = resolveProductImageUrl(
     product.imageUrl,
     product.name,
@@ -199,53 +226,73 @@ const DesktopProductRow = React.memo(function DesktopProductRow({
     product.imageUrl && !product.imageUrl.startsWith('data:image/svg+xml'),
   );
 
+  const cellPad = density === 'compact' ? 'py-2' : 'py-4';
+  const thumbSize = density === 'compact' ? 'size-9' : 'size-12';
+
   return (
-    <tr className={`align-top transition-colors ${isSelected ? 'bg-blue-50/50' : 'hover:bg-slate-50/70'}`}>
-      <td className="py-3.5 pr-2">
-        <button
-          type="button"
-          data-testid={`catalog-select-row-${product.id}`}
-          aria-label={`Selecionar ${product.name}`}
-          onClick={() => onToggleSelect(product.id)}
-          className="flex size-6 items-center justify-center rounded-md border border-slate-300 hover:bg-slate-100"
-        >
-          {isSelected ? (
-            <CheckSquare className="size-4 text-[#2563EB]" />
-          ) : (
-            <Square className="size-4 text-slate-400" />
-          )}
-        </button>
-      </td>
-      <td className="py-3.5 pr-4">
-        <div className="flex items-start gap-3">
+    <tr
+      ref={setRowRef}
+      data-testid={`catalog-row-${product.id}`}
+      data-density={density}
+      className={`group align-middle transition-colors ${
+        isOver ? 'border-t-2 border-t-[var(--cg-primary)]' : ''
+      } ${isDragging ? 'opacity-40' : ''} ${
+        isSelected ? 'bg-[var(--cg-hover)]/70' : 'hover:bg-[var(--cg-hover)]/45'
+      }`}
+    >
+      {/* Sinal 1: Alça Drag + Checkbox + Foto 1:1 fixa */}
+      <td className={`${cellPad} pl-4 pr-2`}>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            data-testid={`catalog-drag-handle-${product.id}`}
+            aria-label={`Arrastar para reordenar ${product.name}`}
+            disabled={!canReorder}
+            {...(canReorder ? attributes : {})}
+            {...(canReorder ? listeners : {})}
+            className="inline-flex size-7 shrink-0 cursor-grab items-center justify-center rounded-lg text-[var(--cg-text-muted)] opacity-45 transition-opacity hover:bg-[var(--cg-surface-elevated)] hover:text-[var(--cg-text)] group-hover:opacity-100 focus-visible:opacity-100 active:cursor-grabbing disabled:cursor-default disabled:opacity-20"
+          >
+            <GripVertical className="size-4" aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            data-testid={`catalog-select-row-${product.id}`}
+            aria-label={`Selecionar ${product.name}`}
+            onClick={(e) => onToggleSelect(product.id, e.shiftKey)}
+            className="flex size-6 shrink-0 items-center justify-center rounded-md border border-[var(--cg-border-strong)] bg-[var(--cg-surface)] hover:bg-[var(--cg-hover)]"
+          >
+            {isSelected ? (
+              <CheckSquare className="size-4 text-[var(--cg-primary)]" />
+            ) : (
+              <Square className="size-4 text-[var(--cg-text-muted)]" />
+            )}
+          </button>
+
           <div className="relative shrink-0">
             <label
               data-testid={`product-upload-photo-${product.id}`}
-              title="Clique para subir foto real do item"
-              className="group relative flex size-16 shrink-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-slate-100 text-slate-500 transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+              title="Clique para enviar foto JPG, PNG ou WebP"
+              className={`group/img relative flex ${thumbSize} aspect-square shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-muted)] transition-colors hover:border-[var(--cg-primary)]`}
             >
               {hasCustomPhoto ? (
-                <>
-                  <img
-                    src={imgSrc}
-                    alt={product.name}
-                    className="size-full object-cover"
-                  />
-                  <span className="absolute inset-x-0 bottom-0 bg-slate-900/70 py-0.5 text-center text-[10px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100">
-                    Trocar
-                  </span>
-                </>
+                <img
+                  src={imgSrc}
+                  alt={product.name}
+                  style={{ objectPosition: `${focalX}% ${focalY}%` }}
+                  className="size-full object-cover"
+                />
               ) : (
-                <>
-                  <ImagePlus className="size-4" aria-hidden="true" />
-                  <span className="mt-0.5 text-[10px] font-semibold">
-                    {isUploading ? '...' : '+ Foto'}
-                  </span>
-                </>
+                <ImagePlus className="size-4" aria-hidden="true" />
               )}
+              {isUploading ? (
+                <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-[10px] font-bold text-white">
+                  ...
+                </span>
+              ) : null}
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/gif"
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0] || null;
@@ -254,11 +301,11 @@ const DesktopProductRow = React.memo(function DesktopProductRow({
                 }}
               />
             </label>
-            {hasCustomPhoto && imgSrc ? (
+            {hasCustomPhoto && imgSrc && density === 'comfortable' ? (
               <button
                 type="button"
                 data-testid={`product-zoom-photo-${product.id}`}
-                title="Ampliar e inspecionar nitidez da foto"
+                title="Ampliar foto"
                 aria-label={`Ampliar foto de ${product.name}`}
                 onClick={() =>
                   onZoomPhoto({
@@ -267,109 +314,167 @@ const DesktopProductRow = React.memo(function DesktopProductRow({
                     imageUrl: imgSrc,
                   })
                 }
-                className="absolute -right-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-blue-50 hover:text-[#2563EB]"
+                className="absolute -right-1.5 -top-1.5 hidden size-5 items-center justify-center rounded-full border border-[var(--cg-border-strong)] bg-[var(--cg-surface)] text-[var(--cg-text-secondary)] shadow-xs group-hover:flex hover:text-[var(--cg-primary)]"
               >
-                <ZoomIn className="size-3.5" />
+                <ZoomIn className="size-3" />
               </button>
             ) : null}
-          </div>
-
-          <div className="min-w-0">
-            <p className="truncate font-semibold text-[#0F172A]">{product.name}</p>
-            <p className="text-xs text-slate-500">
-              {product.category || 'Geral'}
-              {product.variation && product.variation !== 'Padrão'
-                ? ` · ${product.variation}`
-                : ''}
-              {product.prazoOuDuracao ? ` · ${product.prazoOuDuracao}` : ''}
-            </p>
           </div>
         </div>
       </td>
 
-      <td className="px-4 py-3.5 min-w-[260px] space-y-2">
-        <select
-          aria-label={`Tipo de ${product.name}`}
-          data-testid={`product-type-select-${product.id}`}
-          value={product.itemType || 'produto_fisico'}
-          onChange={(e) =>
-            onUpdateItemType(
-              product,
-              e.target.value as CatalogItemType,
-            )
-          }
-          className="min-h-[34px] rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-        >
-          {ITEM_TYPE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-
-        <ProductMoldeInput
-          product={product}
-          brandName={brandName}
-          isSaving={isSavingMold}
-          testId={`product-molde-input-${product.id}`}
-          ariaLabel={`Mensagem molde de ${product.name}`}
-          className="min-h-[36px] w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-          onSave={onSaveMolde}
-        />
-      </td>
-
-      <td className="px-4 py-3.5 whitespace-nowrap">
-        <p className="font-bold text-[#0F172A]">
-          {formatCurrencyBRL(product.priceCents)}
-        </p>
-        <span
-          className={`mt-1 inline-flex rounded-lg px-2 py-0.5 text-xs font-semibold ${
-            product.stock > 0
-              ? 'bg-slate-100 text-slate-700'
-              : 'bg-amber-50 text-amber-800'
-          }`}
-        >
-          {product.stock > 0 ? `${product.stock} un.` : 'Sob consulta'}
-        </span>
-      </td>
-
-      <td className="px-4 py-3.5">
+      {/* Sinal 2: Título + Variação / Categoria */}
+      <td className={`${cellPad} px-3 max-w-[320px]`}>
         <button
           type="button"
-          role="switch"
-          aria-checked={isActive}
-          aria-label={`Alternar visibilidade de ${product.name}`}
-          disabled={isToggling}
-          onClick={() => onToggleActive(product)}
-          className={`relative inline-flex h-8 w-14 items-center rounded-full p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] disabled:opacity-50 ${
-            isActive ? 'bg-[#16A34A]' : 'bg-slate-300'
-          }`}
+          onClick={() => onEdit(product)}
+          className="text-left group/title block w-full min-w-0 focus-visible:outline-none"
         >
-          <span
-            className={`inline-block size-6 rounded-full bg-white shadow-xs transition-transform ${
-              isActive ? 'translate-x-6' : 'translate-x-0'
-            }`}
-          />
+          <p className="truncate text-sm font-semibold text-[var(--cg-text)] group-hover/title:text-[var(--cg-primary)]">
+            {product.name}
+          </p>
+          <p className="truncate text-xs text-[var(--cg-text-muted)]">
+            {product.category || 'Geral'}
+            {product.variation && product.variation !== 'Padrão'
+              ? ` · ${product.variation}`
+              : ''}
+            {!isActive && !isOutOfStock ? ' · Pausado manualmente' : ''}
+          </p>
         </button>
       </td>
 
-      <td className="py-3.5 pl-4 text-right">
-        <div className="inline-flex items-center justify-end gap-2">
-          <ActionButton
-            variant="secondary"
-            size={44}
-            leftIcon={<Edit3 className="size-4" />}
-            onClick={() => onEdit(product)}
+      {/* Sinal 3: Preço Inline Editar (36px, tabular-nums, Zero CLS) */}
+      <td className={`${cellPad} px-3 whitespace-nowrap`}>
+        {editingField === 'price' ? (
+          <input
+            type="text"
+            inputMode="decimal"
+            autoFocus
+            data-testid={`inline-price-input-${product.id}`}
+            aria-label={`Editar preço de ${product.name}`}
+            value={inlineDraft}
+            onChange={(e) => onInlineDraftChange(e.target.value)}
+            onBlur={() => onCommitInlineEdit(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                onCommitInlineEdit(false);
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                onCancelInlineEdit();
+              }
+            }}
+            className="cg-tabular h-[36px] w-28 rounded-lg border border-[var(--cg-primary)] bg-[var(--cg-surface)] px-2.5 text-[14px] font-bold text-[var(--cg-text)] ring-2 ring-[var(--cg-focus-ring)] focus:outline-none"
+          />
+        ) : (
+          <button
+            type="button"
+            data-testid={`inline-price-trigger-${product.id}`}
+            title="Duplo clique para editar preço"
+            onDoubleClick={() => onStartInlineEdit('price', product)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === 'F2') {
+                e.preventDefault();
+                onStartInlineEdit('price', product);
+              }
+            }}
+            className="cg-tabular inline-flex h-[36px] min-w-[92px] items-center rounded-lg px-2 text-[14px] font-bold text-[var(--cg-text)] transition-colors hover:bg-[var(--cg-hover)]"
           >
+            {formatCurrencyBRL(product.priceCents)}
+          </button>
+        )}
+      </td>
+
+      {/* Sinal 4: Estoque Inline + Pílula condicional Baixo / Pausado */}
+      <td className={`${cellPad} px-3 whitespace-nowrap`}>
+        <div className="flex items-center gap-2">
+          {editingField === 'stock' ? (
+            <input
+              type="text"
+              inputMode="numeric"
+              autoFocus
+              data-testid={`inline-stock-input-${product.id}`}
+              aria-label={`Editar estoque de ${product.name}`}
+              value={inlineDraft}
+              onChange={(e) => onInlineDraftChange(e.target.value)}
+              onBlur={() => onCommitInlineEdit(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  onCommitInlineEdit(false);
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  onCancelInlineEdit();
+                }
+              }}
+              className="cg-tabular h-[36px] w-20 rounded-lg border border-[var(--cg-primary)] bg-[var(--cg-surface)] px-2.5 text-sm font-semibold text-[var(--cg-text)] ring-2 ring-[var(--cg-focus-ring)] focus:outline-none"
+            />
+          ) : (
+            <button
+              type="button"
+              data-testid={`inline-stock-trigger-${product.id}`}
+              title="Duplo clique para editar estoque"
+              onDoubleClick={() => onStartInlineEdit('stock', product)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'F2') {
+                  e.preventDefault();
+                  onStartInlineEdit('stock', product);
+                }
+              }}
+              className="cg-tabular inline-flex h-[36px] min-w-[44px] items-center rounded-lg px-2 text-sm font-semibold text-[var(--cg-text)] transition-colors hover:bg-[var(--cg-hover)]"
+            >
+              {product.stock}
+            </button>
+          )}
+
+          {isOutOfStock ? (
+            <span
+              data-testid={`stock-badge-paused-${product.id}`}
+              className="inline-flex rounded-full bg-[var(--cg-surface-elevated)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--cg-text-muted)]"
+            >
+              Pausado
+            </span>
+          ) : isLowStock ? (
+            <span
+              data-testid={`stock-badge-low-${product.id}`}
+              className="inline-flex items-center gap-1 rounded-full bg-[var(--cg-warning)]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#92400E] dark:text-[#FBBF24]"
+            >
+              ⚠ Baixo
+            </span>
+          ) : null}
+        </div>
+      </td>
+
+      {/* Ações sob clique discreto (gaveta completa / pausar / excluir) */}
+      <td className={`${cellPad} pl-2 pr-4 text-right whitespace-nowrap`}>
+        <div className="inline-flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            data-testid={`catalog-toggle-active-${product.id}`}
+            aria-label={`${isActive ? 'Pausar' : 'Reativar'} ${product.name}`}
+            title={isActive ? 'Pausar na vitrine' : 'Ativar na vitrine'}
+            onClick={() => onToggleActive(product)}
+            className="inline-flex size-9 items-center justify-center rounded-xl border border-[var(--cg-border)] bg-[var(--cg-surface)] text-[var(--cg-text-secondary)] transition-colors hover:bg-[var(--cg-hover)]"
+          >
+            {isActive ? <Pause className="size-3.5" /> : <Play className="size-3.5 text-[var(--cg-success)]" />}
+          </button>
+          <button
+            type="button"
+            data-testid={`catalog-edit-btn-${product.id}`}
+            aria-label={`Editar ${product.name}`}
+            onClick={() => onEdit(product)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[var(--cg-border-strong)] bg-[var(--cg-surface)] px-3 text-xs font-semibold text-[var(--cg-text)] transition-colors hover:bg-[var(--cg-hover)]"
+          >
+            <Edit3 className="size-3.5" />
             Editar
-          </ActionButton>
+          </button>
           <button
             type="button"
             aria-label={`Excluir ${product.name}`}
             onClick={() => onDelete(product)}
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-[#EF4444] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
+            className="inline-flex size-9 items-center justify-center rounded-xl border border-[var(--cg-border)] bg-[var(--cg-surface)] text-[var(--cg-text-muted)] transition-colors hover:border-red-300 hover:bg-red-50 hover:text-[#D94C4C]"
           >
-            <Trash2 className="size-4" />
+            <Trash2 className="size-3.5" />
           </button>
         </div>
       </td>
@@ -379,12 +484,10 @@ const DesktopProductRow = React.memo(function DesktopProductRow({
 
 interface MobileProductCardProps {
   product: CatalogProduct;
-  brandName: string;
   brandPrimaryColor: string;
-  isSavingMold: boolean;
-  isToggling: boolean;
+  isSelected: boolean;
+  onToggleSelect: (id: string, shiftKey?: boolean) => void;
   onUploadPhoto: (product: CatalogProduct, file: File | null) => void;
-  onSaveMolde: (product: CatalogProduct, nextMolde: string) => Promise<void>;
   onToggleActive: (product: CatalogProduct) => void;
   onEdit: (product: CatalogProduct) => void;
   onDelete: (product: CatalogProduct) => void;
@@ -392,17 +495,21 @@ interface MobileProductCardProps {
 
 const MobileProductCard = React.memo(function MobileProductCard({
   product,
-  brandName,
   brandPrimaryColor,
-  isSavingMold,
-  isToggling,
+  isSelected,
+  onToggleSelect,
   onUploadPhoto,
-  onSaveMolde,
   onToggleActive,
   onEdit,
   onDelete,
 }: MobileProductCardProps) {
   const isActive = product.active !== false;
+  const lowThreshold = Math.max(0, Number(product.lowStockThreshold ?? 3));
+  const isOutOfStock = product.stock === 0;
+  const isLowStock = product.stock > 0 && product.stock <= lowThreshold;
+  const focalX = product.imageFocalPoint?.x ?? 50;
+  const focalY = product.imageFocalPoint?.y ?? 50;
+
   const imgSrc = resolveProductImageUrl(
     product.imageUrl,
     product.name,
@@ -414,20 +521,38 @@ const MobileProductCard = React.memo(function MobileProductCard({
   );
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-3.5 space-y-3">
+    <article
+      data-testid={`catalog-mobile-card-${product.id}`}
+      className="rounded-2xl border border-[var(--cg-border)] bg-[var(--cg-surface)] p-4 space-y-3"
+    >
       <div className="flex items-start gap-3">
-        <label className="relative flex size-16 shrink-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-slate-100 text-slate-500">
-          {hasCustomPhoto ? (
-            <img src={imgSrc} alt={product.name} className="size-full object-cover" />
+        <button
+          type="button"
+          aria-label={`Selecionar ${product.name}`}
+          onClick={(e) => onToggleSelect(product.id, e.shiftKey)}
+          className="mt-1 flex size-6 shrink-0 items-center justify-center rounded-md border border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)]"
+        >
+          {isSelected ? (
+            <CheckSquare className="size-4 text-[var(--cg-primary)]" />
           ) : (
-            <>
-              <ImagePlus className="size-4" aria-hidden="true" />
-              <span className="mt-0.5 text-[10px] font-semibold">+ Foto</span>
-            </>
+            <Square className="size-4 text-[var(--cg-text-muted)]" />
+          )}
+        </button>
+
+        <label className="relative flex size-14 aspect-square shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-muted)]">
+          {hasCustomPhoto ? (
+            <img
+              src={imgSrc}
+              alt={product.name}
+              style={{ objectPosition: `${focalX}% ${focalY}%` }}
+              className="size-full object-cover"
+            />
+          ) : (
+            <ImagePlus className="size-4" aria-hidden="true" />
           )}
           <input
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             className="sr-only"
             onChange={(e) => {
               const f = e.target.files?.[0] || null;
@@ -436,58 +561,58 @@ const MobileProductCard = React.memo(function MobileProductCard({
             }}
           />
         </label>
+
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[#0F172A]">{product.name}</p>
-          <p className="text-xs text-slate-500">
-            {product.category || 'Geral'} · {product.stock} un.
+          <p className="truncate text-sm font-semibold text-[var(--cg-text)]">{product.name}</p>
+          <p className="text-xs text-[var(--cg-text-muted)]">
+            {product.category || 'Geral'}
+            {product.variation && product.variation !== 'Padrão' ? ` · ${product.variation}` : ''}
           </p>
-          <p className="mt-1 text-base font-bold text-[#0F172A]">
-            {formatCurrencyBRL(product.priceCents)}
-          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <span className="cg-tabular text-sm font-bold text-[var(--cg-text)]">
+              {formatCurrencyBRL(product.priceCents)}
+            </span>
+            <span className="cg-tabular text-xs font-medium text-[var(--cg-text-secondary)]">
+              · {product.stock} un.
+            </span>
+            {isOutOfStock ? (
+              <span className="rounded-full bg-[var(--cg-surface-elevated)] px-2 py-0.5 text-[10px] font-semibold text-[var(--cg-text-muted)]">
+                Pausado
+              </span>
+            ) : isLowStock ? (
+              <span className="rounded-full bg-[var(--cg-warning)]/15 px-2 py-0.5 text-[10px] font-semibold text-[#92400E] dark:text-[#FBBF24]">
+                ⚠ Baixo
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <ActionButton
+            variant="secondary"
+            size={44}
+            fullWidth
+            leftIcon={<Edit3 className="size-4" />}
+            onClick={() => onEdit(product)}
+          >
+            Editar Produto
+          </ActionButton>
         </div>
         <button
           type="button"
-          role="switch"
-          aria-checked={isActive}
-          aria-label={`Alternar visibilidade de ${product.name}`}
-          disabled={isToggling}
+          aria-label={`${isActive ? 'Pausar' : 'Ativar'} ${product.name}`}
           onClick={() => onToggleActive(product)}
-          className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition-colors ${
-            isActive ? 'bg-[#16A34A]' : 'bg-slate-300'
-          }`}
+          className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-secondary)]"
         >
-          <span
-            className={`inline-block size-6 rounded-full bg-white shadow-xs transition-transform ${
-              isActive ? 'translate-x-6' : 'translate-x-0'
-            }`}
-          />
+          {isActive ? <Pause className="size-4" /> : <Play className="size-4 text-[var(--cg-success)]" />}
         </button>
-      </div>
-
-      <ProductMoldeInput
-        product={product}
-        brandName={brandName}
-        isSaving={isSavingMold}
-        ariaLabel={`Mensagem molde móvel de ${product.name}`}
-        className="min-h-[40px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700"
-        onSave={onSaveMolde}
-      />
-
-      <div className="flex items-center gap-2">
-        <ActionButton
-          variant="secondary"
-          size={44}
-          fullWidth
-          leftIcon={<Edit3 className="size-4" />}
-          onClick={() => onEdit(product)}
-        >
-          Editar Produto
-        </ActionButton>
         <button
           type="button"
           aria-label={`Excluir ${product.name}`}
           onClick={() => onDelete(product)}
-          className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-red-50 hover:text-[#EF4444]"
+          className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-[var(--cg-border)] bg-[var(--cg-surface)] text-[var(--cg-text-muted)] hover:bg-red-50 hover:text-[#D94C4C]"
         >
           <Trash2 className="size-4" />
         </button>
@@ -511,27 +636,55 @@ export function ProductCatalogTable({
   const { showToast } = useToast();
   const phaseInfo = useConnectionPhaseInfo(profile, runtimeStatus);
 
-  // Filters & search
+  // Sub-tab, density & filters
+  const [storeSubTab, setStoreSubTab] = React.useState<StoreSubTab>('catalogo');
+  const [density, setDensity] = React.useState<CatalogDensity>(() => loadCatalogDensity());
   const [searchQuery, setSearchQuery] = React.useState('');
   const [categoryFilter, setCategoryFilter] = React.useState('Todas');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'active' | 'paused'>('all');
 
-  // Optimistic & inline edit states
+  // Optimistic, inline edit, batch & DnD states
   const [pendingDeletedIds, setPendingDeletedIds] = React.useState<Record<string, boolean>>({});
+  const [optimisticProducts, setOptimisticProducts] = React.useState<CatalogProduct[] | null>(null);
+  const [inlineEditing, setInlineEditing] = React.useState<{
+    id: string;
+    field: InlineEditField;
+  } | null>(null);
+  const [inlineDraft, setInlineDraft] = React.useState('');
+  const [activeDragId, setActiveDragId] = React.useState<string | null>(null);
+  const [batchCategoryOpen, setBatchCategoryOpen] = React.useState(false);
+  const [batchCategoryInput, setBatchCategoryInput] = React.useState('');
+
   const [togglingId, setTogglingId] = React.useState<string | null>(null);
   const [copiedLink, setCopiedLink] = React.useState(false);
   const [uploadingProductId, setUploadingProductId] = React.useState<string | null>(null);
-  const [savingMoldId, setSavingMoldId] = React.useState<string | null>(null);
   const [mobileInlinePreviewOpen, setMobileInlinePreviewOpen] = React.useState(false);
 
   const savedInlineTimerRef = React.useRef<number | null>(null);
+  const inlineSaveDebounceRef = React.useRef<number | null>(null);
+  const inlineIgnoreBlurRef = React.useRef(false);
+  const pendingInlineUpdatesRef = React.useRef<
+    Map<string, { updater: (p: CatalogProduct) => CatalogProduct; toastMessage: string }>
+  >(new Map());
+  const lastSelectedIdRef = React.useRef<string | null>(null);
   const copiedLinkTimerRef = React.useRef<number | null>(null);
   const zipRevokeTimerRef = React.useRef<number | null>(null);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
+
+  React.useEffect(() => {
+    setOptimisticProducts(null);
+  }, [profile.catalog?.products]);
 
   React.useEffect(() => {
     return () => {
       if (savedInlineTimerRef.current !== null) {
         window.clearTimeout(savedInlineTimerRef.current);
+      }
+      if (inlineSaveDebounceRef.current !== null) {
+        window.clearTimeout(inlineSaveDebounceRef.current);
       }
       if (copiedLinkTimerRef.current !== null) {
         window.clearTimeout(copiedLinkTimerRef.current);
@@ -541,6 +694,15 @@ export function ProductCatalogTable({
       }
     };
   }, []);
+
+  function handleChangeDensity(nextDensity: CatalogDensity) {
+    setDensity(nextDensity);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(CATALOG_DENSITY_KEY, nextDensity);
+      } catch {}
+    }
+  }
 
   // Drawers & Modals (ultra-simplificado)
   const [editorOpen, setEditorOpen] = React.useState(false);
@@ -614,9 +776,11 @@ export function ProductCatalogTable({
     }
   }, [owner, publicUrl, showToast, storeQrPng]);
 
+  const baseProducts = optimisticProducts ?? profile.catalog?.products ?? [];
+
   const allProducts = React.useMemo(
-    () => (profile.catalog?.products ?? []).filter((p) => !pendingDeletedIds[p.id]),
-    [profile.catalog?.products, pendingDeletedIds],
+    () => baseProducts.filter((p) => !pendingDeletedIds[p.id]),
+    [baseProducts, pendingDeletedIds],
   );
 
   const activeProducts = React.useMemo(
@@ -649,24 +813,22 @@ export function ProductCatalogTable({
   }, [allProducts]);
 
   const filteredProducts = React.useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
     return allProducts.filter((p) => {
       const cat = (p.category || 'Geral').trim() || 'Geral';
       if (categoryFilter !== 'Todas' && cat !== categoryFilter) return false;
       if (statusFilter === 'active' && p.active === false) return false;
       if (statusFilter === 'paused' && p.active !== false) return false;
-      if (!query) return true;
-      return (
-        p.name.toLowerCase().includes(query) ||
-        cat.toLowerCase().includes(query) ||
-        (p.variation || '').toLowerCase().includes(query) ||
-        (p.sku || '').toLowerCase().includes(query)
-      );
+      return matchesProductQuery(p, searchQuery);
     });
   }, [allProducts, searchQuery, categoryFilter, statusFilter]);
 
   const isFiltered =
     searchQuery.trim().length > 0 || categoryFilter !== 'Todas' || statusFilter !== 'all';
+  const canReorder = !isFiltered && allProducts.length > 1;
+  const draggingProduct = React.useMemo(
+    () => (activeDragId ? allProducts.find((p) => p.id === activeDragId) || null : null),
+    [activeDragId, allProducts],
+  );
 
   async function handleGenerateStoreWithAi() {
     if (aiComposing) return;
@@ -759,12 +921,17 @@ export function ProductCatalogTable({
     if (!file) return;
     setUploadingProductId(product.id);
     try {
-      const dataUrl = await readImageFileAsDataUrl(file);
+      const optimized = await validateAndOptimizeImageFile(file, {
+        maxDimension: 1200,
+        quality: 0.82,
+        minRecommendedPx: 500,
+      });
       const snap = await updateBusinessProfile(
         (draft) => {
           const target = draft.catalog?.products?.find((p) => p.id === product.id);
           if (target) {
-            target.imageUrl = dataUrl;
+            target.imageUrl = optimized.dataUrl;
+            target.imageLowRes = optimized.lowResolution;
             target.approvedAsset = true;
             target.updatedAt = new Date().toISOString();
           }
@@ -775,14 +942,19 @@ export function ProductCatalogTable({
       onProfileUpdated?.(snap);
       markInlineSaved(product.id);
       showToast({
-        type: 'success',
-        message: `Foto de "${product.name}" atualizada!`,
+        type: optimized.lowResolution ? 'amber' : 'success',
+        message: optimized.lowResolution
+          ? `Foto de "${product.name}" salva (${optimized.originalWidth}×${optimized.originalHeight}px — resolução baixa).`
+          : `Foto de "${product.name}" atualizada!`,
         durationMs: 2800,
       });
     } catch (err) {
       showToast({
         type: 'error',
-        message: err instanceof Error ? err.message : 'Falha ao subir a imagem.',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'Formato de imagem inválido ou não permitido. Envie JPG, PNG ou WebP real.',
       });
     } finally {
       setUploadingProductId(null);
@@ -791,7 +963,11 @@ export function ProductCatalogTable({
 
   async function handleUploadBrandAsset(slot: string, file: File) {
     try {
-      const dataUrl = await readImageFileAsDataUrl(file);
+      const optimized = await validateAndOptimizeImageFile(file, {
+        maxDimension: slot === 'logoUrl' ? 512 : 1400,
+        quality: 0.84,
+      });
+      const dataUrl = optimized.dataUrl;
       const snap = await updateBusinessProfile(
         (draft) => {
           draft.brand = {
@@ -833,51 +1009,199 @@ export function ProductCatalogTable({
     }
   }
 
-  const handleUpdateProductItemType = React.useCallback(async (product: CatalogProduct, nextType: CatalogItemType) => {
-    try {
-      const snap = await updateBusinessProfile(
-        (draft) => {
-          const target = draft.catalog?.products?.find((p) => p.id === product.id);
-          if (target) {
-            target.itemType = nextType;
-            if (!target.mensagemMolde?.trim()) {
-              target.mensagemMolde = buildDefaultMensagemMolde(
-                { ...target, itemType: nextType },
-                brandName,
-              );
-            }
-            target.updatedAt = new Date().toISOString();
-          }
-        },
-        undefined,
-        owner,
-      );
-      onProfileUpdated?.(snap);
-      showToast({
-        type: 'success',
-        message: `Tipo de "${product.name}" alterado para ${ITEM_TYPE_OPTIONS.find((o) => o.value === nextType)?.label}.`,
-        durationMs: 2500,
-      });
-    } catch (err) {
-      showToast({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Erro ao atualizar tipo do item.',
-      });
-    }
-  }, [brandName, onProfileUpdated, owner, showToast]);
+  const startInlineEdit = React.useCallback((field: InlineEditField, product: CatalogProduct) => {
+    inlineIgnoreBlurRef.current = false;
+    setInlineEditing({ id: product.id, field });
+    setInlineDraft(
+      field === 'price'
+        ? formatCentsForInput(product.priceCents)
+        : String(Number.isFinite(product.stock) ? product.stock : 0),
+    );
+  }, []);
 
-  const handleSaveInlineMolde = React.useCallback(async (product: CatalogProduct, nextMolde: string) => {
-    const clean = nextMolde.trim() || buildDefaultMensagemMolde(product, brandName);
-    if (clean === (product.mensagemMolde || '').trim()) return;
-    setSavingMoldId(product.id);
+  const cancelInlineEdit = React.useCallback(() => {
+    inlineIgnoreBlurRef.current = true;
+    setInlineEditing(null);
+    setInlineDraft('');
+  }, []);
+
+  const flushPendingInlineMutations = React.useCallback(
+    async (previousListSnapshot: CatalogProduct[]) => {
+      const pendingEntries = Array.from(pendingInlineUpdatesRef.current.entries());
+      pendingInlineUpdatesRef.current.clear();
+      if (pendingEntries.length === 0) return;
+      const updatesById = new Map(pendingEntries.map(([id, entry]) => [id, entry.updater]));
+      const toastMsg =
+        pendingEntries.length === 1
+          ? pendingEntries[0][1].toastMessage
+          : `${pendingEntries.length} alterações do catálogo salvas!`;
+
+      try {
+        const snap = await updateBusinessProfile(
+          (draft) => {
+            const list = draft.catalog?.products ?? [];
+            draft.catalog = {
+              ...draft.catalog,
+              products: list.map((p) => {
+                const fn = updatesById.get(p.id);
+                return fn ? fn(p) : p;
+              }),
+            };
+          },
+          undefined,
+          owner,
+        );
+        onProfileUpdated?.(snap);
+        for (const [id] of pendingEntries) {
+          markInlineSaved(id);
+        }
+        showToast({ type: 'success', message: toastMsg, durationMs: 2200 });
+      } catch (err) {
+        setOptimisticProducts(previousListSnapshot);
+        showToast({
+          type: 'error',
+          message: err instanceof Error ? err.message : 'Falha ao salvar alteração. Valor restaurado.',
+        });
+      }
+    },
+    [markInlineSaved, onProfileUpdated, owner, showToast],
+  );
+
+  const scheduleInlineProductUpdate = React.useCallback(
+    (
+      productId: string,
+      updater: (p: CatalogProduct) => CatalogProduct,
+      optimisticUpdatedList: CatalogProduct[],
+      toastMessage: string,
+      previousSnapshot: CatalogProduct[],
+    ) => {
+      const existing = pendingInlineUpdatesRef.current.get(productId);
+      const composedUpdater = existing
+        ? (p: CatalogProduct) => updater(existing.updater(p))
+        : updater;
+      pendingInlineUpdatesRef.current.set(productId, {
+        updater: composedUpdater,
+        toastMessage,
+      });
+      setOptimisticProducts(optimisticUpdatedList);
+      if (inlineSaveDebounceRef.current !== null) {
+        window.clearTimeout(inlineSaveDebounceRef.current);
+      }
+      inlineSaveDebounceRef.current = window.setTimeout(() => {
+        inlineSaveDebounceRef.current = null;
+        void flushPendingInlineMutations(previousSnapshot);
+      }, 300);
+    },
+    [flushPendingInlineMutations],
+  );
+
+  const commitInlineEdit = React.useCallback(
+    (fromBlur = false) => {
+      if (fromBlur && inlineIgnoreBlurRef.current) {
+        inlineIgnoreBlurRef.current = false;
+        return;
+      }
+      if (!fromBlur) {
+        inlineIgnoreBlurRef.current = true;
+      }
+      if (!inlineEditing) return;
+
+      const { id, field } = inlineEditing;
+      const target = allProducts.find((p) => p.id === id);
+      const rawDraft = inlineDraft.trim();
+      setInlineEditing(null);
+      setInlineDraft('');
+      if (!target) return;
+
+      const previousSnapshot = baseProducts;
+
+      if (field === 'price') {
+        const nextCents = parseBRLInputToCents(rawDraft);
+        if (!rawDraft || nextCents <= 0 || rawDraft.startsWith('-')) {
+          showToast({
+            type: 'error',
+            message: 'Preço inválido. Informe um valor maior que R$ 0,00.',
+          });
+          return;
+        }
+        if (nextCents === target.priceCents) return;
+
+        const nowIso = new Date().toISOString();
+        const updatedList = baseProducts.map((p) =>
+          p.id === id ? { ...p, priceCents: nextCents, updatedAt: nowIso } : p,
+        );
+        scheduleInlineProductUpdate(
+          id,
+          (p) => ({ ...p, priceCents: nextCents, updatedAt: nowIso }),
+          updatedList,
+          `Preço de "${target.name}" atualizado para ${formatCurrencyBRL(nextCents)}.`,
+          previousSnapshot,
+        );
+        return;
+      }
+
+      if (!/^\d+$/.test(rawDraft)) {
+        showToast({
+          type: 'error',
+          message: 'Estoque inválido. Informe um número inteiro igual ou maior que zero.',
+        });
+        return;
+      }
+      const nextStock = Math.max(0, Number.parseInt(rawDraft, 10));
+      if (nextStock === target.stock) return;
+      const autoPaused = nextStock === 0;
+      const nextActive = autoPaused ? false : target.autoPausedOutOfStock ? true : target.active;
+      const nowIso = new Date().toISOString();
+
+      const updatedList = baseProducts.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              stock: nextStock,
+              active: nextActive,
+              autoPausedOutOfStock: autoPaused,
+              updatedAt: nowIso,
+            }
+          : p,
+      );
+      scheduleInlineProductUpdate(
+        id,
+        (p) => ({
+          ...p,
+          stock: nextStock,
+          active: autoPaused ? false : p.autoPausedOutOfStock ? true : p.active,
+          autoPausedOutOfStock: autoPaused,
+          updatedAt: nowIso,
+        }),
+        updatedList,
+        autoPaused
+          ? `"${target.name}" zerou o estoque e foi pausado na vitrine.`
+          : `Estoque de "${target.name}" atualizado para ${nextStock}.`,
+        previousSnapshot,
+      );
+    },
+    [allProducts, baseProducts, inlineDraft, inlineEditing, scheduleInlineProductUpdate, showToast],
+  );
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragId(String(event.active.id));
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIdx = baseProducts.findIndex((p) => p.id === String(active.id));
+    const toIdx = baseProducts.findIndex((p) => p.id === String(over.id));
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    const previous = baseProducts;
+    const reordered = reorderList(baseProducts, fromIdx, toIdx);
+    setOptimisticProducts(reordered);
     try {
       const snap = await updateBusinessProfile(
         (draft) => {
-          const target = draft.catalog?.products?.find((p) => p.id === product.id);
-          if (target) {
-            target.mensagemMolde = clean;
-            target.updatedAt = new Date().toISOString();
-          }
+          draft.catalog = { ...draft.catalog, products: reordered };
         },
         undefined,
         owner,
@@ -885,18 +1209,17 @@ export function ProductCatalogTable({
       onProfileUpdated?.(snap);
       showToast({
         type: 'success',
-        message: `Mensagem molde de "${product.name}" salva!`,
-        durationMs: 2400,
+        message: 'Ordem da vitrine salva!',
+        durationMs: 2000,
       });
-    } catch (err) {
+    } catch {
+      setOptimisticProducts(previous);
       showToast({
         type: 'error',
-        message: err instanceof Error ? err.message : 'Falha ao salvar mensagem molde.',
+        message: 'Não foi possível salvar a nova ordem agora.',
       });
-    } finally {
-      setSavingMoldId(null);
     }
-  }, [brandName, onProfileUpdated, owner, showToast]);
+  }
 
   async function handleUniversalImportProducts(incoming: CatalogProduct[]) {
     if (!Array.isArray(incoming) || incoming.length === 0) return;
@@ -996,22 +1319,206 @@ export function ProductCatalogTable({
     setSelectedProductIds(new Set());
   };
 
-  const toggleSelectProduct = React.useCallback((id: string) => {
-    setSelectedProductIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const toggleSelectProduct = React.useCallback(
+    (id: string, shiftKey = false) => {
+      setSelectedProductIds((prev) => {
+        const next = new Set(prev);
+        if (shiftKey && lastSelectedIdRef.current) {
+          const orderedIds = filteredProducts.map((p) => p.id);
+          const startIdx = orderedIds.indexOf(lastSelectedIdRef.current);
+          const endIdx = orderedIds.indexOf(id);
+          if (startIdx >= 0 && endIdx >= 0) {
+            const [lo, hi] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+            for (let i = lo; i <= hi; i += 1) {
+              next.add(orderedIds[i]);
+            }
+            lastSelectedIdRef.current = id;
+            return next;
+          }
+        }
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        lastSelectedIdRef.current = id;
+        return next;
+      });
+    },
+    [filteredProducts],
+  );
 
   const toggleSelectAll = () => {
     if (selectedProductIds.size === filteredProducts.length) {
       setSelectedProductIds(new Set());
+      lastSelectedIdRef.current = null;
     } else {
       setSelectedProductIds(new Set(filteredProducts.map((p) => p.id)));
+      lastSelectedIdRef.current = filteredProducts[filteredProducts.length - 1]?.id ?? null;
     }
   };
+
+  async function handleBatchToggleActive(nextActive: boolean) {
+    const ids = new Set(selectedProductIds);
+    if (ids.size === 0) return;
+    const prevSnapshot = baseProducts;
+    const prevActiveMap = new Map(baseProducts.map((p) => [p.id, p.active !== false]));
+    const updated = baseProducts.map((p) =>
+      ids.has(p.id)
+        ? {
+            ...p,
+            active: nextActive,
+            autoPausedOutOfStock: nextActive && p.stock === 0 ? true : false,
+            updatedAt: new Date().toISOString(),
+          }
+        : p,
+    );
+    setOptimisticProducts(updated);
+    setSelectedProductIds(new Set());
+    try {
+      const snap = await updateBusinessProfile(
+        (draft) => {
+          draft.catalog = {
+            ...draft.catalog,
+            products: (draft.catalog?.products ?? []).map((p) =>
+              ids.has(p.id)
+                ? {
+                    ...p,
+                    active: nextActive,
+                    autoPausedOutOfStock: nextActive && p.stock === 0 ? true : false,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : p,
+            ),
+          };
+        },
+        undefined,
+        owner,
+      );
+      onProfileUpdated?.(snap);
+      showToast({
+        type: 'amber',
+        message: nextActive
+          ? `${ids.size} produto(s) reativado(s) na vitrine.`
+          : `${ids.size} produto(s) pausado(s) na vitrine.`,
+        durationMs: 5000,
+        actionLabel: 'Desfazer',
+        onUndo: () => {
+          setOptimisticProducts(prevSnapshot);
+          void updateBusinessProfile(
+            (draft) => {
+              draft.catalog = {
+                ...draft.catalog,
+                products: (draft.catalog?.products ?? []).map((p) =>
+                  prevActiveMap.has(p.id)
+                    ? { ...p, active: prevActiveMap.get(p.id)!, updatedAt: new Date().toISOString() }
+                    : p,
+                ),
+              };
+            },
+            undefined,
+            owner,
+          ).then((restored) => onProfileUpdated?.(restored));
+        },
+      });
+    } catch {
+      setOptimisticProducts(prevSnapshot);
+      showToast({ type: 'error', message: 'Não foi possível atualizar os itens selecionados.' });
+    }
+  }
+
+  async function handleBatchApplyCategory(rawCategory: string) {
+    const cleanCat = rawCategory.trim();
+    const ids = new Set(selectedProductIds);
+    if (!cleanCat || ids.size === 0) return;
+    const prevSnapshot = baseProducts;
+    const updated = baseProducts.map((p) =>
+      ids.has(p.id) ? { ...p, category: cleanCat, updatedAt: new Date().toISOString() } : p,
+    );
+    setOptimisticProducts(updated);
+    setBatchCategoryOpen(false);
+    setBatchCategoryInput('');
+    setSelectedProductIds(new Set());
+    try {
+      const snap = await updateBusinessProfile(
+        (draft) => {
+          draft.catalog = {
+            ...draft.catalog,
+            products: (draft.catalog?.products ?? []).map((p) =>
+              ids.has(p.id) ? { ...p, category: cleanCat, updatedAt: new Date().toISOString() } : p,
+            ),
+          };
+        },
+        undefined,
+        owner,
+      );
+      onProfileUpdated?.(snap);
+      showToast({
+        type: 'success',
+        message: `Categoria "${cleanCat}" aplicada a ${ids.size} item(ns)!`,
+        durationMs: 2800,
+      });
+    } catch {
+      setOptimisticProducts(prevSnapshot);
+      showToast({ type: 'error', message: 'Erro ao trocar categoria em lote.' });
+    }
+  }
+
+  function handleBatchArchive() {
+    const ids = [...selectedProductIds];
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    setPendingDeletedIds((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = true;
+      return next;
+    });
+    setSelectedProductIds(new Set());
+    setBatchCategoryOpen(false);
+
+    showToast({
+      type: 'amber',
+      message: `${ids.length} item(ns) arquivado(s) do catálogo.`,
+      durationMs: 5000,
+      actionLabel: 'Desfazer',
+      onUndo: () => {
+        setPendingDeletedIds((prev) => {
+          const next = { ...prev };
+          for (const id of ids) delete next[id];
+          return next;
+        });
+        showToast({
+          type: 'neutral',
+          message: `Arquivamento cancelado. ${ids.length} item(ns) restaurado(s).`,
+          durationMs: 2200,
+        });
+      },
+      onExpire: async () => {
+        try {
+          const snap = await updateBusinessProfile(
+            (draft) => {
+              draft.catalog = {
+                ...draft.catalog,
+                products: (draft.catalog?.products ?? []).filter((p) => !idSet.has(p.id)),
+              };
+            },
+            undefined,
+            owner,
+          );
+          setPendingDeletedIds((prev) => {
+            const next = { ...prev };
+            for (const id of ids) delete next[id];
+            return next;
+          });
+          onProfileUpdated?.(snap);
+        } catch {
+          setPendingDeletedIds((prev) => {
+            const next = { ...prev };
+            for (const id of ids) delete next[id];
+            return next;
+          });
+          showToast({ type: 'error', message: 'Falha ao arquivar itens. Itens restaurados.' });
+        }
+      },
+    });
+  }
 
   async function handleCopyStoreLink() {
     const ok = await copyTextToClipboard(publicUrl);
@@ -1301,33 +1808,32 @@ export function ProductCatalogTable({
   }
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* TELA 13: Hub Minha Loja (Ultra-Simplificado) */}
+    <div className="space-y-6 pb-20">
+      {/* Cabeçalho Consolidado & Navegação por Sub-abas de Minha Loja */}
       <section
         aria-label="Painel da Minha Loja"
-        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 space-y-5"
+        className="rounded-2xl border border-[var(--cg-border)] bg-[var(--cg-surface)] p-5 shadow-xs sm:p-6 space-y-5"
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex size-9 items-center justify-center rounded-xl bg-[#EFF6FF] text-[#2563EB]">
+              <span className="inline-flex size-9 items-center justify-center rounded-xl bg-[var(--cg-hover)] text-[var(--cg-primary)]">
                 <StoreIcon className="size-5" aria-hidden="true" />
               </span>
-              <h1 className="text-xl font-bold tracking-tight text-[#0F172A] sm:text-2xl">
+              <h1 className="text-xl font-bold tracking-tight text-[var(--cg-text)] sm:text-2xl">
                 {brandName}
               </h1>
               {profile.publishedStore?.published ? (
-                <a
-                  href={publicUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-[#16A34A] transition-colors hover:bg-emerald-100"
+                <button
+                  type="button"
+                  onClick={handleOpenPreview}
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-[#24A677] transition-colors hover:bg-emerald-100"
                 >
                   <CheckCircle2 className="size-3.5" aria-hidden="true" />
                   Vitrine Online
-                </a>
+                </button>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)] px-2.5 py-1 text-xs font-semibold text-[var(--cg-text-secondary)]">
                   Rascunho
                 </span>
               )}
@@ -1340,12 +1846,38 @@ export function ProductCatalogTable({
               </span>
             </div>
 
-            <p className="text-sm text-slate-600">
-              Suba fotos direto nos produtos, peça à IA o visual da vitrine, pré-visualize ou baixe o ZIP completo.
+            <p className="text-sm text-[var(--cg-text-secondary)]">
+              Catálogo com edição inline, regras de frete, divulgação via QR Code &amp; cupons e vitrine ao vivo.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <ActionButton
+              variant={copiedLink ? 'success' : 'softBlue'}
+              size={44}
+              leftIcon={copiedLink ? <Check className="size-4" /> : <Copy className="size-4" />}
+              onClick={() => void handleCopyStoreLink()}
+            >
+              {copiedLink ? 'Copiado!' : 'Copiar Link'}
+            </ActionButton>
+            <ActionButton
+              variant="secondary"
+              size={44}
+              data-testid="open-store-preview-topbar-btn"
+              leftIcon={<Eye className="size-4" />}
+              onClick={handleOpenPreview}
+            >
+              Ver Vitrine
+            </ActionButton>
+            <ActionButton
+              variant="secondary"
+              size={44}
+              data-testid="open-zip-modal-btn"
+              leftIcon={<DownloadCloud className="size-4 text-[#24A677]" />}
+              onClick={() => setZipModalOpen(true)}
+            >
+              Baixar ZIP
+            </ActionButton>
             {!profile.publishedStore?.published ? (
               <ActionButton
                 variant="success"
@@ -1361,451 +1893,597 @@ export function ProductCatalogTable({
           </div>
         </div>
 
-        {/* Link Público + Ações Essenciais (sem botões duplicados) */}
-        <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 min-h-[44px]">
-              <span className="shrink-0 text-xs font-bold text-slate-500">Link público:</span>
-              <input
-                type="text"
-                readOnly
-                value={publicUrl}
-                aria-label="Link público da loja"
-                onClick={(e) => e.currentTarget.select()}
-                className="min-w-0 flex-1 bg-transparent text-xs sm:text-sm text-[#0F172A] focus:outline-none"
-              />
-            </div>
-            <ActionButton
-              variant={copiedLink ? 'success' : 'softBlue'}
-              size={44}
-              leftIcon={copiedLink ? <Check className="size-4" /> : <Copy className="size-4" />}
-              onClick={() => void handleCopyStoreLink()}
-            >
-              {copiedLink ? 'Copiado!' : 'Copiar Link'}
-            </ActionButton>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {onOpenArchetypeComposer ? (
-              <ActionButton
-                variant="secondary"
-                size={44}
-                data-testid="open-visual-editor-btn"
-                leftIcon={<LayoutGrid className="size-4 text-[#2563EB]" />}
-                onClick={onOpenArchetypeComposer}
-              >
-                Editor Visual &amp; Widgets
-              </ActionButton>
-            ) : null}
-            <ActionButton
-              variant="secondary"
-              size={44}
-              data-testid="open-zip-modal-btn"
-              leftIcon={<DownloadCloud className="size-4 text-[#16A34A]" />}
-              onClick={() => setZipModalOpen(true)}
-            >
-              Baixar Loja ZIP
-            </ActionButton>
-            <ActionButton
-              variant="secondary"
-              size={44}
-              data-testid="open-store-qr-btn"
-              leftIcon={<QrCode className="size-4 text-violet-600" />}
-              onClick={() => void handleOpenStoreQr()}
-            >
-              QR Code da Loja
-            </ActionButton>
-          </div>
-        </div>
-
-        {/* Chat Gigante Único para Criar a Loja + Preview Visual ao Vivo */}
-        <div
-          data-testid="minha-loja-ai-studio"
-          className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 space-y-4"
+        {/* Sub-abas Estritas: Catálogo · Estúdio Visual · Divulgação & QRs */}
+        <nav
+          data-testid="minha-loja-subtabs"
+          aria-label="Sub-abas de Minha Loja"
+          className="flex flex-wrap items-center gap-2 border-t border-[var(--cg-border)] pt-4"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <label
-                htmlFor="minha-loja-ai-prompt-input"
-                className="flex items-center gap-2 text-base font-bold text-[#0F172A]"
-              >
-                <Wand2 className="size-4 text-[#2563EB]" aria-hidden="true" />
-                O que você quer criar na sua loja?
-              </label>
-              <p className="mt-0.5 text-xs text-slate-600">
-                Descreva sua empresa, estilo e experiência desejada. A IA monta os blocos e o catálogo ao vivo abaixo.
-              </p>
-            </div>
-            <ActionButton
-              variant="secondary"
-              size={44}
-              leftIcon={<FileSpreadsheet className="size-4 text-[#16A34A]" />}
-              onClick={() => setUniversalXlsxOpen(true)}
-            >
-              Anexar Planilha
-            </ActionButton>
-          </div>
+          <button
+            type="button"
+            data-testid="store-subtab-catalogo"
+            aria-current={storeSubTab === 'catalogo' ? 'page' : undefined}
+            onClick={() => setStoreSubTab('catalogo')}
+            className={`inline-flex min-h-[40px] items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors ${
+              storeSubTab === 'catalogo'
+                ? 'bg-[var(--cg-primary)] text-white shadow-xs'
+                : 'border border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-secondary)] hover:bg-[var(--cg-hover)] hover:text-[var(--cg-text)]'
+            }`}
+          >
+            <Package className="size-4" aria-hidden="true" />
+            <span>Catálogo ({allProducts.length})</span>
+          </button>
 
-          <textarea
-            id="minha-loja-ai-prompt-input"
-            data-testid="minha-loja-ai-prompt-input"
-            rows={4}
-            value={storePrompt}
-            onChange={(e) => setStorePrompt(e.target.value)}
-            placeholder="Ex: Quero uma loja moderna de chocolates artesanais onde o cliente monta a própria caixa de 9 doces e fecha direto no WhatsApp..."
-            className="min-h-[120px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-[#0F172A] shadow-xs focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-          />
+          <button
+            type="button"
+            data-testid="store-subtab-estudio"
+            aria-current={storeSubTab === 'estudio' ? 'page' : undefined}
+            onClick={() => setStoreSubTab('estudio')}
+            className={`inline-flex min-h-[40px] items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors ${
+              storeSubTab === 'estudio'
+                ? 'bg-[var(--cg-primary)] text-white shadow-xs'
+                : 'border border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-secondary)] hover:bg-[var(--cg-hover)] hover:text-[var(--cg-text)]'
+            }`}
+          >
+            <Palette className="size-4" aria-hidden="true" />
+            <span>Estúdio Visual</span>
+          </button>
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <ActionButton
-              variant="primary"
-              size={44}
-              data-testid="minha-loja-ai-generate-btn"
-              isLoading={aiComposing}
-              loadingText="Criando vitrine com IA..."
-              leftIcon={<Sparkles className="size-4" />}
-              onClick={() => void handleGenerateStoreWithAi()}
-            >
-              Gerar Vitrine com IA (-30 cr)
-            </ActionButton>
-          </div>
-        </div>
-
-        {/* Preview Visual ao Vivo embutido */}
-        <div
-          data-testid="minha-loja-inline-preview"
-          className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100/70"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2.5">
-            <div className="flex items-center gap-2">
-              <span className="inline-block size-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
-              <span className="text-xs font-bold text-[#0F172A]">Preview da Loja ao Vivo</span>
-              <span className="hidden truncate text-[11px] text-slate-500 sm:inline">
-                ({activeProducts.length} itens • {formulaV9SectionsCount} seções{savedInlineId ? ' · Salvo ✓' : ''})
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setMobileInlinePreviewOpen((v) => !v)}
-                className="inline-flex min-h-[36px] items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-[#0F172A] md:hidden"
-              >
-                <Eye className="size-3.5" aria-hidden="true" />
-                <span>{mobileInlinePreviewOpen ? 'Ocultar Preview' : 'Mostrar Preview'}</span>
-              </button>
-
-              <div className="hidden rounded-xl border border-slate-200 bg-slate-50 p-0.5 md:inline-flex">
-                <button
-                  type="button"
-                  onClick={() => setInlinePreviewDevice('desktop')}
-                  aria-label="Preview desktop"
-                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    inlinePreviewDevice === 'desktop'
-                      ? 'bg-white text-[#0F172A] shadow-xs'
-                      : 'text-slate-600 hover:text-[#0F172A]'
-                  }`}
-                >
-                  <Monitor className="size-3.5" aria-hidden="true" />
-                  Desktop
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInlinePreviewDevice('mobile')}
-                  aria-label="Preview mobile"
-                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    inlinePreviewDevice === 'mobile'
-                      ? 'bg-white text-[#0F172A] shadow-xs'
-                      : 'text-slate-600 hover:text-[#0F172A]'
-                  }`}
-                >
-                  <Smartphone className="size-3.5" aria-hidden="true" />
-                  Mobile
-                </button>
-              </div>
-
-              <ActionButton
-                variant="secondary"
-                size={44}
-                leftIcon={<Eye className="size-3.5" />}
-                onClick={handleOpenPreview}
-              >
-                Tela Cheia
-              </ActionButton>
-            </div>
-          </div>
-
-          <div className={`${mobileInlinePreviewOpen ? 'flex' : 'hidden md:flex'} justify-center p-3 sm:p-4`}>
-            <div
-              className={`h-[560px] w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm transition-all ${
-                inlinePreviewDevice === 'mobile' ? 'max-w-[390px]' : 'max-w-full'
-              }`}
-            >
-              <CustomerStorefrontView
-                profile={profile}
-                ownerId={owner || 'default'}
-                mode="preview"
-                hidePreviewBanner={true}
-                runtimeStatus={runtimeStatus}
-                onBackToAdmin={handleOpenPreview}
-                onUploadBrandAsset={handleUploadBrandAsset}
-                onUploadProductImage={(productId, file) => {
-                  const target = allProducts.find((p) => p.id === productId);
-                  if (target) return handleQuickUploadProductPhoto(target, file);
-                }}
-              />
-            </div>
-          </div>
-        </div>
+          <button
+            type="button"
+            data-testid="store-subtab-divulgacao"
+            aria-current={storeSubTab === 'divulgacao' ? 'page' : undefined}
+            onClick={() => setStoreSubTab('divulgacao')}
+            className={`inline-flex min-h-[40px] items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors ${
+              storeSubTab === 'divulgacao'
+                ? 'bg-[var(--cg-primary)] text-white shadow-xs'
+                : 'border border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] text-[var(--cg-text-secondary)] hover:bg-[var(--cg-hover)] hover:text-[var(--cg-text)]'
+            }`}
+          >
+            <Megaphone className="size-4" aria-hidden="true" />
+            <span>Divulgação &amp; QRs</span>
+          </button>
+        </nav>
       </section>
 
-      {/* Catálogo de Produtos — 1 botão único de Planilha + upload cinza inline + Mensagem Molde */}
-      <section
-        aria-label="Catálogo de Produtos"
-        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 space-y-5"
-      >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-[#0F172A]">
-              Catálogo de Itens ({activeProducts.length}{' '}
-              {activeProducts.length === 1 ? 'ativo' : 'ativos'})
-            </h2>
-            <p className="text-xs text-slate-600 sm:text-sm">
-              Clique no bloco cinza para subir a foto e ajuste a mensagem molde pronta de cada item.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            {allProducts.length > 0 ? (
-              <ActionButton
-                variant="secondary"
-                size={44}
-                leftIcon={<Percent className="size-4" />}
-                onClick={() => setBatchModalOpen(true)}
-              >
-                Reajustar Preços
-              </ActionButton>
-            ) : null}
-            <ActionButton
-              variant="secondary"
-              size={44}
-              data-testid="open-tela-08-xls-universal"
-              leftIcon={<FileSpreadsheet className="size-4 text-[#16A34A]" />}
-              onClick={() => setUniversalXlsxOpen(true)}
-            >
-              Importar Planilha (IA)
-            </ActionButton>
-            <ActionButton
-              variant="primary"
-              size={44}
-              leftIcon={<Plus className="size-4" />}
-              onClick={handleOpenNewProduct}
-            >
-              Cadastrar Novo Item
-            </ActionButton>
-          </div>
-        </div>
-
-        {/* Filtros e Busca */}
-        {allProducts.length > 0 ? (
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="relative flex-1 md:max-w-sm">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400"
-                aria-hidden="true"
-              />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por nome, SKU ou categoria..."
-                aria-label="Buscar produtos no catálogo"
-                className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-slate-50 pr-3.5 pl-10 text-sm text-[#0F172A] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                aria-label="Filtrar por categoria"
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-              >
-                <option value="Todas">Todas as categorias</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-
-              <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-                {(
-                  [
-                    { id: 'all', label: 'Todos' },
-                    { id: 'active', label: 'Ativos' },
-                    { id: 'paused', label: 'Pausados' },
-                  ] as const
-                ).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setStatusFilter(item.id)}
-                    className={`min-h-[36px] rounded-lg px-3 text-xs font-semibold transition-colors ${
-                      statusFilter === item.id
-                        ? 'bg-white text-[#2563EB] shadow-xs'
-                        : 'text-slate-600 hover:text-[#0F172A]'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+      {storeSubTab === 'estudio' ? (
+        <div className="space-y-5">
+          <section
+            data-testid="minha-loja-ai-studio"
+            className="rounded-2xl border border-[var(--cg-border)] bg-[var(--cg-surface)] p-5 space-y-4 sm:p-6"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <label
+                  htmlFor="minha-loja-ai-prompt-input"
+                  className="flex items-center gap-2 text-base font-bold text-[var(--cg-text)]"
+                >
+                  <Wand2 className="size-4 text-[var(--cg-primary)]" aria-hidden="true" />
+                  O que você quer criar na sua loja?
+                </label>
+                <p className="mt-0.5 text-xs text-[var(--cg-text-secondary)]">
+                  Descreva sua empresa, estilo e experiência desejada. A IA monta os blocos e o catálogo ao vivo abaixo.
+                </p>
               </div>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Conteúdo */}
-        {isLoading ? (
-          <SkeletonTableRows rows={4} columns={4} />
-        ) : allProducts.length === 0 ? (
-          <EmptyStateCard
-            icon={<Package className="size-7" />}
-            title="Seu catálogo ainda está vazio"
-            description="Cadastre seu primeiro item ou importe qualquer planilha (.XLS, .XLSX, .CSV) com nossa IA."
-            ctaLabel="Cadastrar Meu Primeiro Item"
-            ctaIcon={<Plus className="size-5" />}
-            ctaSize={56}
-            onCta={handleOpenNewProduct}
-          />
-        ) : filteredProducts.length === 0 ? (
-          <EmptyStateCard
-            icon={<Search className="size-7" />}
-            title="Nenhum item encontrado"
-            description={
-              isFiltered
-                ? 'Não encontramos itens com esse filtro ou busca. Limpe os filtros para ver todo o catálogo.'
-                : 'Nenhum item disponível no momento.'
-            }
-            ctaLabel="Limpar Filtros"
-            ctaVariant="secondary"
-            ctaSize={44}
-            onCta={() => {
-              setSearchQuery('');
-              setCategoryFilter('Todas');
-              setStatusFilter('all');
-            }}
-          />
-        ) : (
-          <>
-            {/* Barra Flutuante de Seleção Múltipla & Busca de Imagens em Massa */}
-            {selectedProductIds.size > 0 && (
-              <div
-                data-testid="catalog-batch-actions-bar"
-                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/90 px-4 py-3 shadow-md"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="flex size-7 items-center justify-center rounded-lg bg-[#2563EB] text-xs font-bold text-white">
-                    {selectedProductIds.size}
-                  </span>
-                  <span className="text-sm font-bold text-[#0F172A]">
-                    {selectedProductIds.size} item(ns) selecionado(s)
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <ActionButton
-                    variant="primary"
-                    size={44}
-                    data-testid="batch-search-images-btn"
-                    leftIcon={<Sparkles className="size-4" />}
-                    onClick={() => setBatchImageModalOpen(true)}
-                  >
-                    Procurar Imagens em Massa ({selectedProductIds.size})
-                  </ActionButton>
+              <div className="flex flex-wrap items-center gap-2">
+                {onOpenArchetypeComposer ? (
                   <ActionButton
                     variant="secondary"
                     size={44}
-                    onClick={() => setSelectedProductIds(new Set())}
+                    data-testid="open-visual-editor-btn"
+                    leftIcon={<LayoutGrid className="size-4 text-[var(--cg-primary)]" />}
+                    onClick={onOpenArchetypeComposer}
                   >
-                    Limpar Seleção
+                    Editor Visual &amp; Widgets
                   </ActionButton>
+                ) : null}
+                <ActionButton
+                  variant="secondary"
+                  size={44}
+                  data-testid="open-store-qr-btn"
+                  leftIcon={<QrCode className="size-4 text-[var(--cg-primary)]" />}
+                  onClick={() => void handleOpenStoreQr()}
+                >
+                  QR Code Rápido
+                </ActionButton>
+              </div>
+            </div>
+
+            <textarea
+              id="minha-loja-ai-prompt-input"
+              data-testid="minha-loja-ai-prompt-input"
+              rows={4}
+              value={storePrompt}
+              onChange={(e) => setStorePrompt(e.target.value)}
+              placeholder="Ex: Quero uma loja moderna de chocolates artesanais onde o cliente monta a própria caixa de 9 doces e fecha direto no WhatsApp..."
+              className="min-h-[120px] w-full rounded-2xl border border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)] px-4 py-3 text-sm leading-relaxed text-[var(--cg-text)] shadow-xs focus:outline-none focus:ring-2 focus:ring-[var(--cg-primary)]"
+            />
+
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <ActionButton
+                variant="primary"
+                size={44}
+                data-testid="minha-loja-ai-generate-btn"
+                isLoading={aiComposing}
+                loadingText="Criando vitrine com IA..."
+                leftIcon={<Sparkles className="size-4" />}
+                onClick={() => void handleGenerateStoreWithAi()}
+              >
+                Gerar Vitrine com IA (-30 cr)
+              </ActionButton>
+            </div>
+          </section>
+
+          <section
+            data-testid="minha-loja-inline-preview"
+            className="overflow-hidden rounded-2xl border border-[var(--cg-border)] bg-[var(--cg-surface-elevated)]"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--cg-border)] bg-[var(--cg-surface)] px-4 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="inline-block size-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                <span className="text-xs font-bold text-[var(--cg-text)]">Preview da Loja ao Vivo</span>
+                <span className="hidden truncate text-[11px] text-[var(--cg-text-muted)] sm:inline">
+                  ({activeProducts.length} itens · {formulaV9SectionsCount} seções{savedInlineId ? ' · Salvo ✓' : ''})
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMobileInlinePreviewOpen((v) => !v)}
+                  className="inline-flex min-h-[36px] items-center gap-1 rounded-xl border border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)] px-3 text-xs font-semibold text-[var(--cg-text)] md:hidden"
+                >
+                  <Eye className="size-3.5" aria-hidden="true" />
+                  <span>{mobileInlinePreviewOpen ? 'Ocultar Preview' : 'Mostrar Preview'}</span>
+                </button>
+
+                <div className="hidden rounded-xl border border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] p-0.5 md:inline-flex">
+                  <button
+                    type="button"
+                    onClick={() => setInlinePreviewDevice('desktop')}
+                    aria-label="Preview desktop"
+                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      inlinePreviewDevice === 'desktop'
+                        ? 'bg-[var(--cg-surface)] text-[var(--cg-text)] shadow-xs'
+                        : 'text-[var(--cg-text-secondary)] hover:text-[var(--cg-text)]'
+                    }`}
+                  >
+                    <Monitor className="size-3.5" aria-hidden="true" />
+                    Desktop
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInlinePreviewDevice('mobile')}
+                    aria-label="Preview mobile"
+                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      inlinePreviewDevice === 'mobile'
+                        ? 'bg-[var(--cg-surface)] text-[var(--cg-text)] shadow-xs'
+                        : 'text-[var(--cg-text-secondary)] hover:text-[var(--cg-text)]'
+                    }`}
+                  >
+                    <Smartphone className="size-3.5" aria-hidden="true" />
+                    Mobile
+                  </button>
+                </div>
+
+                <ActionButton
+                  variant="secondary"
+                  size={44}
+                  leftIcon={<Eye className="size-3.5" />}
+                  onClick={handleOpenPreview}
+                >
+                  Tela Cheia
+                </ActionButton>
+              </div>
+            </div>
+
+            <div className={`${mobileInlinePreviewOpen ? 'flex' : 'hidden md:flex'} justify-center p-3 sm:p-4`}>
+              <div
+                className={`cg-light-preview h-[560px] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-sm transition-all ${
+                  inlinePreviewDevice === 'mobile' ? 'max-w-[390px] rounded-[28px]' : 'max-w-full'
+                }`}
+              >
+                <CustomerStorefrontView
+                  profile={profile}
+                  ownerId={owner || 'default'}
+                  mode="preview"
+                  hidePreviewBanner={true}
+                  runtimeStatus={runtimeStatus}
+                  onBackToAdmin={handleOpenPreview}
+                  onUploadBrandAsset={handleUploadBrandAsset}
+                  onUploadProductImage={(productId, file) => {
+                    const target = allProducts.find((p) => p.id === productId);
+                    if (target) return handleQuickUploadProductPhoto(target, file);
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : storeSubTab === 'divulgacao' ? (
+        <MarketingHubTab
+          profile={profile}
+          owner={owner}
+          onProfileUpdated={onProfileUpdated}
+        />
+      ) : (
+        <div className="space-y-5">
+          {/* Card Colapsável de Regras Rápidas de Entrega & Frete */}
+          <ShippingQuickCard
+            profile={profile}
+            owner={owner}
+            onProfileUpdated={onProfileUpdated}
+          />
+
+          {/* Catálogo Inteligente (4 Sinais em Repouso · Edição Inline · DnD · Barra Lote) */}
+          <section
+            aria-label="Catálogo de Produtos"
+            className="rounded-2xl border border-[var(--cg-border)] bg-[var(--cg-surface)] p-5 shadow-xs sm:p-6 space-y-5"
+          >
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-[var(--cg-text)]">
+                  Catálogo de Itens ({activeProducts.length}{' '}
+                  {activeProducts.length === 1 ? 'ativo' : 'ativos'})
+                </h2>
+                <p className="text-xs text-[var(--cg-text-secondary)] sm:text-sm">
+                  Duplo clique no preço ou estoque para editar na hora. Arraste ⋮⋮ para reordenar na vitrine.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap shrink-0 items-center gap-2 sm:flex-nowrap">
+                {allProducts.length > 0 ? (
+                  <ActionButton
+                    variant="secondary"
+                    size={44}
+                    leftIcon={<Percent className="size-4" />}
+                    onClick={() => setBatchModalOpen(true)}
+                  >
+                    Reajustar Preços
+                  </ActionButton>
+                ) : null}
+                <ActionButton
+                  variant="secondary"
+                  size={44}
+                  data-testid="open-tela-08-xls-universal"
+                  leftIcon={<FileSpreadsheet className="size-4 text-[#24A677]" />}
+                  onClick={() => setUniversalXlsxOpen(true)}
+                >
+                  Planilha (IA)
+                </ActionButton>
+                <ActionButton
+                  variant="primary"
+                  size={44}
+                  data-testid="catalog-add-product-btn"
+                  leftIcon={<Plus className="size-4" />}
+                  onClick={handleOpenNewProduct}
+                >
+                  Novo Produto
+                </ActionButton>
+              </div>
+            </div>
+
+            {/* Busca Tolerante a Acentos & Typos + Filtro + Densidade Visual */}
+            {allProducts.length > 0 ? (
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative flex-1 lg:max-w-sm">
+                  <Search
+                    className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-[var(--cg-text-muted)]"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="search"
+                    data-testid="catalog-fuzzy-search-input"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar produto (aceita sem acento)..."
+                    aria-label="Buscar produtos no catálogo"
+                    className="h-[44px] w-full rounded-xl border border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)] pr-3.5 pl-10 text-sm text-[var(--cg-text)] focus:bg-[var(--cg-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--cg-primary)]"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    aria-label="Filtrar por categoria"
+                    data-testid="catalog-category-filter"
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="h-[44px] rounded-xl border border-[var(--cg-border-strong)] bg-[var(--cg-surface)] px-3 text-sm font-medium text-[var(--cg-text)] focus:outline-none focus:ring-2 focus:ring-[var(--cg-primary)]"
+                  >
+                    <option value="Todas">Todas as categorias</option>
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="flex rounded-xl border border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] p-1">
+                    {(
+                      [
+                        { id: 'all', label: 'Todos' },
+                        { id: 'active', label: 'Ativos' },
+                        { id: 'paused', label: 'Pausados' },
+                      ] as const
+                    ).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setStatusFilter(item.id)}
+                        className={`min-h-[34px] rounded-lg px-2.5 text-xs font-semibold transition-colors ${
+                          statusFilter === item.id
+                            ? 'bg-[var(--cg-surface)] text-[var(--cg-primary)] shadow-xs'
+                            : 'text-[var(--cg-text-secondary)] hover:text-[var(--cg-text)]'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Seletor Segmentado de Densidade Visual (Confortável | Compacto) */}
+                  <div
+                    role="group"
+                    aria-label="Densidade da tabela do catálogo"
+                    data-testid="catalog-density-toggle"
+                    className="hidden h-[36px] items-center rounded-xl border border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] p-0.5 md:inline-flex"
+                  >
+                    <button
+                      type="button"
+                      data-testid="density-comfortable-btn"
+                      aria-pressed={density === 'comfortable'}
+                      onClick={() => handleChangeDensity('comfortable')}
+                      className={`h-[30px] rounded-lg px-2.5 text-xs font-semibold transition-colors ${
+                        density === 'comfortable'
+                          ? 'bg-[var(--cg-surface)] text-[var(--cg-primary)] shadow-xs'
+                          : 'text-[var(--cg-text-secondary)] hover:text-[var(--cg-text)]'
+                      }`}
+                    >
+                      Confortável
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="density-compact-btn"
+                      aria-pressed={density === 'compact'}
+                      onClick={() => handleChangeDensity('compact')}
+                      className={`h-[30px] rounded-lg px-2.5 text-xs font-semibold transition-colors ${
+                        density === 'compact'
+                          ? 'bg-[var(--cg-surface)] text-[var(--cg-primary)] shadow-xs'
+                          : 'text-[var(--cg-text-secondary)] hover:text-[var(--cg-text)]'
+                      }`}
+                    >
+                      Compacto
+                    </button>
+                  </div>
                 </div>
               </div>
-            )}
+            ) : null}
 
-            {/* Desktop Table */}
-            <div className="hidden overflow-x-auto md:block">
-              <table role="table" className="w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <th className="py-3 pr-2 w-10">
-                      <button
-                        type="button"
-                        data-testid="catalog-select-all-checkbox"
-                        aria-label="Selecionar todos os produtos"
-                        onClick={toggleSelectAll}
-                        className="flex size-6 items-center justify-center rounded-md border border-slate-300 hover:bg-slate-100"
-                      >
-                        {selectedProductIds.size > 0 && selectedProductIds.size === filteredProducts.length ? (
-                          <CheckSquare className="size-4 text-[#2563EB]" />
-                        ) : (
-                          <Square className="size-4 text-slate-400" />
-                        )}
-                      </button>
-                    </th>
-                    <th className="py-3 pr-4">Foto + Item</th>
-                    <th className="px-4 py-3">Tipo & Mensagem Molde</th>
-                    <th className="px-4 py-3">Preço / Estoque</th>
-                    <th className="px-4 py-3">Na Vitrine</th>
-                    <th className="py-3 pl-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
+            {/* Conteúdo */}
+            {isLoading ? (
+              <SkeletonTableRows rows={4} columns={4} />
+            ) : allProducts.length === 0 ? (
+              <EmptyStateCard
+                icon={<Package className="size-7" />}
+                title="Seu catálogo ainda está vazio"
+                description="Cadastre seu primeiro item ou importe qualquer planilha (.XLS, .XLSX, .CSV) com nossa IA."
+                ctaLabel="Cadastrar Meu Primeiro Item"
+                ctaIcon={<Plus className="size-5" />}
+                ctaSize={56}
+                onCta={handleOpenNewProduct}
+              />
+            ) : filteredProducts.length === 0 ? (
+              <EmptyStateCard
+                icon={<Search className="size-7" />}
+                title="Nenhum item encontrado"
+                description={
+                  isFiltered
+                    ? 'Não encontramos itens com esse filtro ou busca. Limpe os filtros para ver todo o catálogo.'
+                    : 'Nenhum item disponível no momento.'
+                }
+                ctaLabel="Limpar Filtros"
+                ctaVariant="secondary"
+                ctaSize={44}
+                onCta={() => {
+                  setSearchQuery('');
+                  setCategoryFilter('Todas');
+                  setStatusFilter('all');
+                }}
+              />
+            ) : (
+              <>
+                {/* Desktop Sticky Header Table inside DndContext */}
+                <DndContext
+                  sensors={dndSensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
+                  onDragEnd={(ev) => void handleDragEnd(ev)}
+                >
+                  <div className="hidden max-h-[560px] overflow-auto rounded-2xl border border-[var(--cg-border)] bg-[var(--cg-surface)] md:block">
+                    <table role="table" className="w-full border-collapse text-left text-sm">
+                      <thead className="sticky top-0 z-10 bg-[var(--cg-surface-elevated)] text-[12px] font-semibold uppercase tracking-wide text-[var(--cg-text-muted)] shadow-[inset_0_-1px_0_var(--cg-border)]">
+                        <tr>
+                          <th className="py-3 pl-4 pr-2 w-28">
+                            <div className="flex items-center gap-2 pl-9">
+                              <button
+                                type="button"
+                                data-testid="catalog-select-all-checkbox"
+                                aria-label="Selecionar todos os produtos"
+                                onClick={toggleSelectAll}
+                                className="flex size-6 items-center justify-center rounded-md border border-[var(--cg-border-strong)] bg-[var(--cg-surface)] hover:bg-[var(--cg-hover)]"
+                              >
+                                {selectedProductIds.size > 0 &&
+                                selectedProductIds.size === filteredProducts.length ? (
+                                  <CheckSquare className="size-4 text-[var(--cg-primary)]" />
+                                ) : (
+                                  <Square className="size-4 text-[var(--cg-text-muted)]" />
+                                )}
+                              </button>
+                              <span>Foto</span>
+                            </div>
+                          </th>
+                          <th className="px-3 py-3">Produto</th>
+                          <th className="px-3 py-3">Preço (duplo clique)</th>
+                          <th className="px-3 py-3">Estoque</th>
+                          <th className="pl-2 pr-4 py-3 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--cg-border)]">
+                        {filteredProducts.map((product) => (
+                          <DesktopProductRow
+                            key={product.id}
+                            product={product}
+                            brandPrimaryColor={brandPrimaryColor}
+                            density={density}
+                            isSelected={selectedProductIds.has(product.id)}
+                            isUploading={uploadingProductId === product.id}
+                            canReorder={canReorder}
+                            editingField={
+                              inlineEditing?.id === product.id ? inlineEditing.field : null
+                            }
+                            inlineDraft={inlineEditing?.id === product.id ? inlineDraft : ''}
+                            onStartInlineEdit={startInlineEdit}
+                            onInlineDraftChange={setInlineDraft}
+                            onCommitInlineEdit={commitInlineEdit}
+                            onCancelInlineEdit={cancelInlineEdit}
+                            onToggleSelect={toggleSelectProduct}
+                            onUploadPhoto={handleQuickUploadProductPhoto}
+                            onZoomPhoto={setCatalogZoomItem}
+                            onToggleActive={handleToggleActive}
+                            onEdit={handleOpenEditProduct}
+                            onDelete={setDeleteTarget}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <DragOverlay>
+                    {draggingProduct ? (
+                      <div className="flex items-center gap-3 rounded-2xl border-2 border-[var(--cg-primary)] bg-[var(--cg-surface)] px-4 py-3 shadow-2xl">
+                        <GripVertical className="size-4 text-[var(--cg-primary)]" />
+                        <span className="text-sm font-bold text-[var(--cg-text)]">
+                          {draggingProduct.name}
+                        </span>
+                        <span className="cg-tabular text-xs font-semibold text-[var(--cg-text-secondary)]">
+                          {formatCurrencyBRL(draggingProduct.priceCents)}
+                        </span>
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+
+                {/* Mobile Stacked Cards (390px Dark & Light safe) */}
+                <div className="space-y-3 md:hidden">
                   {filteredProducts.map((product) => (
-                    <DesktopProductRow
+                    <MobileProductCard
                       key={product.id}
                       product={product}
-                      brandName={brandName}
                       brandPrimaryColor={brandPrimaryColor}
                       isSelected={selectedProductIds.has(product.id)}
-                      isUploading={uploadingProductId === product.id}
-                      isSavingMold={savingMoldId === product.id}
-                      isToggling={togglingId === product.id}
                       onToggleSelect={toggleSelectProduct}
                       onUploadPhoto={handleQuickUploadProductPhoto}
-                      onZoomPhoto={setCatalogZoomItem}
-                      onUpdateItemType={handleUpdateProductItemType}
-                      onSaveMolde={handleSaveInlineMolde}
                       onToggleActive={handleToggleActive}
                       onEdit={handleOpenEditProduct}
                       onDelete={setDeleteTarget}
                     />
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
+              </>
+            )}
+          </section>
 
-            {/* Mobile Stacked Cards (390px safe) */}
-            <div className="space-y-3 md:hidden">
-              {filteredProducts.map((product) => (
-                <MobileProductCard
-                  key={product.id}
-                  product={product}
-                  brandName={brandName}
-                  brandPrimaryColor={brandPrimaryColor}
-                  isSavingMold={savingMoldId === product.id}
-                  isToggling={togglingId === product.id}
-                  onUploadPhoto={handleQuickUploadProductPhoto}
-                  onSaveMolde={handleSaveInlineMolde}
-                  onToggleActive={handleToggleActive}
-                  onEdit={handleOpenEditProduct}
-                  onDelete={setDeleteTarget}
-                />
-              ))}
+          {/* Barra Flutuante Inferior de Lote (100% invisível em repouso quando selectedProductIds.size === 0) */}
+          {selectedProductIds.size > 0 ? (
+            <div
+              data-testid="catalog-floating-batch-bar"
+              role="region"
+              aria-label="Ações em lote para produtos selecionados"
+              className="fixed bottom-6 left-1/2 z-30 w-[min(94vw,760px)] -translate-x-1/2 rounded-2xl border border-[var(--cg-border-strong)] bg-[var(--cg-surface-elevated)] px-4 py-3 shadow-2xl transition-all duration-200 ease-[var(--cg-ease)]"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="cg-tabular flex size-7 items-center justify-center rounded-lg bg-[var(--cg-primary)] text-xs font-bold text-white">
+                    {selectedProductIds.size}
+                  </span>
+                  <span className="text-sm font-bold text-[var(--cg-text)]">
+                    {selectedProductIds.size} selecionado(s)
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <ActionButton
+                    variant="secondary"
+                    size={44}
+                    data-testid="batch-pause-btn"
+                    leftIcon={<Pause className="size-3.5" />}
+                    onClick={() => void handleBatchToggleActive(false)}
+                  >
+                    Pausar
+                  </ActionButton>
+                  <ActionButton
+                    variant="secondary"
+                    size={44}
+                    data-testid="batch-activate-btn"
+                    leftIcon={<Play className="size-3.5 text-[var(--cg-success)]" />}
+                    onClick={() => void handleBatchToggleActive(true)}
+                  >
+                    Reativar
+                  </ActionButton>
+                  <ActionButton
+                    variant="secondary"
+                    size={44}
+                    data-testid="batch-category-btn"
+                    leftIcon={<Tags className="size-3.5" />}
+                    onClick={() => setBatchCategoryOpen((v) => !v)}
+                  >
+                    Trocar Categoria
+                  </ActionButton>
+                  <ActionButton
+                    variant="secondary"
+                    size={44}
+                    data-testid="batch-search-images-btn"
+                    leftIcon={<Sparkles className="size-3.5" />}
+                    onClick={() => setBatchImageModalOpen(true)}
+                  >
+                    Fotos em Massa
+                  </ActionButton>
+                  <ActionButton
+                    variant="secondary"
+                    size={44}
+                    data-testid="batch-archive-btn"
+                    leftIcon={<Archive className="size-3.5 text-[#D94C4C]" />}
+                    onClick={handleBatchArchive}
+                  >
+                    Arquivar
+                  </ActionButton>
+                </div>
+              </div>
+
+              {batchCategoryOpen ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--cg-border)] pt-3">
+                  <input
+                    type="text"
+                    data-testid="batch-category-input"
+                    value={batchCategoryInput}
+                    onChange={(e) => setBatchCategoryInput(e.target.value)}
+                    placeholder="Nova categoria (ex: Ofertas)"
+                    className="h-[44px] flex-1 min-w-[180px] rounded-lg border border-[var(--cg-border-strong)] bg-[var(--cg-surface)] px-3 text-xs text-[var(--cg-text)] focus:outline-none focus:ring-2 focus:ring-[var(--cg-primary)]"
+                  />
+                  <ActionButton
+                    variant="primary"
+                    size={44}
+                    data-testid="batch-category-apply-btn"
+                    onClick={() => void handleBatchApplyCategory(batchCategoryInput)}
+                  >
+                    Aplicar Categoria
+                  </ActionButton>
+                </div>
+              ) : null}
             </div>
-          </>
-        )}
-      </section>
+          ) : null}
+        </div>
+      )}
 
       {/* Drawer de Adicionar / Editar Produto (TELA 17) */}
       <ProductEditorDrawer
@@ -1996,8 +2674,8 @@ export function ProductCatalogTable({
               className="size-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs"
             />
           ) : null}
-          <p className="w-full break-all rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-600">
-            {publicUrl}
+          <p className="text-xs font-medium text-slate-600">
+            Aponte a câmera do celular para abrir a vitrine instantaneamente ou copie o link abaixo.
           </p>
           <div className="flex flex-wrap justify-center gap-2 w-full">
             {storeQrPng ? (

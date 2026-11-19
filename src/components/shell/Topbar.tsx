@@ -142,22 +142,26 @@ export function Topbar({
           data-testid="topbar-breadcrumb"
           className="flex min-w-0 items-center gap-1 text-xs sm:text-sm"
         >
-          <span
-            className={cn(
-              'hidden md:inline truncate max-w-[140px] font-medium',
-              isDarkMode ? 'text-slate-400' : 'text-[var(--cg-text-muted)]',
-            )}
-            title={cleanStoreName}
-          >
-            {cleanStoreName}
-          </span>
-          <ChevronRight
-            className={cn(
-              'hidden md:inline size-3.5 shrink-0',
-              isDarkMode ? 'text-slate-600' : 'text-slate-400',
-            )}
-            aria-hidden="true"
-          />
+          {cleanStoreName.toLowerCase() !== crumb.root.toLowerCase() ? (
+            <>
+              <span
+                className={cn(
+                  'hidden md:inline truncate max-w-[140px] font-medium',
+                  isDarkMode ? 'text-slate-400' : 'text-[var(--cg-text-muted)]',
+                )}
+                title={cleanStoreName}
+              >
+                {cleanStoreName}
+              </span>
+              <ChevronRight
+                className={cn(
+                  'hidden md:inline size-3.5 shrink-0',
+                  isDarkMode ? 'text-slate-600' : 'text-slate-400',
+                )}
+                aria-hidden="true"
+              />
+            </>
+          ) : null}
           <span
             className={cn(
               'hidden min-[431px]:inline truncate font-semibold',

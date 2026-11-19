@@ -4,6 +4,16 @@ export {
 } from './ProductCatalogTable';
 
 export {
+  ShippingQuickCard,
+  type ShippingQuickCardProps,
+} from './ShippingQuickCard';
+
+export {
+  MarketingHubTab,
+  type MarketingHubTabProps,
+} from './MarketingHubTab';
+
+export {
   ProductEditorDrawer,
   type ProductEditorDrawerProps,
 } from './ProductEditorDrawer';

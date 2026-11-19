@@ -75,9 +75,20 @@ export function normalizeCatalogProduct(raw, index = 0) {
   const priceCents = Number.isFinite(Number(raw?.priceCents))
     ? Math.max(0, Math.round(Number(raw.priceCents)))
     : Math.max(0, Math.round((Number(raw?.preco || raw?.price || 0)) * 100));
-  const stock = Number.isFinite(Number(raw?.stock ?? raw?.estoque))
+  const hasExplicitStock =
+    (raw?.stock !== undefined && raw?.stock !== null) ||
+    (raw?.estoque !== undefined && raw?.estoque !== null);
+  const stock = hasExplicitStock
     ? Math.max(0, Math.round(Number(raw?.stock ?? raw?.estoque)))
-    : 0;
+    : raw?.stockStatus === 'in_stock'
+      ? 10
+      : 0;
+  const lowStockThreshold = Number.isFinite(Number(raw?.lowStockThreshold))
+    ? Math.max(0, Math.min(999, Math.round(Number(raw.lowStockThreshold))))
+    : 3;
+  const rawFocal = raw?.imageFocalPoint && typeof raw.imageFocalPoint === 'object' ? raw.imageFocalPoint : {};
+  const focalX = Number.isFinite(Number(rawFocal.x)) ? Math.min(100, Math.max(0, Number(rawFocal.x))) : 50;
+  const focalY = Number.isFinite(Number(rawFocal.y)) ? Math.min(100, Math.max(0, Number(rawFocal.y))) : 50;
   const imageUrl = String(raw?.imageUrl || raw?.fotoUrl || raw?.foto || '').trim();
   const name = String(raw?.name || raw?.nome || `Produto ${index + 1}`).trim();
   const variation = String(raw?.variation || raw?.variacao || 'Padrão').trim() || 'Padrão';
@@ -105,6 +116,10 @@ export function normalizeCatalogProduct(raw, index = 0) {
     priceCents,
     variation,
     stock,
+    lowStockThreshold,
+    autoPausedOutOfStock: Boolean(raw?.autoPausedOutOfStock),
+    imageFocalPoint: { x: focalX, y: focalY },
+    imageLowRes: Boolean(raw?.imageLowRes),
     active: raw?.active !== false && raw?.ativo !== false,
     imageUrl,
     approvedAsset: Boolean(raw?.approvedAsset ?? Boolean(imageUrl)),
@@ -155,6 +170,62 @@ export function normalizeProfile(raw = {}) {
   const fontStyle = ['modern_sans', 'editorial_serif', 'clean_geometric'].includes(brand.fontStyle)
     ? brand.fontStyle
     : 'modern_sans';
+  const visualMood = ['boutique', 'direct', 'warm'].includes(brand.visualMood)
+    ? brand.visualMood
+    : 'boutique';
+  const preferredTrack = ['store_first', 'whatsapp_first', 'full_guided'].includes(onboarding.preferredTrack)
+    ? onboarding.preferredTrack
+    : 'full_guided';
+  const deliveryAllowed = new Set(['pickup', 'local', 'national']);
+  const deliveryModesRaw = Array.isArray(business.deliveryModes)
+    ? business.deliveryModes.filter(m => deliveryAllowed.has(m))
+    : ['pickup', 'local'];
+  const paymentPolicy = ['on_delivery', 'pix_discount', 'deposit_50'].includes(payment.paymentPolicy)
+    ? payment.paymentPolicy
+    : 'pix_discount';
+
+  const rawShipping = safe.shipping && typeof safe.shipping === 'object' ? safe.shipping : null;
+  const deliveryFeeBase = Math.max(0, Math.round(Number(delivery.defaultFeeCents) || 0));
+  const shippingConfig = {
+    fixedFeeCents: rawShipping && rawShipping.fixedFeeCents !== undefined
+      ? Math.max(0, Math.round(Number(rawShipping.fixedFeeCents) || 0))
+      : deliveryFeeBase,
+    freeShippingThresholdCents: rawShipping && rawShipping.freeShippingThresholdCents !== undefined
+      ? Math.max(0, Math.round(Number(rawShipping.freeShippingThresholdCents) || 0))
+      : 0,
+    pickupAvailable: rawShipping && rawShipping.pickupAvailable !== undefined
+      ? Boolean(rawShipping.pickupAvailable)
+      : delivery.pickupEnabled !== false,
+  };
+  const syncedPickupEnabled = rawShipping && rawShipping.pickupAvailable !== undefined
+    ? shippingConfig.pickupAvailable
+    : delivery.pickupEnabled !== false;
+  const syncedDeliveryFee = rawShipping && rawShipping.fixedFeeCents !== undefined
+    ? shippingConfig.fixedFeeCents
+    : deliveryFeeBase;
+
+  const couponsRaw = Array.isArray(safe.coupons) ? safe.coupons : [];
+  const seenCouponCodes = new Set();
+  const coupons = [];
+  for (const item of couponsRaw) {
+    if (!item || typeof item !== 'object') continue;
+    const code = String(item.code || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]/g, '')
+      .slice(0, 20);
+    if (code.length < 3 || seenCouponCodes.has(code)) continue;
+    seenCouponCodes.add(code);
+    const pct = Math.min(90, Math.max(1, Math.round(Number(item.discountPercent) || 0)));
+    coupons.push({
+      code,
+      discountPercent: pct,
+      active: item.active !== false,
+      expiresAt: item.expiresAt ? String(item.expiresAt).slice(0, 40) : null,
+      usageCount: Math.max(0, Math.round(Number(item.usageCount) || 0)),
+    });
+    if (coupons.length >= 25) break;
+  }
 
   return {
     schemaVersion: 1,
@@ -163,6 +234,8 @@ export function normalizeProfile(raw = {}) {
       whatsappConfirmed: Boolean(onboarding.whatsappConfirmed),
       fichaCompleted: Boolean(onboarding.fichaCompleted),
       storeGenerated: Boolean(onboarding.storeGenerated),
+      preferredTrack,
+      completedFirstSimulatedOrder: Boolean(onboarding.completedFirstSimulatedOrder),
     },
     business: {
       name: String(business.name || '').trim().slice(0, 120),
@@ -176,6 +249,7 @@ export function normalizeProfile(raw = {}) {
       mapsUrl: String(business.mapsUrl || '').trim().slice(0, 300),
       hours: String(business.hours || 'Seg a Sáb · 09h às 19h').trim().slice(0, 140),
       email: String(business.email || '').trim().slice(0, 140),
+      deliveryModes: deliveryModesRaw.length > 0 ? deliveryModesRaw : ['pickup', 'local'],
     },
     whatsapp: {
       connected: Boolean(whatsapp.connected),
@@ -190,16 +264,19 @@ export function normalizeProfile(raw = {}) {
       pixKey: String(payment.pixKey || '').trim().slice(0, 160),
       pixDiscountPercent: Math.min(90, Math.max(0, Number(payment.pixDiscountPercent) || 0)),
       acceptedMethods: acceptedMethods.length > 0 ? acceptedMethods : ['pix', 'credit_card', 'debit_card', 'cash'],
+      paymentPolicy,
     },
     delivery: {
-      pickupEnabled: delivery.pickupEnabled !== false,
+      pickupEnabled: syncedPickupEnabled,
       deliveryEnabled: delivery.deliveryEnabled !== false,
       areas: Array.isArray(delivery.areas)
         ? delivery.areas.map(a => String(a).trim()).filter(Boolean).slice(0, 40)
         : [],
-      defaultFeeCents: Math.max(0, Math.round(Number(delivery.defaultFeeCents) || 0)),
+      defaultFeeCents: syncedDeliveryFee,
       pickupHours: String(delivery.pickupHours || 'Seg a Sáb · 09h às 18h').trim().slice(0, 140),
     },
+    shipping: shippingConfig,
+    coupons,
     agent: {
       name: String(agent.name || 'Sofia').trim().slice(0, 80) || 'Sofia',
       tone,
@@ -225,6 +302,7 @@ export function normalizeProfile(raw = {}) {
       primaryColor: /^#[0-9a-f]{3,8}$/i.test(String(brand.primaryColor || '')) ? String(brand.primaryColor) : '#111827',
       accentColor: /^#[0-9a-f]{3,8}$/i.test(String(brand.accentColor || '')) ? String(brand.accentColor) : '#10b981',
       fontStyle,
+      visualMood,
       generateAiLogo: Boolean(brand.generateAiLogo),
       themePreset: String(brand.themePreset || 'minimal-luxury').trim().slice(0, 60) || 'minimal-luxury',
     },
@@ -251,6 +329,17 @@ export function normalizeProfile(raw = {}) {
       faq: Array.isArray(storeLayoutRaw.faq) ? storeLayoutRaw.faq.slice(0, 50) : [],
       updatedAt: String(storeLayoutRaw.updatedAt || '').trim(),
     },
+    ...(safe.desktopPrefs && typeof safe.desktopPrefs === 'object'
+      ? {
+          desktopPrefs: {
+            minimizeToTray: safe.desktopPrefs.minimizeToTray !== false,
+            soundNewOrder: safe.desktopPrefs.soundNewOrder !== false,
+            soundHumanAlert: safe.desktopPrefs.soundHumanAlert !== false,
+            lowCreditEmailAlert: safe.desktopPrefs.lowCreditEmailAlert !== false,
+            offlineEmailAlert: safe.desktopPrefs.offlineEmailAlert !== false,
+          },
+        }
+      : {}),
   };
 }
 
@@ -282,7 +371,7 @@ export function diffProfile(prevRaw, nextRaw) {
       targets.add('dashboard');
     } else if (changed === 'payment.pixKey') {
       targets.add('bot');
-    } else if (changed.startsWith('payment.') || changed.startsWith('delivery.')) {
+    } else if (changed.startsWith('payment.') || changed.startsWith('delivery.') || changed.startsWith('shipping.') || changed.startsWith('coupons')) {
       targets.add('store');
       targets.add('bot');
     } else if (changed.startsWith('agent.')) {
@@ -431,6 +520,11 @@ export function buildBotProjections(profileRaw, sourceRevision = 0) {
     entregaAtiva: profile.delivery.deliveryEnabled,
     regioesEntrega: profile.delivery.areas,
     fretePadraoCentavos: profile.delivery.defaultFeeCents,
+    freteGratisAcimaCentavos: profile.shipping?.freeShippingThresholdCents || 0,
+    cuponsAtivos: (profile.coupons || []).filter((c) => c.active !== false).map((c) => ({
+      code: c.code,
+      discountPercent: c.discountPercent,
+    })),
     horarioRetirada: profile.delivery.pickupHours,
     instagram: profile.brand.instagram,
     logoUrl: profile.brand.logoUrl,
@@ -517,6 +611,13 @@ export function buildPublicStoreProjection(profileRaw, sourceRevision = 0) {
       defaultFeeCents: profile.delivery.defaultFeeCents,
       pickupHours: profile.delivery.pickupHours,
     },
+    shipping: profile.shipping,
+    coupons: (profile.coupons || []).filter((c) => c.active !== false).map((c) => ({
+      code: c.code,
+      discountPercent: c.discountPercent,
+      active: true,
+      expiresAt: c.expiresAt || null,
+    })),
     brand: {
       instagram: profile.brand.instagram,
       logoUrl: profile.brand.logoUrl,
@@ -537,6 +638,8 @@ export function buildPublicStoreProjection(profileRaw, sourceRevision = 0) {
         priceCents: p.priceCents,
         variation: p.variation,
         stock: p.stock,
+        lowStockThreshold: p.lowStockThreshold,
+        imageFocalPoint: p.imageFocalPoint,
         imageUrl: p.imageUrl,
         approvedAsset: p.approvedAsset,
         itemType: p.itemType,
@@ -612,10 +715,22 @@ export function recalculateOrderTotals(rawItems = [], skus = [], shippingCents =
   };
 }
 
+function resolveOrderSalesChannel(order) {
+  const ch = String(order?.source_channel || order?.channel || '').toLowerCase();
+  if (order?.manual === true || String(order?.order_ref || '').startsWith('PED-') || ch.includes('counter') || ch.includes('manual') || ch.includes('balcao')) {
+    return 'counter';
+  }
+  if (ch.includes('whatsapp') || ch.includes('sofia')) {
+    return 'whatsapp';
+  }
+  return 'storefront';
+}
+
 export function buildDashboardProjection(profileRaw, sourceRevision, orders = [], metrics = {}, whatsappData = {}, options = {}) {
   const profile = normalizeProfile(profileRaw);
   const safeOrders = Array.isArray(orders) ? orders : [];
-  const rawDays = options?.days;
+  const rawPeriod = String(options?.period || '').trim().toLowerCase();
+  const rawDays = rawPeriod === '7d' ? 7 : rawPeriod === '30d' ? 30 : rawPeriod === 'all' ? 'all' : options?.days;
   const isAll = rawDays === 'all' || rawDays === 'todos' || rawDays === null;
   const parsedDays = Number(rawDays);
   const periodDays = isAll ? 'all' : (Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : 7);
@@ -640,9 +755,71 @@ export function buildDashboardProjection(profileRaw, sourceRevision, orders = []
 
   const activeProducts = profile.catalog.products.filter(p => p.active);
   const stockUnits = activeProducts.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
-  const salesCents = filteredOrders
-    .filter(order => order?.status !== 'cancelado')
-    .reduce((sum, order) => sum + (Number(order?.total_cents) || 0), 0);
+
+  // BUG-F06-03: Exclui cancelados e simulações de todos os cálculos financeiros reais e CRM
+  const validFinancialOrders = filteredOrders.filter(
+    order => order && order.status !== 'cancelado' && order.status !== 'cancelled' && !order.isSimulation && !order.is_simulation,
+  );
+  const salesCents = validFinancialOrders.reduce((sum, order) => sum + (Number(order?.total_cents) || 0), 0);
+  const validOrderCount = validFinancialOrders.length;
+  const avgTicketCents = validOrderCount > 0 ? Math.round(salesCents / validOrderCount) : 0;
+
+  const byChannel = { storefront: 0, whatsapp: 0, counter: 0 };
+  const productAgg = new Map();
+  const customerAgg = new Map();
+
+  for (const order of validFinancialOrders) {
+    const channel = resolveOrderSalesChannel(order);
+    byChannel[channel] += 1;
+
+    for (const item of Array.isArray(order.items) ? order.items : []) {
+      const name = String(item?.name || item?.sku || 'Produto').trim();
+      const sku = String(item?.sku || name).trim().toUpperCase();
+      const qty = Math.max(1, Math.round(Number(item?.quantity || item?.qty || 1)));
+      const lineCents = Math.max(0, Math.round(Number(item?.lineTotalCents || (Number(item?.unitPriceCents || 0) * qty))));
+      const prev = productAgg.get(sku) || {
+        sku,
+        name,
+        storefrontQty: 0,
+        whatsappQty: 0,
+        counterQty: 0,
+        totalQty: 0,
+        revenueCents: 0,
+      };
+      if (channel === 'storefront') prev.storefrontQty += qty;
+      else if (channel === 'whatsapp') prev.whatsappQty += qty;
+      else prev.counterQty += qty;
+      prev.totalQty += qty;
+      prev.revenueCents += lineCents;
+      productAgg.set(sku, prev);
+    }
+
+    const phoneDigits = String(order.customer_jid || '').replace(/@.*/, '').replace(/\D/g, '');
+    const customerName = String(order.customer_name || 'Cliente').trim() || 'Cliente';
+    const customerKey = phoneDigits || customerName.toLowerCase();
+    const curCust = customerAgg.get(customerKey) || {
+      customerKey,
+      customerName,
+      phone: phoneDigits,
+      orderCount: 0,
+      totalCents: 0,
+      lastOrderAt: order.created_at || new Date().toISOString(),
+    };
+    curCust.orderCount += 1;
+    curCust.totalCents += Math.max(0, Number(order.total_cents) || 0);
+    if (order.created_at && new Date(order.created_at).getTime() > new Date(curCust.lastOrderAt).getTime()) {
+      curCust.lastOrderAt = order.created_at;
+    }
+    if (!curCust.phone && phoneDigits) curCust.phone = phoneDigits;
+    customerAgg.set(customerKey, curCust);
+  }
+
+  const topProducts = Array.from(productAgg.values())
+    .sort((a, b) => b.totalQty - a.totalQty || b.revenueCents - a.revenueCents)
+    .slice(0, 5);
+  const repeatCustomers = Array.from(customerAgg.values())
+    .sort((a, b) => b.orderCount - a.orderCount || b.totalCents - a.totalCents)
+    .slice(0, 20);
 
   return {
     sourceRevision,
@@ -652,11 +829,19 @@ export function buildDashboardProjection(profileRaw, sourceRevision, orders = []
     displayPhone: profile.whatsapp.displayPhone || profile.whatsapp.phoneE164 || '',
     visitsTotal: Number(metrics?.visits_total || 0),
     visitsByDay: metrics?.visits_by_day && typeof metrics.visits_by_day === 'object' ? metrics.visits_by_day : {},
-    ordersCount: filteredOrders.length,
+    ordersCount: validOrderCount,
     salesCents,
     messagesCount,
     catalogCount: activeProducts.length,
     stockUnits,
     recentOrders: filteredOrders.slice(0, 50),
+    crmSummary: {
+      totalRevenueCents: salesCents,
+      orderCount: validOrderCount,
+      avgTicketCents,
+      byChannel,
+      topProducts,
+      repeatCustomers,
+    },
   };
 }

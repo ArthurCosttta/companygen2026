@@ -312,6 +312,7 @@ export function SupportTicketModal({
                 <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">
                   <span>Ou escolher imagem</span>
                   <input
+                    data-testid="support-ticket-file-input"
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
                     className="sr-only"
@@ -382,6 +383,23 @@ export function SupportTicketModal({
               ))}
             </ul>
           )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
+          <span>
+            E-mail oficial:{' '}
+            <a href="mailto:suporte@companygen.store" className="font-semibold text-[#2563EB] hover:underline">
+              suporte@companygen.store
+            </a>
+          </span>
+          <a
+            href="https://wa.me/5561993742091"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-emerald-700 hover:underline"
+          >
+            WhatsApp Suporte: +55 61 99374-2091
+          </a>
         </div>
       </div>
     </ModalContainer>

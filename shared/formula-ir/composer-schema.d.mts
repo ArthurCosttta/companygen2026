@@ -31,8 +31,12 @@ export declare const AnalysisSchema: z.ZodObject<{
   dependencies: z.ZodDefault<z.ZodArray<z.ZodString>>;
   mainExperienceSummary: z.ZodDefault<z.ZodString>;
 }>;
+export declare const ArtDirectionBibleSchema: z.ZodObject<any>;
 export declare const FormulaV9PageSchema: z.ZodObject<any>;
 export declare const FormulaV9DocumentSchema: z.ZodObject<any>;
+
+export declare function relativeLuminance(hex: string): number;
+export declare function contrastRatio(fgHex: string, bgHex: string): number;
 
 export declare function deriveThemeTokensFromHex(primaryHex?: string, fontStyle?: string): {
   accent: string;
@@ -42,6 +46,8 @@ export declare function deriveThemeTokensFromHex(primaryHex?: string, fontStyle?
   card: string;
   ink: string;
   inkMuted: string;
+  onPrimary: string;
+  badgeText: string;
   footerBg: string;
   fontStyle: 'modern_sans' | 'editorial_serif' | 'clean_geometric';
   radiusPx: number;

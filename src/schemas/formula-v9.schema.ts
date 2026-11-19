@@ -1,6 +1,7 @@
 import {
   ActionBindingSchema,
   AnalysisSchema,
+  ArtDirectionBibleSchema,
   AtomControlSchema,
   AtomOptionSchema,
   CalcRuleSchema,
@@ -11,15 +12,18 @@ import {
   ImagePlanItemSchema,
   SectionNodeSchema,
   WHITELISTED_ICONS,
+  contrastRatio,
   deriveThemeTokensFromHex,
   evaluateInteractiveExperience,
   normalizeSpreadsheetItemType,
+  relativeLuminance,
   sanitizeFormulaV9Document,
 } from '../../shared/formula-ir/composer-schema.mjs';
 
 export {
   ActionBindingSchema,
   AnalysisSchema,
+  ArtDirectionBibleSchema,
   AtomControlSchema,
   AtomOptionSchema,
   CalcRuleSchema,
@@ -30,9 +34,11 @@ export {
   ImagePlanItemSchema,
   SectionNodeSchema,
   WHITELISTED_ICONS,
+  contrastRatio,
   deriveThemeTokensFromHex,
   evaluateInteractiveExperience,
   normalizeSpreadsheetItemType,
+  relativeLuminance,
   sanitizeFormulaV9Document,
 };
 
@@ -98,9 +104,27 @@ export interface DesignTokens {
   card: string;
   ink: string;
   inkMuted: string;
+  onPrimary?: string;
+  badgeText?: string;
   footerBg: string;
   fontStyle: 'modern_sans' | 'editorial_serif' | 'clean_geometric';
   radiusPx: number;
+}
+
+export interface ArtDirectionBible {
+  lighting: string;
+  surfaceMaterial: string;
+  backdropTone: string;
+  cameraFraming: string;
+}
+
+export interface ComplementaryBundleItem {
+  id?: string;
+  title: string;
+  description?: string;
+  skuIds: string[];
+  totalCents?: number;
+  pixTotalCents?: number;
 }
 
 export type SectionNode =
@@ -136,6 +160,8 @@ export type SectionNode =
         eyebrow: string;
         title: string;
         subtitle: string;
+        experienceMode?: 'quiz_recommendation' | 'dosage_calculator' | 'bundle_builder';
+        recommendedSkus?: string[];
         layoutVariant: 'workbench_split' | 'stacked_cards' | 'compact_panel';
         stateDefaults: Record<string, string | number | string[]>;
         controls: AtomControl[];
@@ -192,7 +218,17 @@ export type SectionNode =
   | {
       id: string;
       type: 'FaqAccordion';
-      config: { title: string; items: Array<{ q: string; a: string }> };
+      config: { title: string; subtitle?: string; items: Array<{ q: string; a: string }> };
+    }
+  | {
+      id: string;
+      type: 'ContextualFaq';
+      config: { title: string; subtitle?: string; items: Array<{ q: string; a: string }> };
+    }
+  | {
+      id: string;
+      type: 'ComplementaryBundles';
+      config: { title: string; subtitle?: string; items: ComplementaryBundleItem[] };
     }
   | {
       id: string;
@@ -240,6 +276,9 @@ export interface FormulaV9Document {
   generatedAt?: string;
   generatedBy?: string;
   modelUsed?: string;
+  visualDirection?: 'editorial_light' | 'luxury_dark' | 'vibrant_retail' | 'clean_craft';
+  layoutGrid?: 'bento_asymmetric' | 'editorial_split' | 'compact_dense';
+  artDirectionBible?: ArtDirectionBible;
   analysis: AnalysisSummary;
   designTokens: DesignTokens;
   imagePlan: ImagePlanItem[];

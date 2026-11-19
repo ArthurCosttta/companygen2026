@@ -1,10 +1,12 @@
 import * as React from 'react';
 import {
   AlertTriangle,
+  ArchiveRestore,
   Check,
   ChevronDown,
   Copy,
   CreditCard,
+  Download,
   Eye,
   EyeOff,
   HelpCircle,
@@ -13,6 +15,7 @@ import {
   LogOut,
   MapPin,
   MessageSquare,
+  Monitor,
   RotateCcw,
   Save,
   Search,
@@ -20,10 +23,11 @@ import {
   Sparkles,
   Store,
   Truck,
+  Upload,
   Wifi,
   WifiOff,
 } from 'lucide-react';
-import { ActionButton, ModalContainer, SupportTicketModal, useToast } from '@/components/ui';
+import { ActionButton, HumanErrorCard, ModalContainer, SupportTicketModal, useToast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import {
   useConnectionPhaseInfo,
@@ -39,7 +43,7 @@ import {
   updateBusinessProfile,
   type ProfileSnapshot,
 } from '@/services/profile-service';
-import { supabase } from '@/services/supabase-client';
+import { authenticatedFetch, supabase } from '@/services/supabase-client';
 import {
   clearExpressFichaDraft,
   formatBrazilPhoneDisplay,
@@ -192,6 +196,31 @@ export function SettingsView({
   const { showToast } = useToast();
   const phaseInfo = useConnectionPhaseInfo(profile, runtimeStatus);
   const [supportModalOpen, setSupportModalOpen] = React.useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = React.useState<'store' | 'desktop' | 'credits' | 'backup'>('store');
+
+  // Desktop Windows (.exe) prefs & Backup state
+  const [minimizeToTray, setMinimizeToTray] = React.useState<boolean>(
+    profile.desktopPrefs?.minimizeToTray !== false,
+  );
+  const [soundNewOrder, setSoundNewOrder] = React.useState<boolean>(
+    profile.desktopPrefs?.soundNewOrder !== false,
+  );
+  const [soundHumanAlert, setSoundHumanAlert] = React.useState<boolean>(
+    profile.desktopPrefs?.soundHumanAlert !== false,
+  );
+  const [lowCreditEmailAlert, setLowCreditEmailAlert] = React.useState<boolean>(
+    profile.desktopPrefs?.lowCreditEmailAlert !== false,
+  );
+  const [offlineEmailAlert, setOfflineEmailAlert] = React.useState<boolean>(
+    profile.desktopPrefs?.offlineEmailAlert !== false,
+  );
+  const [savingDesktopPrefs, setSavingDesktopPrefs] = React.useState(false);
+  const [exportingBackup, setExportingBackup] = React.useState(false);
+  const [restoringBackup, setRestoringBackup] = React.useState(false);
+  const [restoreError, setRestoreError] = React.useState('');
+  const [lastBackupInfo, setLastBackupInfo] = React.useState<{ sha256: string; sizeBytes: number } | null>(null);
+  const backupFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [creditBalanceSnapshot, setCreditBalanceSnapshot] = React.useState<number | null>(null);
 
   // TELA 30: Dados da Loja & Pix
   const [businessName, setBusinessName] = React.useState(profile.business?.name ?? '');
@@ -235,7 +264,138 @@ export function SettingsView({
     setPickupHours(profile.delivery?.pickupHours || 'Seg a Sáb · 09h às 18h');
     setPixKey(profile.payment?.pixKey ?? '');
     setPixDiscountPercent(profile.payment?.pixDiscountPercent ?? 0);
+    setMinimizeToTray(profile.desktopPrefs?.minimizeToTray !== false);
+    setSoundNewOrder(profile.desktopPrefs?.soundNewOrder !== false);
+    setSoundHumanAlert(profile.desktopPrefs?.soundHumanAlert !== false);
+    setLowCreditEmailAlert(profile.desktopPrefs?.lowCreditEmailAlert !== false);
+    setOfflineEmailAlert(profile.desktopPrefs?.offlineEmailAlert !== false);
   }, [profile]);
+
+  // C82 / BUG-F06-02: Sanitização PII inline para diagnóstico copiado
+  const scrubDiagnosticString = (raw: string): string =>
+    String(raw || '')
+      .replace(/\bBearer\s+[A-Za-z0-9\-_.~+/]+=*/gi, 'Bearer [REDACTED_TOKEN]')
+      .replace(/\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{4,}\b/g, '[REDACTED_JWT]')
+      .replace(/\b(?:sb_[a-z]+_[A-Za-z0-9_-]{8,}|sbp_[A-Za-z0-9]{12,}|sk_(?:live|test)_[A-Za-z0-9]{8,})\b/g, '[REDACTED_KEY]')
+      .replace(/\b([A-Za-z0-9._%+-])([A-Za-z0-9._%+-]*)(@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g, '$1***$3')
+      .replace(/(\+?55[\s-]?\(?\d{2}\)?[\s-]?\d{4,5}[\s-]?)(\d{4})\b/g, '+55 (**)...$2');
+
+  const isStoreDirty =
+    businessName.trim() !== (profile.business?.name ?? '').trim() ||
+    address.trim() !== (profile.business?.address ?? '').trim() ||
+    pixKey.trim() !== (profile.payment?.pixKey ?? '').trim() ||
+    hours.trim() !== (profile.business?.hours || 'Seg a Sáb · 09h às 19h').trim();
+
+  React.useEffect(() => {
+    if (!owner) return;
+    authenticatedFetch('/api/credits/balance', undefined, owner)
+      .then((r) => r.json().catch(() => null))
+      .then((json) => {
+        if (typeof json?.balance === 'number') setCreditBalanceSnapshot(json.balance);
+      })
+      .catch(() => {});
+  }, [owner]);
+
+  const handleSaveDesktopPrefs = async () => {
+    if (savingDesktopPrefs) return;
+    setSavingDesktopPrefs(true);
+    try {
+      const snap = await updateBusinessProfile(
+        (draft) => {
+          draft.desktopPrefs = {
+            minimizeToTray,
+            soundNewOrder,
+            soundHumanAlert,
+            lowCreditEmailAlert,
+            offlineEmailAlert,
+          };
+        },
+        undefined,
+        owner,
+      );
+      onProfileUpdated(snap);
+      showToast({ type: 'success', message: 'Preferências Desktop (.exe) salvas!', durationMs: 3000 });
+    } catch {
+      showToast({ type: 'error', message: 'Falha ao salvar preferências desktop.', durationMs: 3500 });
+    } finally {
+      setSavingDesktopPrefs(false);
+    }
+  };
+
+  const handleExportZipBackup = async () => {
+    if (exportingBackup) return;
+    setExportingBackup(true);
+    try {
+      const res = await authenticatedFetch('/api/workspace/backup-export?format=json', undefined, owner);
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.zipBase64) {
+        throw new Error(json?.error || 'Falha ao gerar backup completo (.zip).');
+      }
+      setLastBackupInfo({ sha256: String(json.sha256 || ''), sizeBytes: Number(json.sizeBytes || 0) });
+      const bin = atob(String(json.zipBase64));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = String(json.filename || 'companygen-backup.zip');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      showToast({
+        type: 'success',
+        message: 'Backup Completo (.zip) gerado com checksum SHA-256!',
+        durationMs: 3200,
+      });
+    } catch (err) {
+      showToast({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Erro ao exportar backup.',
+        durationMs: 3500,
+      });
+    } finally {
+      setExportingBackup(false);
+    }
+  };
+
+  const handleRestoreZipFile = async (fileList: FileList | null) => {
+    const file = fileList?.[0];
+    if (!file || restoringBackup) return;
+    setRestoringBackup(true);
+    setRestoreError('');
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < buf.length; i += 1) binary += String.fromCharCode(buf[i]);
+      const zipBase64 = btoa(binary);
+      const res = await authenticatedFetch(
+        '/api/workspace/backup-restore',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ zipBase64 }),
+        },
+        owner,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || `Falha ao restaurar snapshot (HTTP ${res.status}).`);
+      }
+      if (json.profile) {
+        onProfileUpdated({ revision: Number(json.revision || 1), profile: json.profile, provider: 'supabase' });
+      }
+      showToast({ type: 'success', message: 'Snapshot restaurado com segurança!', durationMs: 3500 });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Snapshot inválido ou corrompido.';
+      setRestoreError(msg);
+      showToast({ type: 'error', message: msg, durationMs: 4000 });
+    } finally {
+      setRestoringBackup(false);
+      if (backupFileInputRef.current) backupFileInputRef.current.value = '';
+    }
+  };
 
   // Security Modals: Alterar Senha & Confirmar Saída
   const [passwordModalOpen, setPasswordModalOpen] = React.useState(false);
@@ -488,23 +648,27 @@ export function SettingsView({
 
   async function handleCopyDiagnostic() {
     const activeCount = (profile.catalog?.products ?? []).filter((p) => p.active !== false).length;
-    const summary = [
-      `Resumo da Loja — CompanyGen`,
-      `Loja: ${profile.business?.name?.trim() || 'Não informado'}`,
-      `Produtos ativos: ${activeCount}`,
-      `Vitrine publicada: ${profile.publishedStore?.published ? 'Sim' : 'Não'}`,
-      `Atendimento WhatsApp: ${phaseInfo.labelPT}`,
-      `Entrega: ${profile.delivery?.deliveryEnabled ? 'Ativa' : 'Desativada'} | Retirada: ${profile.delivery?.pickupEnabled ? 'Ativa' : 'Desativada'}`,
-      `Chave Pix configurada: ${profile.payment?.pixKey?.trim() ? 'Sim' : 'Não'}`,
-      `Status de rede: ${isOnline ? 'Online' : 'Offline'}`,
-    ].join('\n');
+    const isDesktopEnv = Boolean((window as unknown as { companygenDesktop?: { isDesktop?: boolean } }).companygenDesktop?.isDesktop);
+    const summary = scrubDiagnosticString(
+      [
+        `Diagnóstico Técnico Sanitizado — CompanyGen`,
+        `Loja: ${profile.business?.name?.trim() || 'Não informado'}`,
+        `Produtos ativos: ${activeCount}`,
+        `Vitrine publicada: ${profile.publishedStore?.published ? 'Sim' : 'Não'}`,
+        `Canal WhatsApp: ${phaseInfo.labelPT}`,
+        `Ambiente Desktop .exe: ${isDesktopEnv ? 'Electron Ativo (v1.0)' : 'Navegador Web'}`,
+        `Bandeja ativa: ${minimizeToTray ? 'Sim' : 'Não'} | Alertas <15cr: ${lowCreditEmailAlert ? 'Sim' : 'Não'}`,
+        `Chave Pix configurada: ${profile.payment?.pixKey?.trim() ? 'Sim (oculta)' : 'Não'}`,
+        `Status de rede: ${isOnline ? 'Online' : 'Offline'}`,
+      ].join('\n'),
+    );
 
     const ok = await copyTextToClipboard(summary);
     if (ok) {
       setCopiedDiagnostic(true);
       showToast({
         type: 'success',
-        message: 'Resumo da loja copiado! Envie para o suporte quando precisar.',
+        message: 'Diagnóstico técnico sanitizado copiado!',
         durationMs: 3000,
       });
     }
@@ -514,31 +678,93 @@ export function SettingsView({
     setOpenFaqIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const storeFormRef = React.useRef<HTMLFormElement | null>(null);
+
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && activeSettingsTab === 'store' && isStoreDirty) {
+        e.preventDefault();
+        storeFormRef.current?.requestSubmit();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeSettingsTab, isStoreDirty]);
+
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 p-4 pb-24 sm:p-6 min-[769px]:pb-10">
-      {/* Header */}
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0F172A]">
-            Ajustes da Loja
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Atualize dados comerciais, entrega, chave Pix, segurança e suporte da sua loja.
-          </p>
+    <div
+      data-testid="settings-view"
+      className="mx-auto w-full max-w-4xl space-y-6 p-4 pb-24 sm:p-6 min-[769px]:pb-10"
+    >
+      {/* Header + 4 Sub-abas limpas */}
+      <header className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-[#0F172A] dark:text-[#F8FAFC]">
+              Ajustes da Loja
+            </h1>
+            <p className="mt-1 text-sm text-slate-600 dark:text-[#94A3B8]">
+              Gerencie dados comerciais, preferências do App Windows (.exe), créditos e backup.
+            </p>
+          </div>
+          {isStoreDirty && activeSettingsTab === 'store' && (
+            <span className="rounded-full border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-800 dark:text-amber-200">
+              Alterações pendentes · Ctrl+S para salvar
+            </span>
+          )}
         </div>
+
+        <nav
+          role="tablist"
+          aria-label="Seções de Ajustes"
+          className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-1.5 sm:grid-cols-4"
+        >
+          {(
+            [
+              { id: 'store' as const, label: '1. Dados da Loja & Pix', icon: Store },
+              { id: 'desktop' as const, label: '2. Desktop Windows (.exe)', icon: Monitor },
+              { id: 'credits' as const, label: '3. Créditos & Planos', icon: CreditCard },
+              { id: 'backup' as const, label: '4. Segurança & Backup', icon: ArchiveRestore },
+            ] as const
+          ).map((tab) => {
+            const Icon = tab.icon;
+            const active = activeSettingsTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                data-testid={`settings-subtab-${tab.id}`}
+                onClick={() => setActiveSettingsTab(tab.id)}
+                className={cn(
+                  'flex min-h-[42px] items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold transition',
+                  active
+                    ? 'bg-[#2563EB] text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#1E293B]',
+                )}
+              >
+                <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </header>
 
       {/* ====================================================================
-       * TELA 30: Dados da Loja, Entrega/Retirada & Chave Pix
+       * SUB-ABA 1: Dados da Loja, Entrega/Retirada & Chave Pix (max-w-2xl)
        * ================================================================== */}
+      {activeSettingsTab === 'store' && (
       <form
+        ref={storeFormRef}
         role="form"
         aria-label="Configurações da Loja"
         onSubmit={handleSaveStore}
-        className="space-y-6"
+        className="mx-auto max-w-2xl space-y-6"
       >
         {/* Bloco 1: Dados da Empresa */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 space-y-5">
+        <section className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface)] p-6 shadow-xs space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div className="flex items-center gap-2.5">
               <div className="flex size-10 items-center justify-center rounded-xl bg-[#EFF6FF] text-[#2563EB]">
@@ -629,20 +855,34 @@ export function SettingsView({
               >
                 WhatsApp da loja (com DDD) *
               </label>
-              <input
-                id="settings-store-whatsapp"
-                type="tel"
-                inputMode="tel"
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(formatBrazilPhoneDisplay(e.target.value))}
-                placeholder="(11) 98765-4321"
-                className={cn(
-                  'min-h-[48px] w-full rounded-xl border bg-white px-3.5 text-sm text-[#0F172A] focus:outline-none focus:ring-2',
-                  !isPhoneValid
-                    ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
-                    : 'border-slate-300 focus:border-[#2563EB] focus:ring-[#2563EB]/20',
-                )}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  id="settings-store-whatsapp"
+                  type="tel"
+                  inputMode="tel"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(formatBrazilPhoneDisplay(e.target.value))}
+                  placeholder="(11) 98765-4321"
+                  className={cn(
+                    'min-h-[48px] min-w-0 flex-1 rounded-xl border bg-white dark:bg-[#090D16] px-3.5 text-sm text-[#0F172A] dark:text-[#F8FAFC] focus:outline-none focus:ring-2',
+                    !isPhoneValid
+                      ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                      : 'border-slate-300 dark:border-[#334155] focus:border-[#2563EB] focus:ring-[#2563EB]/20',
+                  )}
+                />
+                <button
+                  type="button"
+                  data-testid="settings-testar-oi-btn"
+                  disabled={!isPhoneValid}
+                  onClick={() => {
+                    const msg = encodeURIComponent(`Oi! Testando o atendimento oficial de ${cleanName || 'nossa loja'}.`);
+                    window.open(`https://wa.me/${phoneE164}?text=${msg}`, '_blank', 'noopener,noreferrer');
+                  }}
+                  className="inline-flex min-h-[48px] shrink-0 items-center gap-1.5 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/15 px-3 text-xs font-bold text-[#15803D] dark:text-emerald-300 hover:bg-emerald-100 disabled:opacity-50"
+                >
+                  Testar Oi
+                </button>
+              </div>
               {!isPhoneValid ? (
                 <p className="mt-1 text-xs font-medium text-red-600">
                   Informe um celular com DDD válido (10 ou 11 dígitos).
@@ -912,11 +1152,232 @@ export function SettingsView({
           </div>
         </section>
       </form>
+      )}
 
       {/* ====================================================================
-       * Segurança da Conta (Alterar Senha & Logout Seguro)
+       * SUB-ABA 2: Desktop Windows (.exe) & Diagnóstico Técnico Sanitizado
        * ================================================================== */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 space-y-4">
+      {activeSettingsTab === 'desktop' && (
+        <section
+          data-testid="settings-panel-desktop"
+          className="mx-auto max-w-2xl rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface)] p-6 shadow-xs space-y-5"
+        >
+          <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-[#1E293B] pb-4">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-500/15 text-[#2563EB]">
+              <Monitor className="size-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">Preferências do App Windows (.exe)</h2>
+              <p className="text-xs text-slate-500 dark:text-[#94A3B8]">
+                Controle bandeja do sistema, toques de alerta e avisos preventivos por e-mail.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {[
+              {
+                id: 'minimize-tray',
+                label: 'Minimizar para bandeja do Windows ao fechar (Sofia continua respondendo)',
+                checked: minimizeToTray,
+                onChange: setMinimizeToTray,
+              },
+              {
+                id: 'sound-order',
+                label: 'Tocar alerta suave quando um novo pedido chegar no WhatsApp',
+                checked: soundNewOrder,
+                onChange: setSoundNewOrder,
+              },
+              {
+                id: 'sound-human',
+                label: 'Som prioritário (#FF2E54) quando cliente pedir atendimento humano',
+                checked: soundHumanAlert,
+                onChange: setSoundHumanAlert,
+              },
+              {
+                id: 'email-low-credits',
+                label: 'Avisar por e-mail quando saldo cair abaixo de 15 créditos (cooldown 24h)',
+                checked: lowCreditEmailAlert,
+                onChange: setLowCreditEmailAlert,
+              },
+              {
+                id: 'email-offline',
+                label: 'Avisar por e-mail se o App Windows (.exe) ficar offline por mais de 1 hora',
+                checked: offlineEmailAlert,
+                onChange: setOfflineEmailAlert,
+              },
+            ].map((pref) => (
+              <label
+                key={pref.id}
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-[#1E293B] bg-slate-50/70 dark:bg-[#090D16] px-4 py-3"
+              >
+                <span className="text-xs sm:text-sm font-medium text-[#0F172A] dark:text-[#F8FAFC]">{pref.label}</span>
+                <input
+                  type="checkbox"
+                  checked={pref.checked}
+                  onChange={(e) => pref.onChange(e.target.checked)}
+                  className="size-4 accent-[#2563EB]"
+                />
+              </label>
+            ))}
+          </div>
+
+          <div className="flex justify-end">
+            <ActionButton
+              variant="primary"
+              size={44}
+              isLoading={savingDesktopPrefs}
+              loadingText="Salvando..."
+              leftIcon={<Save className="size-4" />}
+              data-testid="settings-save-desktop-prefs-btn"
+              onClick={() => void handleSaveDesktopPrefs()}
+            >
+              Salvar Preferências Desktop
+            </ActionButton>
+          </div>
+
+          {/* Rodapé elevado --cg-surface-elevated com versão tabular-nums + Diagnóstico sanitizado */}
+          <div className="rounded-xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface-elevated)] p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-0.5 text-xs">
+              <p className="font-bold text-[#0F172A] dark:text-[#F8FAFC]">Diagnóstico do Terminal Desktop</p>
+              <p className="cg-tabular text-slate-600 dark:text-[#94A3B8]">
+                Versão: 1.0.0 · Canal: {phaseInfo.labelPT} · Sem exposição de tokens JWT
+              </p>
+            </div>
+            <ActionButton
+              variant={copiedDiagnostic ? 'success' : 'secondary'}
+              size={44}
+              data-testid="settings-copy-diagnostic-btn"
+              leftIcon={copiedDiagnostic ? <Check className="size-4" /> : <Copy className="size-4" />}
+              onClick={() => void handleCopyDiagnostic()}
+            >
+              {copiedDiagnostic ? 'Diagnóstico Copiado!' : 'Copiar Diagnóstico Técnico'}
+            </ActionButton>
+          </div>
+        </section>
+      )}
+
+      {/* ====================================================================
+       * SUB-ABA 3: Créditos & Planos (Atalho direto CheckoutPlansView)
+       * ================================================================== */}
+      {activeSettingsTab === 'credits' && (
+        <section
+          data-testid="settings-panel-credits"
+          className="mx-auto max-w-2xl rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface)] p-6 shadow-xs space-y-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-500/15 text-[#10B981]">
+                <CreditCard className="size-5" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">Saldo de Créditos & Recarga</h2>
+                <p className="text-xs text-slate-500 dark:text-[#94A3B8]">
+                  Simule sua necessidade mensal e acompanhe o extrato completo por operação.
+                </p>
+              </div>
+            </div>
+            {creditBalanceSnapshot !== null && (
+              <span className="cg-tabular rounded-full border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/15 px-3.5 py-1.5 text-sm font-extrabold text-[#15803D] dark:text-emerald-300">
+                {creditBalanceSnapshot.toLocaleString('pt-BR')} cr disponíveis
+              </span>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-slate-200 dark:border-[#1E293B] bg-slate-50 dark:bg-[#090D16] p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs text-slate-600 dark:text-[#CBD5E1] space-y-1">
+              <p className="font-semibold text-[#0F172A] dark:text-[#F8FAFC]">Pacotes avulsos sem assinatura mensal</p>
+              <p className="cg-tabular">A partir de R$ 9,90 (100 cr) · Melhor custo R$ 100,00 (2.500 cr = R$ 0,04/cr).</p>
+            </div>
+            <ActionButton
+              variant="success"
+              size={44}
+              data-testid="settings-open-checkout-btn"
+              leftIcon={<CreditCard className="size-4" />}
+              onClick={() => window.dispatchEvent(new CustomEvent('companygen:open-checkout'))}
+            >
+              Abrir Planos & Simulador
+            </ActionButton>
+          </div>
+        </section>
+      )}
+
+      {/* ====================================================================
+       * SUB-ABA 4: Segurança & Backup Completo (.zip SHA-256)
+       * ================================================================== */}
+      {activeSettingsTab === 'backup' && (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <section
+          data-testid="settings-panel-backup"
+          className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface)] p-6 shadow-xs space-y-4"
+        >
+          <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-[#1E293B] pb-4">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-500/15 text-[#2563EB]">
+              <ArchiveRestore className="size-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">Backup Completo (.zip) & Restauração</h2>
+              <p className="text-xs text-slate-500 dark:text-[#94A3B8]">
+                Exporte catálogo, respostas rápidas e Formula-IR com verificação SHA-256 (sem tokens de sessão).
+              </p>
+            </div>
+          </div>
+
+          <input
+            ref={backupFileInputRef}
+            type="file"
+            accept=".zip,application/zip"
+            data-testid="settings-restore-file-input"
+            className="sr-only"
+            onChange={(e) => void handleRestoreZipFile(e.target.files)}
+          />
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <ActionButton
+              variant="primary"
+              size={46}
+              isLoading={exportingBackup}
+              loadingText="Empacotando..."
+              leftIcon={<Download className="size-4" />}
+              data-testid="settings-export-backup-zip-btn"
+              onClick={() => void handleExportZipBackup()}
+            >
+              Baixar Backup Completo (.zip)
+            </ActionButton>
+
+            <ActionButton
+              variant="secondary"
+              size={46}
+              isLoading={restoringBackup}
+              loadingText="Validando SHA-256..."
+              leftIcon={<Upload className="size-4" />}
+              data-testid="settings-restore-backup-zip-btn"
+              onClick={() => backupFileInputRef.current?.click()}
+            >
+              Restaurar Snapshot
+            </ActionButton>
+          </div>
+
+          {lastBackupInfo && (
+            <p className="cg-tabular text-xs font-medium text-emerald-700 dark:text-emerald-300">
+              Último pacote gerado ({lastBackupInfo.sizeBytes} bytes) · SHA-256: {lastBackupInfo.sha256.slice(0, 16)}…
+            </p>
+          )}
+
+          {restoreError && (
+            <div data-testid="settings-restore-error-alert">
+              <HumanErrorCard
+                status={400}
+                fallbackMessage={restoreError}
+                actionLabel="Fechar aviso"
+                onAction={() => setRestoreError('')}
+              />
+            </div>
+          )}
+        </section>
+
+      {/* Segurança da Conta (Alterar Senha & Logout Seguro) */}
+      <section className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface)] p-5 shadow-xs sm:p-6 space-y-4">
         <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4">
           <div className="flex size-10 items-center justify-center rounded-xl bg-slate-100 text-[#0F172A]">
             <ShieldCheck className="size-5" aria-hidden="true" />
@@ -1181,6 +1642,8 @@ export function SettingsView({
           </ActionButton>
         </div>
       </section>
+      </div>
+      )}
 
       {/* ====================================================================
        * TELA 31 — Confirmação 1 de 2 (alertdialog + initialFocus="cancel")

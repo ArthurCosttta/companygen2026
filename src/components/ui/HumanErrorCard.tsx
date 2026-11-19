@@ -54,7 +54,7 @@ export function HumanErrorCard({
       data-testid="human-error-card"
       data-error-status={String(info.status)}
       className={cn(
-        'flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between',
+        'flex flex-col gap-3 rounded-2xl border p-4 @min-[480px]:flex-row @min-[480px]:items-center @min-[480px]:justify-between sm:flex-wrap',
         paletteClass,
         className,
       )}

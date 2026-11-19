@@ -110,14 +110,41 @@ export function resolveProductImageUrl(
 
 /**
  * Parses Brazilian/international currency text (e.g. "29,90", "R$ 1.299,50") into integer cents.
+ * Strictly rejects negative values, scientific notation, multiple decimal separators, or non-numeric garbage.
  */
 export function parseBRLInputToCents(raw: string): number {
   const text = String(raw || '').trim();
   if (!text) return 0;
   const cleaned = text.replace(/R\$/gi, '').replace(/\s+/g, '');
+  if (!cleaned || /^[-+]|e/i.test(cleaned) || /[^0-9.,]/.test(cleaned)) {
+    return 0;
+  }
+
   let normalized = cleaned;
   if (cleaned.includes(',')) {
-    normalized = cleaned.replace(/\./g, '').replace(',', '.');
+    const commaParts = cleaned.split(',');
+    if (commaParts.length !== 2) return 0;
+    const [intRaw, decRaw] = commaParts;
+    if (!intRaw || decRaw.length === 0 || decRaw.length > 2 || /[^0-9.]/.test(intRaw) || /\D/.test(decRaw)) {
+      return 0;
+    }
+    if (intRaw.includes('.') && !/^\d{1,3}(\.\d{3})+$/.test(intRaw)) {
+      return 0;
+    }
+    normalized = `${intRaw.replace(/\./g, '')}.${decRaw}`;
+  } else if (cleaned.includes('.')) {
+    const dotParts = cleaned.split('.');
+    if (dotParts.length === 2 && dotParts[1].length <= 2 && dotParts[0].length >= 1) {
+      normalized = cleaned;
+    } else if (/^\d{1,3}(\.\d{3})+$/.test(cleaned)) {
+      normalized = cleaned.replace(/\./g, '');
+    } else {
+      return 0;
+    }
+  }
+
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) {
+    return 0;
   }
   const num = Number(normalized);
   if (!Number.isFinite(num) || num <= 0) return 0;

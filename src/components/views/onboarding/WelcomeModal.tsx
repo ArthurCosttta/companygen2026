@@ -1,13 +1,18 @@
+import { useEffect, useState } from 'react';
 import {
   ArrowRight,
   BookmarkCheck,
-  CreditCard,
+  Check,
   HelpCircle,
-  Package,
+  MessageSquare,
+  Rocket,
   Sparkles,
   Store,
 } from 'lucide-react';
 import { ActionButton, ModalContainer } from '@/components/ui';
+import { cn } from '@/lib/utils';
+
+export type OnboardingPreferredTrack = 'store_first' | 'whatsapp_first' | 'full_guided';
 
 export interface WelcomeModalProps {
   open: boolean;
@@ -15,32 +20,41 @@ export interface WelcomeModalProps {
   storeName?: string;
   ownerEmail?: string;
   hasDraft?: boolean;
+  initialTrack?: OnboardingPreferredTrack;
+  onSelectTrack?: (track: OnboardingPreferredTrack) => void;
   onStartExpressWizard: () => void;
   onContinueDraft?: () => void;
   onExploreFirst?: () => void;
   onOpenHelp?: () => void;
 }
 
-const WELCOME_STEPS = [
+const WELCOME_TRACKS: ReadonlyArray<{
+  id: OnboardingPreferredTrack;
+  title: string;
+  description: string;
+  recommended?: boolean;
+  icon: typeof Store;
+}> = [
   {
-    step: 1,
-    title: 'Nome, WhatsApp e Entrega',
-    description: 'Como os clientes encontram sua loja e recebem os pedidos.',
+    id: 'full_guided',
+    title: 'Setup Completo Guiado',
+    description: 'Crie sua vitrine com IA + configure a Sofia em 3 passos com prévia ao vivo.',
+    recommended: true,
+    icon: Rocket,
+  },
+  {
+    id: 'store_first',
+    title: 'Criar Vitrine IA primeiro',
+    description: 'Foque agora no catálogo, logo e link público compartilhável no Instagram.',
     icon: Store,
   },
   {
-    step: 2,
-    title: 'Seu Primeiro Produto',
-    description: 'Nome e preço em reais. Sem foto? Criamos uma imagem pronta.',
-    icon: Package,
+    id: 'whatsapp_first',
+    title: 'Conectar WhatsApp primeiro',
+    description: 'Pareie seu número via QR Code antes de preencher o restante da loja.',
+    icon: MessageSquare,
   },
-  {
-    step: 3,
-    title: 'Pagamento com Pix',
-    description: 'Deixe sua chave Pix pronta para acelerar as vendas.',
-    icon: CreditCard,
-  },
-] as const;
+];
 
 export function WelcomeModal({
   open,
@@ -48,17 +62,31 @@ export function WelcomeModal({
   storeName,
   ownerEmail,
   hasDraft = false,
+  initialTrack = 'full_guided',
+  onSelectTrack,
   onStartExpressWizard,
   onContinueDraft,
   onExploreFirst,
   onOpenHelp,
 }: WelcomeModalProps) {
+  const [selectedTrack, setSelectedTrack] = useState<OnboardingPreferredTrack>(initialTrack);
+
+  useEffect(() => {
+    setSelectedTrack(initialTrack);
+  }, [initialTrack, open]);
+
   const cleanStoreName = (storeName || '').trim();
   const hasCustomName =
     cleanStoreName.length >= 2 &&
     !/^(minha\s+loja|loja\s+companygen)$/i.test(cleanStoreName);
 
   const handlePrimaryClick = () => {
+    if (onSelectTrack) {
+      onSelectTrack(selectedTrack);
+    }
+    if (selectedTrack === 'whatsapp_first') {
+      return;
+    }
     if (hasDraft && onContinueDraft) {
       onContinueDraft();
       return;
@@ -82,7 +110,7 @@ export function WelcomeModal({
       maxWidth="lg"
       mobileHeight="90%"
       title={
-        <span className="inline-flex items-center gap-2 text-[#0F172A]">
+        <span className="inline-flex items-center gap-2 text-[#0F172A] dark:text-white">
           <Sparkles className="size-5 text-[#2563EB]" aria-hidden="true" />
           <span>
             {hasCustomName
@@ -91,19 +119,22 @@ export function WelcomeModal({
           </span>
         </span>
       }
-      description="Configure sua loja em 3 passos simples e comece a vender pela vitrine e pelo WhatsApp."
+      description="Escolha como prefere começar — você pode ajustar tudo depois com 1 clique."
       footer={
         <div className="flex flex-col gap-2.5">
           <ActionButton
             variant="primaryGradient"
             size={52}
             fullWidth
+            data-testid="welcome-start-track-btn"
             rightIcon={<ArrowRight className="size-4" aria-hidden="true" />}
             onClick={handlePrimaryClick}
           >
-            {hasDraft
-              ? 'Continuar Configuração Express'
-              : 'Configurar Minha Loja Agora (2 min)'}
+            {selectedTrack === 'whatsapp_first'
+              ? 'Ir para Conexão WhatsApp'
+              : hasDraft
+                ? 'Continuar Configuração Express'
+                : 'Começar em Menos de 3 Min'}
           </ActionButton>
 
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -133,7 +164,7 @@ export function WelcomeModal({
       <div className="space-y-4">
         {ownerEmail ? (
           <p className="text-xs font-medium text-slate-500">
-            Conta conectada: <span className="text-[#0F172A]">{ownerEmail}</span>
+            Conta conectada: <span className="text-[#0F172A] dark:text-white">{ownerEmail}</span>
           </p>
         ) : null}
 
@@ -144,31 +175,57 @@ export function WelcomeModal({
           >
             <BookmarkCheck className="mt-0.5 size-4 shrink-0 text-[#F59E0B]" aria-hidden="true" />
             <span>
-              Encontramos um rascunho salvo da sua loja. Clique abaixo para continuar exatamente de onde parou.
+              Encontramos um rascunho salvo da sua loja. Você continuará exatamente de onde parou.
             </span>
           </div>
         ) : null}
 
-        <div className="grid gap-3">
-          {WELCOME_STEPS.map((item) => {
-            const Icon = item.icon;
+        <div className="grid gap-3" role="radiogroup" aria-label="Objetivo inicial">
+          {WELCOME_TRACKS.map((track) => {
+            const Icon = track.icon;
+            const active = selectedTrack === track.id;
             return (
-              <div
-                key={item.step}
-                className="flex items-start gap-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+              <button
+                key={track.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                data-testid={`welcome-track-${track.id}`}
+                onClick={() => setSelectedTrack(track.id)}
+                className={cn(
+                  'flex w-full items-start gap-3.5 rounded-2xl border p-4 text-left transition-all',
+                  active
+                    ? 'border-[#2563EB] bg-[#EFF6FF] ring-2 ring-[#2563EB]/25 dark:border-blue-500 dark:bg-[#182034]'
+                    : 'border-slate-200 bg-slate-50/70 hover:border-slate-300 dark:border-slate-800 dark:bg-[#111726]',
+                )}
               >
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#EFF6FF] text-[#2563EB]">
+                <div
+                  className={cn(
+                    'flex size-10 shrink-0 items-center justify-center rounded-xl',
+                    active ? 'bg-[#2563EB] text-white' : 'bg-[#EFF6FF] text-[#2563EB]',
+                  )}
+                >
                   <Icon className="size-5" aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-[#0F172A]">
-                    {item.step}. {item.title}
-                  </p>
-                  <p className="mt-0.5 text-sm leading-relaxed text-slate-600">
-                    {item.description}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-bold text-[#0F172A] dark:text-white">
+                      {track.title}
+                    </p>
+                    {track.recommended ? (
+                      <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                        Recomendado
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                    {track.description}
                   </p>
                 </div>
-              </div>
+                {active ? (
+                  <Check className="mt-1 size-4 shrink-0 text-[#2563EB]" aria-hidden="true" />
+                ) : null}
+              </button>
             );
           })}
         </div>
