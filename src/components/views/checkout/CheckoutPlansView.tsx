@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { authenticatedFetch } from '@/services/supabase-client';
 import { getBrandHorizontalLogo, useDocumentDarkMode } from '@/utils/themeLogos';
 import { CreditDurationSimulator } from './CreditDurationSimulator';
+import { RedeemCreditCodeCard } from '@/components/views/settings/RedeemCreditCodeCard';
 
 export interface CreditLedgerEntry {
   id: string;
@@ -63,6 +64,7 @@ export interface CheckoutPlansViewProps {
 const OP_LABELS: Record<string, { label: string; category: 'credit' | 'debit' | 'refund' }> = {
   purchase_kiwify: { label: 'Compra Kiwify aprovada', category: 'credit' },
   welcome_invite: { label: 'Código de convite resgatado', category: 'credit' },
+  recharge_code: { label: 'Código especial de recarga resgatado', category: 'credit' },
   redeem_code: { label: 'Código de acesso resgatado', category: 'credit' },
   order_refunded: { label: 'Estorno / Reembolso Kiwify', category: 'refund' },
   failure_refund: { label: 'Estorno automático de falha', category: 'credit' },
@@ -134,40 +136,40 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                 id: 'plan_100_brl',
                 slug: 'plan_100_brl',
                 name: 'Plano Profissional IA',
-                credits: 2500,
+                credits: 250,
                 priceCents: 10000,
                 priceFormatted: 'R$ 100,00',
-                pricePerCredit: 'R$ 0,04',
-                savingsPercent: '60%',
+                pricePerCredit: 'R$ 0,40',
+                savingsPercent: '20%',
                 popular: true,
                 kiwifyUrl: 'https://pay.kiwify.com.br/0USJqo5',
-                description: 'Ideal para atendimento contínuo no WhatsApp e geração completa de vitrines.',
+                description: '250 créditos (200 + 50 bônus): até 2.500 respostas da Sofia ou vitrine IA + 20 fotos + 2.260 msgs.',
               },
               {
                 id: 'plan_micro_10',
                 slug: 'plan_micro_10',
-                name: 'Recarga Rápida',
-                credits: 100,
+                name: 'Recarga Entrada',
+                credits: 20,
                 priceCents: 990,
                 priceFormatted: 'R$ 9,90',
-                pricePerCredit: 'R$ 0,10',
+                pricePerCredit: 'R$ 0,50',
                 savingsPercent: null,
                 popular: false,
                 kiwifyUrl: 'https://pay.kiwify.com.br/7fBDYu4',
-                description: 'Recarga única de entrada para testar respostas e edições com clientes reais.',
+                description: '20 créditos: até 200 respostas da Sofia ou 1 vitrine IA + 4 fotos + 120 msgs no WhatsApp.',
               },
               {
                 id: 'plan_growth_25',
                 slug: 'plan_growth_25',
-                name: 'Recarga Intermediária',
-                credits: 300,
+                name: 'Recarga Crescimento',
+                credits: 55,
                 priceCents: 2490,
                 priceFormatted: 'R$ 24,90',
-                pricePerCredit: 'R$ 0,08',
-                savingsPercent: '20%',
+                pricePerCredit: 'R$ 0,45',
+                savingsPercent: '10%',
                 popular: false,
                 kiwifyUrl: 'https://pay.kiwify.com.br/O0ueDhe',
-                description: 'Bom para picos de movimento e campanhas pontuais de vendas.',
+                description: '55 créditos (50 + 5 bônus): até 550 respostas da Sofia ou 2 vitrines + 10 fotos + 370 msgs.',
               },
             ].sort((a, b) => a.priceCents - b.priceCents),
           );
@@ -463,7 +465,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                   : 'border-[var(--cg-border)] bg-[var(--cg-surface)] shadow-sm'
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
+              <div data-testid="credits-telemetry-panel" className="flex items-center justify-between gap-2">
                 <div>
                   <h2
                     className={`text-sm font-bold flex items-center gap-2 ${
@@ -681,6 +683,13 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
         ) : (
         /* Conteúdo Principal de Planos */
         <div className="mt-6 space-y-6">
+          {userId ? (
+            <RedeemCreditCodeCard
+              userId={userId}
+              compact
+              onRedeemed={({ newBalance }) => setCurrentBalance(newBalance)}
+            />
+          ) : null}
           <CreditDurationSimulator
             plans={plans}
             selectedPlanId={selectedPlanId}

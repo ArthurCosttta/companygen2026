@@ -963,6 +963,62 @@ function deterministicOrderInsight(order, totalCents, canalOrigem) {
   return { categoriaIA, prioridadeIA, resumoIA };
 }
 
+export function computeOrdersDreSummary(orders = []) {
+  const toCents = (val) => {
+    const n = Number(val);
+    return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  };
+  let grossRevenueCents = 0;
+  let cmvCents = 0;
+  let feesCents = 0;
+  let lossesCents = 0;
+
+  for (const order of Array.isArray(orders) ? orders : []) {
+    if (!order || typeof order !== 'object') continue;
+    const status = String(order.status || '').toLowerCase();
+    const orderTotalCents =
+      typeof order.total_cents === 'number'
+        ? Math.round(order.total_cents)
+        : toCents(order.total ?? order.amount ?? 0);
+
+    const isCancelled = status === 'cancelled' || status === 'cancelado';
+    if (!isCancelled && !order.isOperationalLoss) {
+      grossRevenueCents += Math.max(0, orderTotalCents);
+      if (Array.isArray(order.items)) {
+        for (const item of order.items) {
+          const qty = Math.max(1, Number(item?.qty ?? item?.quantity ?? 1) || 1);
+          const unitCostCents =
+            typeof item?.unit_cost_cents === 'number'
+              ? Math.round(item.unit_cost_cents)
+              : toCents(item?.unitCost ?? 0);
+          cmvCents += Math.max(0, unitCostCents) * qty;
+        }
+      } else if (typeof order.cmv_cents === 'number' || order.unitCost !== undefined) {
+        cmvCents += typeof order.cmv_cents === 'number' ? Math.round(order.cmv_cents) : toCents(order.unitCost);
+      }
+      feesCents +=
+        typeof order.fee_cents === 'number' ? Math.max(0, Math.round(order.fee_cents)) : Math.max(0, toCents(order.feeAmount));
+    }
+
+    const explicitLossCents =
+      typeof order.loss_cents === 'number' ? Math.max(0, Math.round(order.loss_cents)) : Math.max(0, toCents(order.lossAmount));
+    lossesCents += explicitLossCents;
+  }
+
+  const netProfitCents = grossRevenueCents - cmvCents - feesCents - lossesCents;
+  const marginPercent =
+    grossRevenueCents > 0 ? Number(((netProfitCents / grossRevenueCents) * 100).toFixed(1)) : 0;
+
+  return {
+    grossRevenueCents,
+    cmvCents,
+    feesCents,
+    lossesCents,
+    netProfitCents,
+    marginPercent,
+  };
+}
+
 export async function catalogOrdersData(orders, profile) {
   const list = Array.isArray(orders) ? orders : [];
   const compactForAi = list.slice(0, 25).map((o, idx) => ({
@@ -1074,6 +1130,7 @@ export async function catalogOrdersData(orders, profile) {
   };
 
   const topProducts = [...productStats.values()].sort((a, b) => b.revenueCents - a.revenueCents);
+  const dreSummary = computeOrdersDreSummary(orders);
 
   const xlsxBytes = await buildXlsxUint8Array([
     {
@@ -1130,6 +1187,18 @@ export async function catalogOrdersData(orders, profile) {
         item.orders,
       ]),
     },
+    {
+      name: 'DRE_Financeiro',
+      headers: ['Linha_DRE', 'Valor_BRL', 'Observacao'],
+      rows: [
+        ['Faturamento Bruto', formatBRL(dreSummary.grossRevenueCents), 'Pedidos válidos (não cancelados)'],
+        ['(-) CMV / Custo dos Produtos', formatBRL(dreSummary.cmvCents), 'Custo unitário x quantidade'],
+        ['(-) Taxas', formatBRL(dreSummary.feesCents), 'Taxas de gateway, Pix e entrega'],
+        ['(-) Prejuízos / Estornos', formatBRL(dreSummary.lossesCents), 'Avarias, perdas ou estornos registrados'],
+        ['(=) Lucro Líquido', formatBRL(dreSummary.netProfitCents), 'Faturamento - CMV - Taxas - Prejuízos'],
+        ['Margem Líquida (%)', `${dreSummary.marginPercent.toFixed(1)}%`, 'Sobre o faturamento bruto'],
+      ],
+    },
   ]);
 
   return {
@@ -1137,6 +1206,7 @@ export async function catalogOrdersData(orders, profile) {
     modelUsed: ollamaResult.modelUsed || 'deterministic-order-classifier',
     usedFallback: !ollamaResult.modelUsed,
     summary,
+    dreSummary,
     catalogedOrders,
     xlsxBase64: Buffer.from(xlsxBytes).toString('base64'),
     filename: 'pedidos_catalogados_companygen.xlsx',

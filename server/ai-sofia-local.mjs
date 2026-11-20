@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { debitCredits, getCreditBalance, refundCredits } from './access-and-checkout.mjs';
+import { CREDIT_ACTION_COSTS, debitCredits, getCreditBalance, refundCredits } from './access-and-checkout.mjs';
 import {
   AUDIO_FALLBACK_MESSAGE,
   matchProductImageSuggestion,
@@ -63,8 +63,8 @@ function getGlmConfig({ allowDotEnvFallback = true } = {}) {
     endpointUrl = /\/chat\/completions$/i.test(clean) ? clean : `${clean}/chat/completions`;
   }
   const model = String(process.env.GLM_MODEL || fileEnv.GLM_MODEL || DEFAULT_GLM_MODEL).trim() || DEFAULT_GLM_MODEL;
-  const rawTimeout = Number(process.env.GLM_TIMEOUT_MS || fileEnv.GLM_TIMEOUT_MS || 3500);
-  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout >= 500 ? Math.min(12000, Math.round(rawTimeout)) : 3500;
+  const rawTimeout = Number(process.env.GLM_TIMEOUT_MS || fileEnv.GLM_TIMEOUT_MS || 9000);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout >= 500 ? Math.min(18000, Math.round(rawTimeout)) : 9000;
   return { apiKey, endpointUrl, model, timeoutMs };
 }
 
@@ -111,7 +111,7 @@ function buildThreadHistoryMessages({
   threadKey = '',
   customerName = '',
   currentMessageText = '',
-  maxItems = 15,
+  maxItems = 6,
   maxChars = 250,
   maxAgeMs = 24 * 60 * 60 * 1000,
 }) {
@@ -504,10 +504,7 @@ export function selectReplyMediaItems({
   const shouldAttachPhotos = wantsCatalogOrPhotos || detectedIds.size > 0;
   if (!shouldAttachPhotos) return [];
 
-  const firstName =
-    customerName && customerName.trim() && customerName !== 'Cliente WhatsApp' && customerName !== 'Meu numero:'
-      ? customerName.trim().split(/\s+/)[0]
-      : '';
+  const firstName = sanitizeCustomerDisplayName(customerName, false);
   const clientTag = firstName ? `${firstName}, ` : '';
   const shopTag = storeName ? ` na ${storeName}` : '';
 
@@ -828,6 +825,25 @@ export function normalizeForMatch(text) {
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+export function sanitizeCustomerDisplayName(rawName = '', isSelfChat = false) {
+  if (isSelfChat) return '';
+  const clean = String(rawName || '').trim();
+  if (!clean) return '';
+  if (/^(meu\s*n[uú]mero:?|cliente\s*whatsapp|voc[eê]|you|eu|me|whatsapp|desconhecido)$/i.test(clean)) return '';
+  if (/^[\d\s()+-]+$/.test(clean)) return '';
+  return clean.split(/\s+/)[0];
+}
+
+export function isShortClosingConfirmation(text = '', recentAssistantMessages = []) {
+  const clean = String(text || '').trim();
+  if (!/^(sim|pode|pode\s+prosseguir|prosseguir|fechado|ok|okay|beleza|manda|quero|confirmo|bora|isso|perfeito|t[aá]\s*bom)(?:[\s,!.]*(?:pode\s+)?(?:prosseguir|seguir|fechar|mandar|confirmar|sim|ok))*[!.\s]*$/i.test(clean)) {
+    return false;
+  }
+  return (recentAssistantMessages || []).some((m) =>
+    /(posso seguir|confirma o endere[çc]o|forma de pagamento|pix|entrega ou retirada|fechar o pedido)/i.test(String(m || '')),
+  );
 }
 
 export const ACOLHEDOR_GREETINGS = [
@@ -1338,10 +1354,8 @@ export function buildDeterministicSofiaReply({
 }) {
   const storeName = profile?.business?.name?.trim() || 'nossa loja';
   const agentName = profile?.agent?.name?.trim() || 'Sofia';
-  const clientGreeting =
-    customerName && customerName.trim() && customerName !== 'Cliente WhatsApp'
-      ? `, ${customerName.trim().split(' ')[0]}`
-      : '';
+  const safeFirstName = sanitizeCustomerDisplayName(customerName, false);
+  const clientGreeting = safeFirstName ? `, ${safeFirstName}` : '';
   const activeProducts = products.filter((p) => p && p.active !== false && Number(p.stock ?? 10) > 0);
   const deliveryFeeCents = Math.max(
     0,
@@ -1771,6 +1785,33 @@ function hasIdentityOrBotLeak(replyText, storeName) {
   return false;
 }
 
+const sofiaContextCache = new Map();
+const SOFIA_CACHE_TTL_MS = 60_000;
+
+export function getSofiaCachedContext(userId) {
+  if (!userId) return null;
+  const hit = sofiaContextCache.get(String(userId));
+  if (!hit) return null;
+  if (Date.now() - hit.updatedAt > SOFIA_CACHE_TTL_MS) {
+    sofiaContextCache.delete(String(userId));
+    return null;
+  }
+  return hit;
+}
+
+export function setSofiaCachedContext(userId, payload) {
+  if (!userId || !payload) return;
+  sofiaContextCache.set(String(userId), { ...payload, updatedAt: Date.now() });
+}
+
+export function invalidateSofiaContextCache(userId) {
+  if (!userId) {
+    sofiaContextCache.clear();
+    return;
+  }
+  sofiaContextCache.delete(String(userId));
+}
+
 export async function classifyAndRespondWithLocalAi({
   messageText,
   customerName = 'Cliente WhatsApp',
@@ -2028,9 +2069,9 @@ export async function classifyAndRespondWithLocalAi({
           messages: [
             { role: 'system', content: glmSystemPrompt },
             ...threadHistory,
-            { role: 'user', content: `<customer_message>${String(messageText || '').trim().slice(0, 320)}</customer_message>` },
+            { role: 'user', content: `<customer_message>${String(messageText || '').trim().slice(0, 900)}</customer_message>` },
           ],
-          max_tokens: 100,
+          max_tokens: 220,
           temperature: 0.2,
           chat_template_kwargs: { enable_thinking: false },
         }),
@@ -2266,9 +2307,71 @@ export async function classifyAndRespondWithLocalAi({
     }
   }
 
+  const recentBotTexts = (threadHistory || [])
+    .filter((m) => m && m.role === 'assistant')
+    .map((m) => String(m.content || ''));
+
+  if (brain?.officialCompanyGenMode === true && /(bug|erro|travou|suporte|chamado|ticket|n[aã]o funciona|problema)/i.test(messageText)) {
+    const emailMatch = String(messageText || '').match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+    const officialReply = emailMatch
+      ? `Recebi seu relato para a conta ${emailMatch[0]}! Já registrei um chamado prioritário de suporte na CompanyGen. Nossa equipe está analisando e você acompanha o status direto no botão "Suporte & Ajuda" do painel.`
+      : `Posso abrir um chamado de suporte direto daqui! Me confirma só o e-mail da sua conta CompanyGen e o que aconteceu pra eu registrar o protocolo agora.`;
+    return {
+      classification: { ...classification, intent: 'OFFICIAL_SUPPORT_TRIAGE', suggestedReply: officialReply },
+      replyText: officialReply,
+      replyParts: [officialReply],
+      mediaItems: [],
+      modelUsed: 'companygen-official-support',
+      usedFallback: false,
+      hallucinationBlocked: false,
+      securityBlocked: false,
+      fallbackLevel: 4,
+      readDelayMs: computeGaussianReadDelay(350, 700),
+      typingTimeMs: 950,
+      serverElapsedMs: Date.now() - startedAtMs,
+      targetTotalMs: 1800,
+      isOffHours: false,
+      storeOpen: true,
+      officialSupportEmailDetected: emailMatch ? emailMatch[0] : null,
+      tokensBudgetMode: 'official_companygen_support',
+    };
+  }
+
+  const isClosingConfirm = isShortClosingConfirmation(messageText, recentBotTexts);
+  if (isClosingConfirm && classification.intent !== 'HUMAN_ESCALATION') {
+    const closingName = sanitizeCustomerDisplayName(customerName, false);
+    const closingPrefix = closingName ? `Fechado, ${closingName}! ` : 'Fechado! ';
+    const closingReply = `${closingPrefix}Me passa só o seu endereço completo (ou me avisa se prefere retirar na loja) e se o pagamento vai ser Pix ou cartão pra eu já finalizar seu pedido.`;
+    return {
+      classification: { ...classification, intent: 'PURCHASE_ORDER', suggestedReply: closingReply },
+      replyText: closingReply,
+      replyParts: [closingReply],
+      mediaItems: [],
+      modelUsed: 'deterministic-closing-checkout',
+      usedFallback: false,
+      hallucinationBlocked: false,
+      securityBlocked: false,
+      fallbackLevel: 4,
+      readDelayMs: computeGaussianReadDelay(350, 750),
+      typingTimeMs: Math.min(1300, Math.max(600, computeTypingDurationMs(closingReply, 18, 28))),
+      serverElapsedMs: Date.now() - startedAtMs,
+      targetTotalMs: 1800,
+      isOffHours: isOffHours(brain.workingHoursNotice),
+      storeOpen: true,
+      tokensBudgetMode: 'closing_checkout_fast',
+    };
+  }
+
   const offHoursNotice = !storeOpenStatus.open || isOffHours(brain.workingHoursNotice);
-  const readDelayMs = shouldUseGlm ? computeGaussianReadDelay(1000, 2200) : computeGaussianReadDelay(1500, 4000);
-  const typingTimeMs = computeTypingDurationMs(finalReply, 25, 45);
+  const isShortFastMessage =
+    String(messageText || '').trim().length <= 32 && classification.intent !== 'HUMAN_ESCALATION';
+  const readDelayMs = isShortFastMessage
+    ? computeGaussianReadDelay(350, 750)
+    : shouldUseGlm
+      ? computeGaussianReadDelay(1000, 2200)
+      : computeGaussianReadDelay(1500, 4000);
+  const rawTypingTimeMs = computeTypingDurationMs(finalReply, 25, 45);
+  const typingTimeMs = isShortFastMessage ? Math.min(1300, Math.max(600, rawTypingTimeMs)) : rawTypingTimeMs;
   const replyParts = splitReplyIntoBubbles(finalReply, mediaItems);
 
   return {
@@ -2820,6 +2923,56 @@ export async function handleWhatsappAiRoutes(
     throw new ApiError(405, 'Método indisponível.');
   }
 
+  // 3b-ii. POST /api/whatsapp/ai/refund-failed-send (QA13-08: falha no envio WhatsApp = 0 cobrança)
+  if (pathname === '/api/whatsapp/ai/refund-failed-send') {
+    if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
+    const body = await readJson(req, 16 * 1024);
+    const referenceId = String(body?.referenceId || '').trim();
+    if (!referenceId || referenceId.length > 120) {
+      throw new ApiError(400, 'Informe o referenceId do débito para estorno.');
+    }
+    const maxRefund = CREDIT_ACTION_COSTS.glm_whatsapp || 0.1;
+    const requestedAmount = Number(body?.amount);
+    const amount = Number.isFinite(requestedAmount) && requestedAmount > 0
+      ? Math.min(maxRefund, requestedAmount)
+      : maxRefund;
+
+    const refundedIdsPath = path.join(directory, '_whatsapp_failed_send_refunds.json');
+    const refundOutcome = await serializeForDir(directory, async () => {
+      const refundedIds = await readJsonFile(refundedIdsPath, []);
+      const list = Array.isArray(refundedIds) ? refundedIds : [];
+      if (list.includes(referenceId)) {
+        const currentBal = await getCreditBalance({ user, bearer: user?.bearer, directory, readJsonFile }).catch(() => 0);
+        return { ok: true, duplicate: true, refunded: 0, balanceAfter: currentBal };
+      }
+      const resRefund = await refundCredits({
+        user,
+        directory,
+        action: 'glm_whatsapp',
+        amount,
+        metadata: {
+          reason: String(body?.reason || 'whatsapp_send_failed').slice(0, 80),
+          referenceId,
+        },
+        readJsonFile,
+        atomicWriteJson,
+      });
+      if (resRefund?.ok) {
+        list.push(referenceId);
+        await atomicWriteJson(refundedIdsPath, list.slice(-300));
+      }
+      return resRefund;
+    });
+
+    send(res, 200, {
+      ok: Boolean(refundOutcome?.ok),
+      duplicate: Boolean(refundOutcome?.duplicate),
+      refunded: Number(refundOutcome?.refunded || 0),
+      balanceAfter: refundOutcome?.balanceAfter,
+    });
+    return true;
+  }
+
   // 3b. POST /api/whatsapp/ai/transcribe-audio (STT seguro <=4MB / <=60s + magic-bytes)
   if (pathname === '/api/whatsapp/ai/transcribe-audio') {
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
@@ -2829,8 +2982,8 @@ export async function handleWhatsappAiRoutes(
       mimeType: String(body?.mimeType || 'audio/ogg'),
       durationSeconds: Number(body?.durationSeconds || 0),
       sttEndpointUrl: body?.sttEndpointUrl || process.env.WHISPER_ENDPOINT_URL || '',
-      sttApiKey: process.env.WHISPER_API_KEY || process.env.GLM_API_KEY || '',
-      timeoutMs: Number(body?.timeoutMs || 8000),
+      sttApiKey: process.env.WHISPER_API_KEY || '',
+      timeoutMs: Number(body?.timeoutMs || (Number(body?.durationSeconds || 0) > 30 ? 20000 : 12000)),
       fetchImpl: typeof fetchImpl === 'function' ? fetchImpl : fetch,
     });
     send(res, 200, {
@@ -3102,7 +3255,7 @@ export async function handleWhatsappAiRoutes(
           user,
           directory,
           action: 'glm_whatsapp',
-          amount: 2,
+          amount: CREDIT_ACTION_COSTS.glm_whatsapp,
           metadata: {
             customerName,
             phase: 'reserve',
@@ -3552,6 +3705,7 @@ export async function handleWhatsappAiRoutes(
           ? {
               debited: creditDebitResult.debited,
               balanceAfter: creditDebitResult.balanceAfter,
+              debitReferenceId: creditDebitResult.entry?.id || null,
             }
           : {}),
       };

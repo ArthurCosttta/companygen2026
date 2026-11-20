@@ -327,7 +327,7 @@ describe('Local AI Spreadsheet Engine (server/ai-spreadsheet-engine.mjs)', () =>
       assert.equal(parsed.format, 'xlsx');
       assert.deepEqual(
         parsed.sheets.map(s => s.name),
-        ['Pedidos_Catalogados', 'Resumo_D1_e_Canais', 'Produtos_Mais_Vendidos']
+        ['Pedidos_Catalogados', 'Resumo_D1_e_Canais', 'Produtos_Mais_Vendidos', 'DRE_Financeiro']
       );
       assert.equal(parsed.sheets[0].rows.length, 3);
       assert.equal(parsed.sheets[2].rows[0][0], 'Kit Café Especial');

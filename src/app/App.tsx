@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   AlertTriangle,
@@ -64,6 +64,7 @@ import {
   ToastProvider,
   useToast,
 } from '@/components/ui';
+import { GlobalAiAssistantWidget } from '@/components/ui/GlobalAiAssistantWidget';
 import {
   buildDraftFromProfile,
   ContextualHelpModal,
@@ -76,7 +77,9 @@ import {
   type OnboardingHelpTopic,
   type OnboardingWizardStep,
 } from '@/components/views/onboarding';
-import { ArchetypeComposerView } from '@/components/views/studio';
+const ArchetypeComposerView = lazy(() =>
+  import('@/components/views/studio').then((m) => ({ default: m.ArchetypeComposerView })),
+);
 import {
   buildStorePublicUrl,
   CustomerStorefrontView,
@@ -87,11 +90,19 @@ import {
   WhatsAppConnectionView,
   type WhatsappDadosResponse,
 } from '@/components/views/whatsapp';
-import { OrdersKanbanView } from '@/components/views/orders';
-import { SettingsView } from '@/components/views/settings';
+const OrdersKanbanView = lazy(() =>
+  import('@/components/views/orders').then((m) => ({ default: m.OrdersKanbanView })),
+);
+const SettingsView = lazy(() =>
+  import('@/components/views/settings').then((m) => ({ default: m.SettingsView })),
+);
 import { AccessCodeView } from '@/components/views/access/AccessCodeView';
-import { AdminConsoleView } from '@/components/views/admin/AdminConsoleView';
-import { CheckoutPlansView } from '@/components/views/checkout/CheckoutPlansView';
+const AdminConsoleView = lazy(() =>
+  import('@/components/views/admin/AdminConsoleView').then((m) => ({ default: m.AdminConsoleView })),
+);
+const CheckoutPlansView = lazy(() =>
+  import('@/components/views/checkout/CheckoutPlansView').then((m) => ({ default: m.CheckoutPlansView })),
+);
 import { getDesktopBridge } from '@/hooks/useWebviewWhatsappResponder';
 import { runWithFichaModalLayout } from '@/utils/fichaModalLayout';
 
@@ -164,9 +175,13 @@ function PublicStorefrontRoute({
   targetSlug: string;
 }) {
   const lookupKey = targetOwnerId || targetSlug;
+  const isAdminPreview =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('adminPreview') === '1';
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [publicProfile, setPublicProfile] = useState<BusinessProfile | null>(null);
+  const [isDraftStore, setIsDraftStore] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -181,21 +196,44 @@ function PublicStorefrontRoute({
       setLoading(true);
       setErrorMessage('');
       try {
-        const res = await fetch(
-          `/api/store-molde/${encodeURIComponent(lookupKey)}/data/formulas-ir.json`,
-          { cache: 'no-store' },
-        );
-        if (!res.ok) {
-          throw new Error('Vitrine não encontrada ou ainda não publicada.');
+        const endpoint = isAdminPreview
+          ? `/api/admin/users/${encodeURIComponent(lookupKey)}/storefront`
+          : `/api/public/store/${encodeURIComponent(lookupKey)}`;
+        const res = isAdminPreview
+          ? await authenticatedFetch(endpoint, { cache: 'no-store' })
+          : await fetch(endpoint, { cache: 'no-store' });
+        const payload = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+        if (!res.ok || !payload?.ok) {
+          throw new Error(String(payload?.error || 'Vitrine não encontrada ou ainda não publicada.'));
         }
-        const irData = (await res.json()) as Record<string, unknown>;
         if (!active) return;
+
+        setIsDraftStore(Boolean(payload.draft));
+        const irData = (payload.formulasIr && typeof payload.formulasIr === 'object'
+          ? payload.formulasIr
+          : null) as Record<string, unknown> | null;
+        const prof = (payload.profile && typeof payload.profile === 'object'
+          ? payload.profile
+          : {}) as Record<string, unknown>;
+        const profBiz = (prof.business || {}) as Record<string, unknown>;
+        const profBrand = (prof.brand || {}) as Record<string, unknown>;
+        const profWa = (prof.whatsapp || {}) as Record<string, unknown>;
+        const profPay = (prof.payment || {}) as Record<string, unknown>;
+        const profDel = (prof.delivery || {}) as Record<string, unknown>;
+        const profCat = (prof.catalog || {}) as Record<string, unknown>;
+        const profPub = (prof.publishedStore || {}) as Record<string, unknown>;
 
         const storeInfo = (irData?.storeInfo || {}) as Record<string, unknown>;
         const designTokens = (irData?.designTokens || irData?.themeTokens || {}) as Record<string, unknown>;
-        const catalogList = Array.isArray(irData?.catalog) ? irData.catalog : [];
+        const catalogList =
+          Array.isArray(profCat.products) && profCat.products.length > 0
+            ? profCat.products
+            : Array.isArray(irData?.catalog)
+              ? irData.catalog
+              : [];
+
         const base = createEmptyProfile();
-        const rawModel = String(storeInfo.businessModel || '');
+        const rawModel = String(profBiz.businessModel || storeInfo.businessModel || '');
         const businessModel =
           rawModel === 'produtos' || rawModel === 'servicos' || rawModel === 'hibrido' || rawModel === 'sob_medida'
             ? rawModel
@@ -205,57 +243,67 @@ function PublicStorefrontRoute({
           ...base,
           business: {
             ...base.business,
-            name: String(storeInfo.name || 'Vitrine Online'),
-            segment: String(storeInfo.segment || 'Geral'),
+            name: String(profBiz.name || storeInfo.name || 'Vitrine Online'),
+            segment: String(profBiz.segment || storeInfo.segment || 'Geral'),
             businessModel,
-            description: String(storeInfo.description || ''),
-            address: String(storeInfo.address || ''),
-            hours: String(storeInfo.hours || ''),
+            description: String(profBiz.description || storeInfo.description || ''),
+            address: String(profBiz.address || storeInfo.address || ''),
+            hours: String(profBiz.hours || storeInfo.hours || ''),
           },
           brand: {
             ...base.brand,
-            logoUrl: String(storeInfo.logoUrl || ''),
-            storefrontPhotoUrl: String(storeInfo.storefrontPhotoUrl || ''),
+            logoUrl: String(profBrand.logoUrl || storeInfo.logoUrl || ''),
+            storefrontPhotoUrl: String(profBrand.storefrontPhotoUrl || storeInfo.storefrontPhotoUrl || ''),
             primaryColor:
-              typeof designTokens.accent === 'string' && designTokens.accent
-                ? designTokens.accent
-                : base.brand.primaryColor,
+              typeof profBrand.primaryColor === 'string' && profBrand.primaryColor
+                ? profBrand.primaryColor
+                : typeof designTokens.accent === 'string' && designTokens.accent
+                  ? designTokens.accent
+                  : base.brand.primaryColor,
             accentColor:
-              typeof designTokens.accent === 'string' && designTokens.accent
-                ? designTokens.accent
-                : base.brand.accentColor,
+              typeof profBrand.accentColor === 'string' && profBrand.accentColor
+                ? profBrand.accentColor
+                : typeof designTokens.accent === 'string' && designTokens.accent
+                  ? designTokens.accent
+                  : base.brand.accentColor,
           },
           whatsapp: {
             ...base.whatsapp,
-            connected: Boolean(storeInfo.whatsappE164),
-            phoneE164: String(storeInfo.whatsappE164 || ''),
-            displayPhone: String(storeInfo.whatsappE164 || ''),
+            connected: Boolean(profWa.phoneE164 || storeInfo.whatsappE164),
+            phoneE164: String(profWa.phoneE164 || storeInfo.whatsappE164 || ''),
+            displayPhone: String(profWa.displayPhone || profWa.phoneE164 || storeInfo.whatsappE164 || ''),
           },
           payment: {
             ...base.payment,
-            pixDiscountPercent: Number(storeInfo.pixDiscountPercent || 0) || 0,
+            pixDiscountPercent: Number(profPay.pixDiscountPercent ?? storeInfo.pixDiscountPercent ?? 0) || 0,
+          },
+          delivery: {
+            ...base.delivery,
+            defaultFeeCents: Number(profDel.defaultFeeCents || 0) || 0,
           },
           catalog: {
             products: catalogList,
           },
           publishedStore: {
             ...base.publishedStore,
-            published: true,
-            publicSlug: targetSlug || lookupKey,
+            published: !payload.draft,
+            publicSlug: String(profPub.publicSlug || targetSlug || lookupKey),
           },
           storeLayout: {
             ...base.storeLayout,
-            formulasIr: irData,
+            ...(irData ? { formulasIr: irData } : {}),
           },
         });
-        const sanitizedIr = sanitizeFormulaV9Document(irData, hydratedBase);
-        const hydrated: BusinessProfile = {
-          ...hydratedBase,
-          storeLayout: {
-            ...hydratedBase.storeLayout,
-            formulasIr: sanitizedIr,
-          },
-        };
+
+        const hydrated: BusinessProfile = irData
+          ? {
+              ...hydratedBase,
+              storeLayout: {
+                ...hydratedBase.storeLayout,
+                formulasIr: sanitizeFormulaV9Document(irData, hydratedBase),
+              },
+            }
+          : hydratedBase;
         setPublicProfile(hydrated);
       } catch (err) {
         if (active) {
@@ -271,7 +319,7 @@ function PublicStorefrontRoute({
     return () => {
       active = false;
     };
-  }, [lookupKey, targetSlug]);
+  }, [lookupKey, targetSlug, isAdminPreview]);
 
   if (loading) {
     return (
@@ -307,6 +355,17 @@ function PublicStorefrontRoute({
 
   return (
     <div data-testid="public-storefront-route" className="min-h-dvh w-full bg-[#F3F8FE] text-[#0F172A]">
+      {isAdminPreview ? (
+        <div
+          data-testid="admin-storefront-preview-banner"
+          className="sticky top-0 z-50 flex min-h-[40px] items-center justify-between gap-3 bg-[#DC2626] px-4 py-2 text-xs font-bold text-white shadow-sm"
+        >
+          <span>
+            Prévia Administrativa · {isDraftStore ? 'Loja em Rascunho (ainda não publicada)' : 'Loja Publicada ao Vivo'}
+          </span>
+          <span className="font-mono text-[11px] opacity-90">{lookupKey}</span>
+        </div>
+      ) : null}
       <CustomerStorefrontView
         profile={publicProfile}
         ownerId={lookupKey}
@@ -465,6 +524,12 @@ export function App() {
       <ToastProvider>
         <AccessCodeView
           onSuccess={() => {
+            const localShowcase = readLocalShowcaseSession();
+            if (localShowcase?.token && localShowcase.user?.id) {
+              const showcaseUser = toSupabaseUserFromShowcase(localShowcase);
+              setWorkspaceUser(showcaseUser.id);
+              setUser(showcaseUser);
+            }
             setCurrentRoute(null);
             clearAccessUrl(true);
           }}
@@ -487,6 +552,7 @@ export function App() {
     })();
     return (
       <ToastProvider>
+        <Suspense fallback={<div className="p-6 text-xs text-slate-400">Carregando módulo...</div>}>
         <CheckoutPlansView
           userId={user?.id}
           initialSubTab={initialCheckoutTab}
@@ -501,6 +567,7 @@ export function App() {
             } catch {}
           }}
         />
+        </Suspense>
       </ToastProvider>
     );
   }
@@ -639,9 +706,25 @@ function StudioApp({ user }: { user: User }) {
   }, [isDarkMode]);
 
   const handleLogout = useCallback(() => {
+    setSupportReadonlySession(null);
     clearLocalShowcaseSession();
+    try {
+      sessionStorage.removeItem('cg_validated_invite');
+      sessionStorage.removeItem(`cg_welcome_dismissed_${user.id}`);
+    } catch {}
+    void getDesktopBridge()?.setTrayStatus?.({
+      active: false,
+      phase: 'idle',
+      summary: 'Sessão encerrada',
+    });
     void supabase.auth.signOut({ scope: 'local' });
-  }, []);
+    try {
+      const url = new URL(window.location.href);
+      url.pathname = '/';
+      url.search = '?route=access';
+      window.history.replaceState({}, '', url.toString());
+    } catch {}
+  }, [user.id]);
 
   const refreshDashboard = useCallback(async () => {
     setDashboardLoading(true);
@@ -782,6 +865,13 @@ function StudioApp({ user }: { user: User }) {
       const detail = (ev as CustomEvent<{ balance?: number }>).detail;
       if (detail && typeof detail.balance === 'number') {
         setCreditBalance(detail.balance);
+      } else {
+        void authenticatedFetch('/api/credits/balance', undefined, user.id)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => {
+            if (active && typeof j?.balance === 'number') setCreditBalance(j.balance);
+          })
+          .catch(() => {});
       }
     };
     const onInsufficientCredits = (ev: Event) => {
@@ -1352,10 +1442,12 @@ function StudioApp({ user }: { user: User }) {
           storeName={storeName}
           activeTab={activeTab}
           onSelectTab={handleSelectTab}
+          onOpenSupport={() => setSupportModalOpen(true)}
           connectionPhaseInfo={connectionPhaseInfo}
           pendingOrdersCount={pendingOrdersCount}
           waitingHumanCount={notificationsState.waitingHumanCount}
           isAdmin={isAdmin}
+          onLogout={handleLogout}
           electronHealth={{
             isDesktop,
             trayActive: isDesktop,
@@ -1441,6 +1533,7 @@ function StudioApp({ user }: { user: User }) {
 
         {/* Main Workspace Stage (extra bottom padding on mobile for 64px fixed bar) */}
         <main className="flex-1 min-h-0 overflow-y-auto pb-20 min-[769px]:pb-0">
+          <Suspense fallback={<div className="p-6 text-xs text-slate-400">Carregando módulo...</div>}>
           {/* TAB 1: Minha Loja */}
           {!previewKind && activeTab === 'store' &&
             (archetypeComposerOpen && isStoreOperationReady ? (
@@ -1513,10 +1606,13 @@ function StudioApp({ user }: { user: User }) {
               activeTab === 'whatsapp' && !previewKind
                 ? undefined
                 : {
-                    visibility: 'hidden',
-                    pointerEvents: 'none',
                     position: 'fixed',
-                    inset: 0,
+                    left: '-12000px',
+                    top: 0,
+                    width: '1024px',
+                    height: '768px',
+                    opacity: 0.01,
+                    pointerEvents: 'none',
                     zIndex: -1,
                   }
             }
@@ -1592,10 +1688,25 @@ function StudioApp({ user }: { user: User }) {
               profile={profile}
               owner={user.id}
               ownerEmail={user.email}
+              creditBalance={creditBalance}
               runtimeStatus={runtimeStatus}
               isDarkMode={isDarkMode}
               onToggleDarkMode={() => setIsDarkMode((v) => !v)}
               onProfileUpdated={handleProfileUpdated}
+              onStoreReset={() => {
+                setArchetypeComposerOpen(false);
+                setPreviewKind(null);
+                setActiveTab('store');
+                openWizard(1);
+              }}
+              onOpenCheckout={() => {
+                try {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('route', 'checkout');
+                  window.history.pushState({}, '', url.toString());
+                } catch {}
+                window.dispatchEvent(new CustomEvent('companygen:open-checkout'));
+              }}
               onLogout={handleLogout}
               onOpenExpressWizard={openWizard}
               onOpenWhatsApp={() => setActiveTab('whatsapp')}
@@ -1616,6 +1727,7 @@ function StudioApp({ user }: { user: User }) {
               />
             </div>
           )}
+          </Suspense>
         </main>
         </div>
       </div>
@@ -1745,6 +1857,7 @@ function StudioApp({ user }: { user: User }) {
         onOpenSupport={() => setSupportModalOpen(true)}
         onToggleDarkMode={() => setIsDarkMode((v) => !v)}
         onOpenTour={() => setWelcomeOpen(true)}
+        onLogout={handleLogout}
       />
 
       <SupportTicketModal
@@ -1753,6 +1866,16 @@ function StudioApp({ user }: { user: User }) {
         userId={user.id}
         storeName={storeName}
       />
+
+      {!previewKind ? (
+        <GlobalAiAssistantWidget
+          activeTab={activeTab}
+          storeName={storeName}
+          creditBalance={creditBalance}
+          onOpenSupport={() => setSupportModalOpen(true)}
+          onNavigateTab={(tab) => setActiveTab(tab)}
+        />
+      ) : null}
     </div>
   );
 }

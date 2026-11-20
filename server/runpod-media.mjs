@@ -129,6 +129,9 @@ export async function generateRunPodImage({
     height: Math.max(256, Math.min(1536, Number(height) || 1024)),
     output_format: 'webp',
   };
+  if (arguments[0]?.negativePrompt) {
+    inputPayload.negative_prompt = String(arguments[0].negativePrompt).slice(0, 400);
+  }
   if (normalizedKind === 'edit' && sourceImageBase64) {
     inputPayload.image = sourceImageBase64;
     inputPayload.image_url = sourceImageBase64;

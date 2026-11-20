@@ -22,6 +22,9 @@ import {
   Users,
   Bot,
   UserCheck,
+  Maximize2,
+  Minimize2,
+  Wrench,
 } from 'lucide-react';
 import {
   ActionButton,
@@ -124,6 +127,8 @@ export function WhatsAppConnectionView({
   const [autonomyMode, setAutonomyMode] = React.useState<'sugestao' | 'misto' | 'autonomo'>('misto');
   const [autonomyAccordionOpen, setAutonomyAccordionOpen] = React.useState(false);
   const [channelTab, setChannelTab] = React.useState<'simulator' | 'real'>('real');
+  const [whatsappFullscreen, setWhatsappFullscreen] = React.useState(false);
+  const [repairingWhatsapp, setRepairingWhatsapp] = React.useState(false);
   const [soundMuted, setSoundMuted] = React.useState<boolean>(() => {
     try {
       return window.localStorage.getItem('companygen:sound_muted') === '1';
@@ -187,6 +192,73 @@ export function WhatsAppConnectionView({
       }
       return next;
     });
+  };
+
+  React.useEffect(() => {
+    if (!whatsappFullscreen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setWhatsappFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [whatsappFullscreen]);
+
+  React.useEffect(() => {
+    if (!effectiveUserId) return;
+    const syncCredits = async () => {
+      try {
+        const res = await authenticatedFetch('/api/credits/balance', { method: 'GET' }, effectiveUserId);
+        const json = await res.json().catch(() => null);
+        if (typeof json?.balance === 'number') setCreditBalance(json.balance);
+      } catch {}
+    };
+    const onCreditsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ balance?: number }>).detail;
+      if (typeof detail?.balance === 'number') {
+        setCreditBalance(detail.balance);
+      } else {
+        void syncCredits();
+      }
+    };
+    const onFocus = () => {
+      void syncCredits();
+    };
+    window.addEventListener('companygen:credits-updated', onCreditsUpdated);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('companygen:credits-updated', onCreditsUpdated);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [effectiveUserId]);
+
+  const handleAutoRepairWhatsapp = async () => {
+    if (repairingWhatsapp) return;
+    setRepairingWhatsapp(true);
+    try {
+      const bridge = getDesktopBridge();
+      if (bridge?.repairWhatsAppWebview) {
+        const res = await bridge.repairWhatsAppWebview();
+        if (res?.ok) {
+          showToast({
+            type: 'success',
+            message: 'WhatsApp Web reparado e recarregado sem perder sua conexão.',
+          });
+        } else {
+          showToast({
+            type: 'error',
+            message: res?.reason || 'Não foi possível reparar o WebView agora.',
+          });
+        }
+      } else {
+        await refreshStatus();
+        showToast({
+          type: 'success',
+          message: 'Status do WhatsApp atualizado.',
+        });
+      }
+    } finally {
+      setRepairingWhatsapp(false);
+    }
   };
 
   const handleRunLiveSofiaTest = async (
@@ -874,16 +946,16 @@ export function WhatsAppConnectionView({
 
         <div className="flex flex-wrap items-center gap-2">
           {(() => {
-            const hasCloudCredits = cloudAiAvailable && (creditBalance === null || creditBalance >= 2);
+            const hasCloudCredits = cloudAiAvailable && (creditBalance === null || creditBalance >= 0.1);
             const hasAnyAi = hasCloudCredits || Boolean(ollamaOnline);
-            const msgsLeft = creditBalance !== null ? Math.max(0, Math.floor(creditBalance / 2)) : null;
+            const msgsLeft = creditBalance !== null ? Math.max(0, Math.floor((creditBalance + 1e-9) / 0.1)) : null;
             const label = !aiEnabled
               ? 'Sofia Pausada'
-              : responderStatus.pauseReason === 'credit_exhausted' || (cloudAiAvailable && creditBalance !== null && creditBalance < 2 && !ollamaOnline)
+              : responderStatus.pauseReason === 'credit_exhausted' || (cloudAiAvailable && creditBalance !== null && creditBalance < 0.1 && !ollamaOnline)
                 ? 'Sem Créditos (0 msgs)'
                 : hasCloudCredits
                   ? msgsLeft !== null
-                    ? `IA Nuvem Ativa · ~${msgsLeft} msgs`
+                    ? `IA Nuvem Ativa · ~${msgsLeft.toLocaleString('pt-BR')} msgs`
                     : 'IA Nuvem Ativa'
                   : ollamaOnline
                     ? 'IA Local Ativa'
@@ -894,7 +966,7 @@ export function WhatsAppConnectionView({
                 className={`cg-tabular inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold ${
                   hasAnyAi && aiEnabled && responderStatus.pauseReason !== 'credit_exhausted'
                     ? 'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300'
-                    : !aiEnabled || responderStatus.pauseReason === 'credit_exhausted' || (cloudAiAvailable && creditBalance !== null && creditBalance < 2)
+                    : !aiEnabled || responderStatus.pauseReason === 'credit_exhausted' || (cloudAiAvailable && creditBalance !== null && creditBalance < 0.1)
                       ? 'border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300'
                       : 'border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-300'
                 }`}
@@ -938,15 +1010,15 @@ export function WhatsAppConnectionView({
         </div>
       )}
 
-      {/* Grid 50% / 50% Desktop — Coluna Esquerda (Cérebro, Fila & Conhecimento) + Coluna Direita (Canal & Sandbox) */}
-      <div className="grid flex-1 min-h-0 gap-4 overflow-y-auto p-4 sm:p-6 lg:grid-cols-2">
-        {/* COLUNA ESQUERDA (50%) — Cérebro, Fila & Conhecimento */}
+      {/* Grid Assimétrico Desktop (FILA 13: ~33% Cérebro / ~67% WhatsApp Real com Tela Cheia sem desmontar <webview>) */}
+      <div className="grid flex-1 min-h-0 gap-4 overflow-y-auto p-3 sm:p-5 lg:grid-cols-[minmax(360px,0.8fr)_minmax(640px,1.6fr)]">
+        {/* COLUNA ESQUERDA (~33%) — Cérebro, Fila & Conhecimento */}
         <section
           aria-label="Cérebro, Fila Humana e Conhecimento da Sofia"
-          className="flex min-w-0 flex-col gap-3.5 rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4 sm:p-5 shadow-sm"
+          className="flex min-w-0 flex-col gap-3.5 rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4 shadow-sm"
         >
           {/* 3 Toolbar Pills Mutuamente Exclusivos */}
-          <div className="grid grid-cols-1 gap-2 border-b border-slate-100 dark:border-[#1E293B] pb-3 sm:grid-cols-3">
+          <div className="flex flex-wrap gap-2 border-b border-slate-100 dark:border-[#1E293B] pb-3">
             <button
               type="button"
               data-testid="wpp-drawer-human-queue-btn"
@@ -1278,7 +1350,7 @@ export function WhatsAppConnectionView({
                 data-testid="wpp-ai-brain-collapse-btn"
                 aria-expanded={aiBrainExpanded}
                 onClick={() => setAiBrainExpanded((prev) => !prev)}
-                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                className="flex min-w-[210px] flex-1 items-center gap-2 text-left"
               >
                 <ChevronDown
                   className={`size-4 shrink-0 text-slate-500 transition-transform ${aiBrainExpanded ? 'rotate-180' : ''}`}
@@ -1470,12 +1542,18 @@ export function WhatsAppConnectionView({
           </div>
         </section>
 
-        {/* COLUNA DIREITA (50%) — Canal & Sandbox (Simulador Seguro ↔ WhatsApp Real (.exe)) */}
+        {/* COLUNA DIREITA (~68%) — Canal & Sandbox (Simulador Seguro ↔ WhatsApp Real com Tela Cheia sem desmontar <webview>) */}
         <section
           aria-label="Canal e Sandbox da Sofia"
-          className="flex min-w-0 min-h-[380px] flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] shadow-sm"
+          data-testid="wpp-channel-section"
+          data-fullscreen={whatsappFullscreen ? 'true' : 'false'}
+          className={
+            whatsappFullscreen
+              ? 'fixed inset-0 z-40 flex min-w-0 flex-col overflow-hidden bg-white dark:bg-[#111726] shadow-2xl'
+              : 'flex min-w-0 min-h-[680px] lg:h-[calc(100vh-195px)] flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] shadow-sm'
+          }
         >
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-[#1E293B] bg-slate-50/70 dark:bg-[#090D16] px-4 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-[#1E293B] bg-slate-50/70 dark:bg-[#090D16] px-4 py-2">
             <div className="inline-flex rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#111726] p-1">
               <button
                 type="button"
@@ -1499,12 +1577,49 @@ export function WhatsAppConnectionView({
                     : 'text-slate-600 dark:text-slate-300 hover:text-[#0F172A] dark:hover:text-white'
                 }`}
               >
-                WhatsApp Real (.exe)
+                WhatsApp Real
               </button>
             </div>
-            <span className="text-[11px] font-medium text-slate-500 dark:text-[#94A3B8]">
-              {channelTab === 'simulator' ? 'Teste grátis sem tocar em clientes reais' : 'Sessão local isolada'}
-            </span>
+            <div className="flex items-center gap-2">
+              {channelTab === 'real' && (
+                <>
+                  <button
+                    type="button"
+                    data-testid="wpp-auto-repair-btn"
+                    disabled={repairingWhatsapp}
+                    onClick={() => void handleAutoRepairWhatsapp()}
+                    title="Limpar cache do WhatsApp Web mantendo sua conta conectada"
+                    className="inline-flex min-h-[34px] items-center gap-1.5 rounded-lg border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#111726] px-2.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1E293B] transition disabled:opacity-50"
+                  >
+                    <Wrench className={`size-3.5 ${repairingWhatsapp ? 'animate-spin' : ''}`} />
+                    <span>{repairingWhatsapp ? 'Reparando...' : 'Corrigir WhatsApp'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="wpp-fullscreen-toggle-btn"
+                    onClick={() => setWhatsappFullscreen((prev) => !prev)}
+                    className="inline-flex min-h-[34px] items-center gap-1.5 rounded-lg border border-blue-200 dark:border-blue-500/40 bg-blue-50 dark:bg-blue-500/15 px-2.5 text-[11px] font-bold text-[#2563EB] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 transition"
+                  >
+                    {whatsappFullscreen ? (
+                      <>
+                        <Minimize2 className="size-3.5" />
+                        <span>Sair da Tela Cheia (Esc)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="size-3.5" />
+                        <span>Expandir (Tela Cheia)</span>
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
+              {channelTab === 'simulator' && (
+                <span className="text-[11px] font-medium text-slate-500 dark:text-[#94A3B8]">
+                  Teste grátis sem tocar em clientes reais
+                </span>
+              )}
+            </div>
           </div>
 
           {channelTab === 'simulator' ? (
@@ -1670,30 +1785,31 @@ export function WhatsAppConnectionView({
               )}
             </div>
           ) : (
-            <div className="flex flex-1 flex-col min-h-0 overflow-auto p-3 sm:p-4 space-y-3">
-              {/* 3 checkmarks de proteção anti-ban antes do QR Code */}
-              <div
-                data-testid="wpp-antiban-preqr-checks"
-                className="grid grid-cols-1 gap-1.5 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/70 dark:bg-emerald-500/10 p-3 text-[11px] text-emerald-900 dark:text-emerald-200 sm:grid-cols-3"
-              >
-                <span className="flex items-center gap-1.5 font-semibold">
-                  <CheckCircle2 className="size-3.5 shrink-0 text-[#10B981]" />
-                  Leitura humanizada (2–4s)
-                </span>
-                <span className="flex items-center gap-1.5 font-semibold">
-                  <CheckCircle2 className="size-3.5 shrink-0 text-[#10B981]" />
-                  Máx. 2 balões por resposta
-                </span>
-                <span className="flex items-center gap-1.5 font-semibold">
-                  <CheckCircle2 className="size-3.5 shrink-0 text-[#10B981]" />
-                  Pausa automática humana
-                </span>
-              </div>
+            <div className="flex flex-1 flex-col min-h-0 overflow-hidden p-2 sm:p-3 gap-2">
+              {!whatsappFullscreen && (
+                <div
+                  data-testid="wpp-antiban-preqr-checks"
+                  className="grid grid-cols-1 gap-1.5 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/70 dark:bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-900 dark:text-emerald-200 sm:grid-cols-3 shrink-0"
+                >
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    <CheckCircle2 className="size-3.5 shrink-0 text-[#10B981]" />
+                    Leitura humanizada (2–4s)
+                  </span>
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    <CheckCircle2 className="size-3.5 shrink-0 text-[#10B981]" />
+                    Máx. 2 balões por resposta
+                  </span>
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    <CheckCircle2 className="size-3.5 shrink-0 text-[#10B981]" />
+                    Pausa automática humana
+                  </span>
+                </div>
+              )}
 
-              {desktopBridge?.isDesktop && (
+              {desktopBridge?.isDesktop && !whatsappFullscreen && (
                 <div
                   data-testid="wpp-desktop-live-responder-status"
-                  className="rounded-xl border border-slate-200 dark:border-[#334155] bg-slate-50 dark:bg-[#090D16] px-3 py-2 text-xs text-slate-700 dark:text-slate-300"
+                  className="rounded-xl border border-slate-200 dark:border-[#334155] bg-slate-50 dark:bg-[#090D16] px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 shrink-0"
                 >
                   {responderStatus.active
                     ? `Atendente Desktop ativo no WhatsApp Web (${responderStatus.repliedCount} enviada${responderStatus.repliedCount === 1 ? '' : 's'})`
@@ -1701,10 +1817,13 @@ export function WhatsAppConnectionView({
                 </div>
               )}
 
-              <div className="flex-1 min-h-0 overflow-auto rounded-xl bg-white p-3">
+              <div
+                data-testid="wpp-real-preview-frame"
+                className="flex-1 min-h-[600px] overflow-hidden rounded-xl border border-slate-200 dark:border-[#334155] bg-white dark:bg-[#090D16]"
+              >
                 {initialLoading && !data && !desktopBridge?.isDesktop ? (
                   <div className="p-5">
-                    <SkeletonBlock width="100%" height="340px" rounded="xl" />
+                    <SkeletonBlock width="100%" height="560px" rounded="xl" />
                   </div>
                 ) : (
                   <RealWhatsAppWeb

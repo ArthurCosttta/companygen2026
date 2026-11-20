@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   Activity,
+  HelpCircle,
+  LogOut,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -68,6 +70,8 @@ export interface SidebarProps {
   isAdmin?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  onOpenSupport?: () => void;
+  onLogout?: () => void;
   electronHealth?: ElectronHealthInfo;
 }
 
@@ -92,6 +96,8 @@ export function Sidebar({
   isAdmin = false,
   collapsed: controlledCollapsed,
   onToggleCollapse,
+  onOpenSupport,
+  onLogout,
   electronHealth,
 }: SidebarProps) {
   const isDark = useDocumentDarkMode();
@@ -317,59 +323,101 @@ export function Sidebar({
           </nav>
         </div>
 
-        {/* Desktop .exe Health Footer (only when running inside Electron) */}
-        {electronHealth?.isDesktop ? (
-          <div
-            data-testid="sidebar-exe-health"
-            title={`App Desktop · Bandeja ${electronHealth.trayActive !== false ? 'Ativa' : 'Inativa'}${typeof electronHealth.lastPollMs === 'number' ? ` · Sync ${electronHealth.lastPollMs}ms` : ''}`}
-            className={cn(
-              'mt-4 rounded-xl border p-2.5 text-[11px]',
-              collapsed ? 'flex justify-center p-2' : 'space-y-1',
-              isDark
-                ? 'border-emerald-500/25 bg-emerald-950/20 text-emerald-200'
-                : 'border-emerald-200 bg-emerald-50/80 text-emerald-900',
-            )}
-          >
-            {collapsed ? (
-              <Activity className="size-4 text-emerald-500" aria-hidden="true" />
-            ) : (
-              <>
-                <div className="flex items-center justify-between gap-2 font-bold">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
-                    App Desktop
-                  </span>
-                  <span className="cg-tabular opacity-80">
-                    {typeof electronHealth.lastPollMs === 'number'
-                      ? `${electronHealth.lastPollMs}ms`
-                      : 'Ativo'}
-                  </span>
-                </div>
-                <p className="truncate text-[10px] opacity-80">
-                  Bandeja {electronHealth.trayActive !== false ? 'ativa' : 'pausada'} · Som{' '}
-                  {electronHealth.soundEnabled !== false ? 'ligado' : 'mudo'}
-                </p>
-                {electronHealth.updateReadyVersion ? (
-                  <button
-                    type="button"
-                    data-testid="sidebar-updater-restart-btn"
-                    onClick={electronHealth.onInstallUpdate}
-                    className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-lg bg-[#2563EB] px-2 py-1 text-[10px] font-bold text-white shadow-xs hover:bg-[#1D4ED8]"
-                  >
-                    Atualização pronta ({electronHealth.updateReadyVersion}) · Reiniciar
-                  </button>
-                ) : null}
-              </>
-            )}
-          </div>
-        ) : null}
+        <div className="mt-4 space-y-2">
+          {/* Desktop .exe Health Footer (only when running inside Electron) */}
+          {electronHealth?.isDesktop ? (
+            <div
+              data-testid="sidebar-exe-health"
+              title={`App Desktop · Bandeja ${electronHealth.trayActive !== false ? 'Ativa' : 'Inativa'}${typeof electronHealth.lastPollMs === 'number' ? ` · Sync ${electronHealth.lastPollMs}ms` : ''}`}
+              className={cn(
+                'rounded-xl border p-2.5 text-[11px]',
+                collapsed ? 'flex justify-center p-2' : 'space-y-1',
+                isDark
+                  ? 'border-emerald-500/25 bg-emerald-950/20 text-emerald-200'
+                  : 'border-emerald-200 bg-emerald-50/80 text-emerald-900',
+              )}
+            >
+              {collapsed ? (
+                <Activity className="size-4 text-emerald-500" aria-hidden="true" />
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-2 font-bold">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                      App Desktop
+                    </span>
+                    <span className="cg-tabular opacity-80">
+                      {typeof electronHealth.lastPollMs === 'number'
+                        ? `${electronHealth.lastPollMs}ms`
+                        : 'Ativo'}
+                    </span>
+                  </div>
+                  <p className="truncate text-[10px] opacity-80">
+                    Bandeja {electronHealth.trayActive !== false ? 'ativa' : 'pausada'} · Som{' '}
+                    {electronHealth.soundEnabled !== false ? 'ligado' : 'mudo'}
+                  </p>
+                  {electronHealth.updateReadyVersion ? (
+                    <button
+                      type="button"
+                      data-testid="sidebar-updater-restart-btn"
+                      onClick={electronHealth.onInstallUpdate}
+                      className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-lg bg-[#2563EB] px-2 py-1 text-[10px] font-bold text-white shadow-xs hover:bg-[#1D4ED8]"
+                    >
+                      Atualização pronta ({electronHealth.updateReadyVersion}) · Reiniciar
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
+
+          {onOpenSupport ? (
+            <button
+              type="button"
+              data-testid="sidebar-support-btn"
+              onClick={onOpenSupport}
+              title={collapsed ? 'Suporte & Ajuda' : undefined}
+              aria-label="Suporte & Ajuda"
+              className={cn(
+                'flex w-full min-h-[40px] items-center rounded-xl border text-xs font-semibold transition-colors',
+                collapsed ? 'justify-center px-0 py-2' : 'gap-2.5 px-3 py-2',
+                isDark
+                  ? 'border-slate-800 bg-slate-900/60 text-slate-200 hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300'
+                  : 'border-slate-200/80 bg-slate-50 text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700',
+              )}
+            >
+              <HelpCircle className="size-4 shrink-0 text-[#2563EB]" aria-hidden="true" />
+              {!collapsed ? <span className="truncate">Suporte & Ajuda</span> : null}
+            </button>
+          ) : null}
+
+          {onLogout ? (
+            <button
+              type="button"
+              data-testid="sidebar-logout-btn"
+              onClick={onLogout}
+              title={collapsed ? 'Sair da Conta' : undefined}
+              aria-label="Sair da Conta"
+              className={cn(
+                'flex w-full min-h-[40px] items-center rounded-xl border text-xs font-semibold transition-colors',
+                collapsed ? 'justify-center px-0 py-2' : 'gap-2.5 px-3 py-2',
+                isDark
+                  ? 'border-slate-800 bg-transparent text-slate-400 hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300'
+                  : 'border-slate-200/80 bg-transparent text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700',
+              )}
+            >
+              <LogOut className="size-4 shrink-0" aria-hidden="true" />
+              {!collapsed ? <span className="truncate">Sair da Conta</span> : null}
+            </button>
+          ) : null}
+        </div>
       </aside>
 
       {/* Mobile Fixed Bottom Bar (<= 768px, 64px height) */}
       <nav
         aria-label="Navegação inferior"
         className={cn(
-          'cg-sidebar fixed inset-x-0 bottom-0 z-40 grid h-16 items-center gap-1 border-t px-2 backdrop-blur-md min-[769px]:hidden',
+          'fixed inset-x-0 bottom-0 z-40 grid h-16 items-center gap-1 border-t px-2 backdrop-blur-md min-[769px]:hidden',
           isDark
             ? 'border-slate-800 bg-[#111726]/95'
             : 'border-[var(--cg-border)] bg-white/95',

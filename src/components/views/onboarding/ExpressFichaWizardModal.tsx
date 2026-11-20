@@ -769,6 +769,15 @@ export function ExpressFichaWizardModal({
         (target) => {
           applyDraftFieldsToTarget(target);
           target.onboarding.storeGenerated = true;
+          if (!target.brand.storeIdentityId) {
+            const seed = `${draft.businessName}|${draft.segment || ''}|${draft.businessModel}`.toLowerCase();
+            let h = 2166136261;
+            for (let i = 0; i < seed.length; i += 1) {
+              h ^= seed.charCodeAt(i);
+              h = Math.imul(h, 16777619);
+            }
+            target.brand.storeIdentityId = `cg_${(h >>> 0).toString(16).padStart(8, '0')}`;
+          }
           target.catalog.products = target.catalog.products.map((item) => ({
             ...item,
             itemType:
@@ -805,12 +814,12 @@ export function ExpressFichaWizardModal({
         writeExpressFichaDraft(draft, owner);
         const errPayload = await genRes.json().catch(() => ({
           error: 'Saldo de créditos insuficiente para gerar a página com IA.',
-          required: 30,
+          required: 4,
         }));
         onProfileUpdated?.(snap);
         setStepError(
           errPayload?.error ||
-            'Sua ficha e uploads grátis foram salvos, mas seu saldo de créditos não atingiu os 30 cr da geração com IA.',
+            'Sua ficha e uploads grátis foram salvos, mas seu saldo de créditos não atingiu os 4 cr da geração com IA.',
         );
         return;
       }
@@ -1904,6 +1913,15 @@ export function ExpressFichaWizardModal({
                   </span>
                   <span>·</span>
                   <span>Fachada: {draft.storefrontPhotoUrl ? 'Enviada (0 cr)' : draft.noPhysicalLocation ? 'Online' : 'IA gera ambiente'}</span>
+                </div>
+                <div
+                  data-testid="wizard-credit-confirmation"
+                  className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 text-[11px] font-semibold text-[#0F172A]"
+                >
+                  <span>Confirmação de consumo: montar vitrine completa com IA</span>
+                  <span className="rounded-full bg-blue-50 px-2.5 py-0.5 font-extrabold text-[#1D4ED8]">
+                    4 créditos (estorno automático se falhar)
+                  </span>
                 </div>
               </div>
             </div>

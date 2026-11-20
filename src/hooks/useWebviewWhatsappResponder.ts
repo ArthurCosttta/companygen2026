@@ -48,10 +48,29 @@ export interface DesktopWhatsappBridge {
     isSelfChat?: boolean;
     msgKey?: string;
     text?: string;
+    hasAudio?: boolean;
+    items?: Array<{
+      kind: 'text' | 'audio';
+      hasAudio?: boolean;
+      durationHint?: string;
+      durationSeconds?: number;
+      text?: string;
+      msgKey: string;
+      prePlain?: string;
+    }>;
     selectorHealth?: 'ok' | 'degraded';
     missingSelector?: string;
     error?: string;
   }>;
+  extractWhatsAppAudio?: (payload: { msgKey?: string }) => Promise<{
+    ok?: boolean;
+    audioBase64?: string;
+    mimeType?: string;
+    sizeBytes?: number;
+    durationSeconds?: number;
+    reason?: string;
+  }>;
+  repairWhatsAppWebview?: () => Promise<{ ok?: boolean; preservedSession?: boolean; reason?: string }>;
   sendWhatsAppReply?: (payload: {
     chatTitle?: string;
     text: string;
@@ -405,6 +424,10 @@ export function useWebviewWhatsappResponder({
           pausedForHuman?: boolean;
           required?: number;
           balance?: number;
+          creditsCharged?: number;
+          debited?: number;
+          balanceAfter?: number;
+          debitReferenceId?: string | null;
           error?: string;
         } | null;
 
@@ -518,6 +541,13 @@ export function useWebviewWhatsappResponder({
 
           if (sent?.ok) {
             markMessageProcessed(lastMsgDedupeKey);
+            if (typeof aiJson.balanceAfter === 'number') {
+              try {
+                window.dispatchEvent(
+                  new CustomEvent('companygen:credits-updated', { detail: { balance: aiJson.balanceAfter } }),
+                );
+              } catch {}
+            }
             const sentAt = new Date().toISOString();
             const nextMediaCount = Number(sent.mediaSentCount || 0);
             if (aiJson.pausedForHuman) {
@@ -583,6 +613,31 @@ export function useWebviewWhatsappResponder({
               lastError: '',
             });
           } else {
+            // QA13-08: falha no envio WhatsApp = estorno automático (zero cobrança)
+            const charged = Number(aiJson.creditsCharged ?? aiJson.debited ?? 0);
+            if (charged > 0 && aiJson.debitReferenceId && userId) {
+              try {
+                const refundRes = await authenticatedFetch(
+                  '/api/whatsapp/ai/refund-failed-send',
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      referenceId: aiJson.debitReferenceId,
+                      amount: charged,
+                      reason: sent?.error || 'whatsapp_send_failed',
+                    }),
+                  },
+                  userId,
+                );
+                const refundJson = (await refundRes.json().catch(() => null)) as { balanceAfter?: number } | null;
+                if (typeof refundJson?.balanceAfter === 'number') {
+                  window.dispatchEvent(
+                    new CustomEvent('companygen:credits-updated', { detail: { balance: refundJson.balanceAfter } }),
+                  );
+                }
+              } catch {}
+            }
             const tries = (sharedRetryAttempts.get(lastMsgDedupeKey) || 0) + 1;
             sharedRetryAttempts.set(lastMsgDedupeKey, tries);
             if (tries >= 3) markMessageProcessed(lastMsgDedupeKey);
@@ -630,8 +685,31 @@ export function useWebviewWhatsappResponder({
         onActivityRef.current?.();
       } finally {
         sharedInFlightChatKeys.delete(chatDedupKey);
+        const queued = pendingDuringFlight.get(chatDedupKey);
+        if (queued && queued.length > 0 && live) {
+          pendingDuringFlight.delete(chatDedupKey);
+          setTimeout(() => {
+            if (!live) return;
+            for (const entry of queued) {
+              burstAccumulator.enqueue(chatDedupKey, entry.text, entry.meta);
+            }
+          }, 500);
+        }
       }
     };
+
+    const pendingDuringFlight = new Map<
+      string,
+      Array<{
+        text: string;
+        meta: {
+          chatTitle: string;
+          chatPhone: string;
+          isSelfChat: boolean;
+          lastMsgDedupeKey: string;
+        };
+      }>
+    >();
 
     const burstAccumulator = createBurstDebounceAccumulator<{
       chatTitle: string;
@@ -639,8 +717,8 @@ export function useWebviewWhatsappResponder({
       isSelfChat: boolean;
       lastMsgDedupeKey: string;
     }>({
-      debounceMs: 4500,
-      maxWaitMs: 10000,
+      debounceMs: 4000,
+      maxWaitMs: 12000,
       onFlush: (chatDedupKey, mergedText, meta) => processCustomerBurst(chatDedupKey, mergedText, meta),
     });
 
@@ -710,6 +788,7 @@ export function useWebviewWhatsappResponder({
     });
 
     let pausedByCredits = false;
+    let lastActivityAt = Date.now();
 
     const handleCreditsUpdated = () => {
       if (pausedByCredits && live) {
@@ -733,10 +812,19 @@ export function useWebviewWhatsappResponder({
       }
 
       inFlightRef.current = true;
-      const nextDelayMs = 1200;
+      // Poll adaptativo para PCs fracos (4 GB RAM): 1,2s ativo -> 3s após 2 min sem movimento
+      let nextDelayMs = Date.now() - lastActivityAt > 120_000 ? 3000 : 1200;
       try {
         const poll = await pollInbox();
         if (!live) return;
+
+        if (poll?.action === 'opened_unread_chat') {
+          lastActivityAt = Date.now();
+          nextDelayMs = 400;
+        } else if (poll?.action === 'incoming' || poll?.action === 'manual_human_takeover') {
+          lastActivityAt = Date.now();
+          nextDelayMs = 1200;
+        }
 
         if (poll?.selectorHealth === 'degraded') {
           setStatus((prev) => ({
@@ -754,32 +842,92 @@ export function useWebviewWhatsappResponder({
           );
         }
 
+        const hasIncomingAudio = Boolean(
+          poll?.hasAudio || (Array.isArray(poll?.items) && poll.items.some((item) => item.kind === 'audio' || item.hasAudio)),
+        );
+
         if (poll?.action === 'manual_human_takeover') {
           await handleManualTakeoverSignal(poll);
-        } else if (poll?.action === 'incoming' && poll.text?.trim()) {
+        } else if (poll?.action === 'incoming' && (poll.text?.trim() || hasIncomingAudio)) {
           pruneSharedMaps();
           const chatTitle = String(poll.chatTitle || 'Cliente WhatsApp').trim();
           const chatDedupKey = normalizeEchoText(poll.chatPhone || chatTitle || 'chat');
-          const msgDedupeKey = `${chatDedupKey}::${poll.msgKey || normalizeEchoText(poll.text)}`;
-          const incomingEchoKey = `${chatDedupKey}::${normalizeEchoText(poll.text)}`;
+          const rawText = String(poll.text || '').trim();
+          const msgDedupeKey = `${chatDedupKey}::${poll.msgKey || normalizeEchoText(rawText || 'audio')}`;
+          const incomingEchoKey = rawText ? `${chatDedupKey}::${normalizeEchoText(rawText)}` : '';
 
           if (
             !sharedHumanPausedKeys.has(chatDedupKey) &&
-            !sharedInFlightChatKeys.has(chatDedupKey) &&
             !sharedProcessedMsgIds.has(msgDedupeKey) &&
-            !sharedRecentBotEchoes.has(incomingEchoKey) &&
+            (!incomingEchoKey || !sharedRecentBotEchoes.has(incomingEchoKey)) &&
             !recentKeysRef.current.has(msgDedupeKey)
           ) {
             markMessageProcessed(msgDedupeKey);
-            burstAccumulator.enqueue(chatDedupKey, poll.text, {
-              chatTitle,
-              chatPhone: String(poll.chatPhone || '').trim(),
-              isSelfChat: Boolean(poll.isSelfChat),
-              lastMsgDedupeKey: msgDedupeKey,
-            });
+
+            // Monta o texto final da rajada, transcrevendo balões de áudio se houver
+            const parts: string[] = [];
+            const pollItems = Array.isArray(poll.items) && poll.items.length > 0
+              ? poll.items
+              : [{ kind: hasIncomingAudio && !rawText ? ('audio' as const) : ('text' as const), hasAudio: hasIncomingAudio, text: rawText, msgKey: poll.msgKey || '' }];
+
+            for (const item of pollItems) {
+              if (item.text?.trim()) {
+                parts.push(item.text.trim());
+              }
+              if (item.kind === 'audio' || item.hasAudio) {
+                let transcribed = '';
+                if (bridge.extractWhatsAppAudio && userId) {
+                  try {
+                    const extracted = await bridge.extractWhatsAppAudio({ msgKey: item.msgKey });
+                    if (extracted?.ok && extracted.audioBase64) {
+                      const sttRes = await authenticatedFetch(
+                        '/api/whatsapp/ai/transcribe-audio',
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            audioBase64: extracted.audioBase64,
+                            mimeType: extracted.mimeType || 'audio/ogg',
+                            durationSeconds: extracted.durationSeconds || item.durationSeconds || 0,
+                          }),
+                        },
+                        userId,
+                      );
+                      const sttJson = (await sttRes.json().catch(() => null)) as { ok?: boolean; transcript?: string } | null;
+                      if (sttJson?.ok && sttJson.transcript?.trim()) {
+                        transcribed = sttJson.transcript.trim();
+                      }
+                    }
+                  } catch {}
+                }
+                if (transcribed) {
+                  parts.push(`[Áudio do cliente]: "${transcribed}"`);
+                } else {
+                  parts.push('[Áudio do cliente não pôde ser transcrito — peça educadamente para mandar por texto]');
+                }
+              }
+            }
+
+            const finalIncomingText = parts.join('\n').trim();
+            if (finalIncomingText) {
+              const burstMeta = {
+                chatTitle,
+                chatPhone: String(poll.chatPhone || '').trim(),
+                isSelfChat: Boolean(poll.isSelfChat),
+                lastMsgDedupeKey: msgDedupeKey,
+              };
+              if (sharedInFlightChatKeys.has(chatDedupKey)) {
+                const list = pendingDuringFlight.get(chatDedupKey) || [];
+                list.push({ text: finalIncomingText, meta: burstMeta });
+                pendingDuringFlight.set(chatDedupKey, list.slice(-10));
+              } else {
+                burstAccumulator.enqueue(chatDedupKey, finalIncomingText, burstMeta);
+              }
+            }
           }
         }
       } catch (err) {
+        nextDelayMs = Math.min(3000, Math.max(1500, nextDelayMs * 2));
         if (live) {
           setStatus((prev) => ({
             ...prev,

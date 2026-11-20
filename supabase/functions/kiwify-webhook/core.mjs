@@ -1,13 +1,13 @@
 export const PLAN_CREDITS = Object.freeze({
-  "0USJqo5": 2500,
-  "7fBDYu4": 100,
-  "O0ueDhe": 300,
+  "0USJqo5": 250,
+  "7fBDYu4": 20,
+  "O0ueDhe": 55,
 });
 
 export const PLAN_CREDITS_BY_AMOUNT_CENTS = Object.freeze({
-  10000: 2500,
-  990: 100,
-  2490: 300,
+  10000: 250,
+  990: 20,
+  2490: 55,
 });
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -85,13 +85,13 @@ export function resolveCredits(event) {
     ["product", "name"],
   ]);
   if (/profissional/i.test(planName)) {
-    return { credits: 2500, planCode: planCode || planName, via: "plan_name" };
+    return { credits: 250, planCode: planCode || planName, via: "plan_name" };
   }
-  if (/r[aá]pida/i.test(planName)) {
-    return { credits: 100, planCode: planCode || planName, via: "plan_name" };
+  if (/r[aá]pida|entrada/i.test(planName)) {
+    return { credits: 20, planCode: planCode || planName, via: "plan_name" };
   }
-  if (/intermedi[aá]ria/i.test(planName)) {
-    return { credits: 300, planCode: planCode || planName, via: "plan_name" };
+  if (/intermedi[aá]ria|crescimento/i.test(planName)) {
+    return { credits: 55, planCode: planCode || planName, via: "plan_name" };
   }
 
   const amount = Number(readPath(event, ["Commissions", "charge_amount"]));

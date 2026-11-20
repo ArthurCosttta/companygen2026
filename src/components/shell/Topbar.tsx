@@ -55,7 +55,34 @@ export function Topbar({
 
   // Count-up suave de 350ms no saldo da Topbar (hidratação inicial instantânea)
   const [displayBalance, setDisplayBalance] = useState<number>(creditBalance);
+  const [lastSpent, setLastSpent] = useState<{ debited: number; label: string } | null>(null);
   const prevBalanceRef = useRef<number>(creditBalance);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let clearTimer: number | undefined;
+    const onCreditSpent = (event: Event) => {
+      const detail = (event as CustomEvent<{ debited?: number; action?: string }>)?.detail;
+      const debited = Number(detail?.debited || 0);
+      if (!(debited > 0)) return;
+      const rawAction = String(detail?.action || '');
+      const label = /whatsapp|sofia/i.test(rawAction)
+        ? 'WhatsApp'
+        : /create-page|subpage/i.test(rawAction)
+          ? 'Subpágina'
+          : /generate-full|storefront/i.test(rawAction)
+            ? 'Vitrine IA'
+            : 'IA';
+      setLastSpent({ debited, label });
+      if (clearTimer) window.clearTimeout(clearTimer);
+      clearTimer = window.setTimeout(() => setLastSpent(null), 8000);
+    };
+    window.addEventListener('companygen:credit-spent', onCreditSpent);
+    return () => {
+      window.removeEventListener('companygen:credit-spent', onCreditSpent);
+      if (clearTimer) window.clearTimeout(clearTimer);
+    };
+  }, []);
   const hasHydratedBalanceRef = useRef<boolean>(creditBalance > 0);
 
   useEffect(() => {
@@ -91,7 +118,7 @@ export function Topbar({
     const tick = (now: number) => {
       const progress = Math.min(1, (now - startAt) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      const next = Math.round(startValue + (targetValue - startValue) * eased);
+      const next = Math.round((startValue + (targetValue - startValue) * eased) * 100) / 100;
       setDisplayBalance(next);
       if (progress < 1) {
         rafId = requestAnimationFrame(tick);
@@ -236,8 +263,20 @@ export function Topbar({
           title="Abrir Central de Planos e Créditos de IA (Plano de R$ 100,00)"
         >
           <Sparkles className="size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />
-          <span className="sm:hidden">{displayBalance} cr</span>
-          <span className="hidden sm:inline">Planos IA · {displayBalance} cr</span>
+          <span className="sm:hidden">
+            {displayBalance.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} cr
+          </span>
+          <span className="hidden sm:inline">
+            Planos IA · {displayBalance.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} cr
+          </span>
+          {lastSpent ? (
+            <span
+              data-testid="topbar-last-credit-spent"
+              className="ml-1 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-700 dark:text-amber-300"
+            >
+              -{lastSpent.debited.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} cr ({lastSpent.label})
+            </span>
+          ) : null}
         </button>
 
         {!isCatalogEmpty ? (

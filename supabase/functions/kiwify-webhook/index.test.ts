@@ -28,15 +28,15 @@ Deno.test("alterar o corpo invalida a assinatura", async () => {
 Deno.test("resolve os três planos por código e por valor", () => {
   assertEquals(
     resolveCredits({ Subscription: { plan: { checkout_code: "7fBDYu4" } } }),
-    { credits: 100, planCode: "7fBDYu4", via: "plan_code" },
+    { credits: 20, planCode: "7fBDYu4", via: "plan_code" },
   );
   assertEquals(
     resolveCredits({ Subscription: { plan: { checkout_code: "O0ueDhe" } } }),
-    { credits: 300, planCode: "O0ueDhe", via: "plan_code" },
+    { credits: 55, planCode: "O0ueDhe", via: "plan_code" },
   );
   assertEquals(
     resolveCredits({ Commissions: { charge_amount: 10000 } }),
-    { credits: 2500, planCode: "10000", via: "amount_cents" },
+    { credits: 250, planCode: "10000", via: "amount_cents" },
   );
   assertEquals(resolveCredits({ Commissions: { charge_amount: 3223 } }), null);
 });

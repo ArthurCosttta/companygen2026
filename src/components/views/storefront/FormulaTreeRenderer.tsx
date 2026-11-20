@@ -895,7 +895,10 @@ export function FormulaTreeRenderer({
     <div
       style={styleVars}
       data-preview-viewport={previewViewport}
-      className="cg-light-preview @container/formula min-h-screen min-w-0 overflow-x-clip bg-[var(--cg-surface)] text-[var(--cg-ink)] antialiased"
+      className={cn(
+        'cg-light-preview @container/formula min-w-0 overflow-x-clip bg-[var(--cg-surface)] text-[var(--cg-ink)] antialiased',
+        editable ? 'min-h-full' : 'min-h-screen',
+      )}
       data-formula-version="9.0"
     >
       {sectionsToRender.map((sec) => {
@@ -1018,14 +1021,54 @@ export function FormulaTreeRenderer({
                 </div>
 
                 <div className="@min-[700px]/formula:col-span-6">
-                  <div className="aspect-[16/10] max-h-[210px] w-full overflow-hidden rounded-3xl border border-slate-200/80 bg-[#F1F5F9] @min-[640px]/formula:aspect-[4/3] @min-[640px]/formula:max-h-none">
+                  <div className="aspect-[16/10] max-h-[240px] w-full overflow-hidden rounded-3xl border border-slate-200/80 bg-[#F1F5F9] @min-[640px]/formula:aspect-[4/3] @min-[640px]/formula:max-h-[340px]">
                     {heroImg ? (
-                      <img src={heroImg} alt={sec.config.title} className="size-full object-cover" />
-                    ) : (
-                      <div className="flex size-full items-center justify-center text-sm font-semibold text-slate-400">
-                        {storeName}
-                      </div>
-                    )}
+                      <img
+                        src={heroImg}
+                        alt={sec.config.title}
+                        className={cn(
+                          'size-full',
+                          sec.config.imageFit === 'cover' ? 'object-cover' : 'object-contain',
+                        )}
+                      />
+                    ) : (() => {
+                      const featured = products
+                        .filter((p) => {
+                          const u = sanitizeSafeAssetUrl(p.imageUrl, '');
+                          return Boolean(u && !u.startsWith('data:image/svg+xml'));
+                        })
+                        .slice(0, 4);
+                      if (featured.length > 0) {
+                        return (
+                          <div
+                            data-testid="v9-hero-bento-collage"
+                            className="grid size-full grid-cols-2 gap-2 p-2.5 bg-white/80"
+                          >
+                            {featured.map((item) => (
+                              <div
+                                key={item.id}
+                                onClick={() => onSelectProductDetail?.(item)}
+                                className="group relative flex cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-1.5"
+                              >
+                                <img
+                                  src={sanitizeSafeAssetUrl(item.imageUrl, '')}
+                                  alt={item.name}
+                                  className="size-full object-contain transition-transform duration-200 group-hover:scale-105"
+                                />
+                                <span className="absolute bottom-1.5 left-1.5 right-1.5 truncate rounded-lg bg-slate-900/80 px-2 py-0.5 text-[10px] font-bold text-white">
+                                  {formatCurrencyBRL(item.priceCents)} · {item.name}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="flex size-full items-center justify-center text-sm font-semibold text-slate-400">
+                          {storeName}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1298,7 +1341,7 @@ export function FormulaTreeRenderer({
                 </div>
               ) : null}
 
-              <div className="mt-6 grid grid-cols-1 gap-4 @min-[640px]/formula:grid-cols-2 @min-[900px]/formula:grid-cols-4">
+              <div className="mt-6 grid grid-cols-2 gap-2.5 @min-[640px]/formula:grid-cols-2 @min-[640px]/formula:gap-4 @min-[900px]/formula:grid-cols-4">
                 {filtered.map((prod) => {
                   const isAdded = Boolean(addedIds[prod.id]);
                   const safeProdImg = sanitizeSafeAssetUrl(prod.imageUrl, '');
@@ -1388,12 +1431,17 @@ export function FormulaTreeRenderer({
                         <div className="cg-tabular whitespace-nowrap text-lg font-black text-[var(--cg-ink)]">
                           {formatCurrencyBRL(prod.priceCents)}
                         </div>
-                        {Number(prod.stock ?? 10) <= 0 ? (
+                        {(() => {
+                          const effectiveStock = typeof prod.stock === 'number' ? prod.stock : prod.stockQty;
+                          const isOutOfStock =
+                            prod.autoPausedOutOfStock === true ||
+                            (Boolean(prod.trackStock) && Number(effectiveStock ?? 0) <= 0);
+                          return isOutOfStock ? (
                           <button
                             type="button"
                             disabled
                             data-testid={`v9-add-cart-${prod.sku}`}
-                            className="inline-flex min-h-[44px] w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-200 px-3 text-center text-xs font-bold text-slate-500"
+                            className="inline-flex min-h-[40px] w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-200 px-2 text-center text-[11px] font-bold text-slate-500 @min-[640px]/formula:min-h-[44px] @min-[640px]/formula:px-3 @min-[640px]/formula:text-xs"
                           >
                             Esgotado
                           </button>
@@ -1403,7 +1451,7 @@ export function FormulaTreeRenderer({
                             data-testid={`v9-add-cart-${prod.sku}`}
                             onClick={() => handleCardAdd(prod)}
                             className={cn(
-                              'inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl px-3 text-center text-xs font-bold leading-tight text-white transition-colors',
+                              'inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl px-2 text-center text-[11px] font-bold leading-tight text-white transition-colors @min-[640px]/formula:min-h-[44px] @min-[640px]/formula:px-3 @min-[640px]/formula:text-xs',
                               isAdded
                                 ? 'bg-emerald-600'
                                 : 'bg-[var(--cg-accent)] hover:bg-[var(--cg-accent-deep)]',
@@ -1411,14 +1459,15 @@ export function FormulaTreeRenderer({
                           >
                             {isAdded ? (
                               <>
-                                <Check className="size-3.5" />
+                                <Check className="size-3.5 shrink-0" />
                                 <span>Adicionado</span>
                               </>
                             ) : (
                               <span>{sec.config.itemActionLabel || 'Adicionar à sacola'}</span>
                             )}
                           </button>
-                        )}
+                        );
+                        })()}
                       </div>
                     </article>
                   );

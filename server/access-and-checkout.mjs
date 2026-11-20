@@ -14,15 +14,22 @@ try {
 
 const EPHEMERAL_SHOWCASE_SECRET = randomBytes(32).toString('hex');
 
-// Tabela Oficial de Custos de Créditos de IA
+// Arredondamento monetário/crédito seguro em 2 casas decimais (evita drift IEEE-754)
+export function roundCredits(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  return Math.round((num + Number.EPSILON) * 100) / 100;
+}
+
+// Tabela Oficial de Custos de Créditos de IA (FILA 11: 0,1 cr = R$ 0,04-0,05/msg WhatsApp)
 export const CREDIT_ACTION_COSTS = {
-  glm_whatsapp: 2,
-  edit_block: 3,
-  generate_image_schnell: 5,
-  generate_hero_dev: 10,
-  edit_image_qwen: 10,
-  create_subpage: 15,
-  generate_full_storefront: 30,
+  glm_whatsapp: 0.1,
+  edit_block: 0.5,
+  generate_image_schnell: 1,
+  generate_hero_dev: 2,
+  edit_image_qwen: 2,
+  create_subpage: 2,
+  generate_full_storefront: 4,
 };
 
 export const SHOWCASE_PROFILE_CODES = new Set(['AI10-FARM-LUME']);
@@ -64,8 +71,21 @@ export function issueLocalShowcaseToken(userId, email = 'sandbox@companygen.loca
 
 const UUID_REGEX = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
+export function issueGuestInviteToken(userId, email) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub: userId,
+      email,
+      guest: true,
+      exp: Math.floor(Date.now() / 1000) + 12 * 3600,
+    }),
+    'utf8',
+  ).toString('base64url');
+  const sig = createHmac('sha256', getLocalShowcaseHmacSecret()).update(payload).digest('base64url');
+  return `cg-local-showcase.${payload}.${sig}`;
+}
+
 export function verifyLocalShowcaseToken(bearer) {
-  if (!isLocalShowcaseEnabled()) return null;
   if (typeof bearer !== 'string' || !bearer.startsWith('cg-local-showcase.')) return null;
   const parts = bearer.split('.');
   if (parts.length !== 3) return null;
@@ -76,54 +96,64 @@ export function verifyLocalShowcaseToken(bearer) {
   if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) return null;
   try {
     const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    if (typeof parsed?.sub !== 'string' || !UUID_REGEX.test(parsed.sub) || !parsed?.showcase) return null;
+    if (typeof parsed?.sub !== 'string' || !UUID_REGEX.test(parsed.sub)) return null;
     if (typeof parsed.exp !== 'number' || parsed.exp * 1000 <= Date.now()) return null;
+    if (parsed.guest === true) {
+      return { id: parsed.sub, email: String(parsed.email || 'guest@companygen.store'), isGuest: true };
+    }
+    if (!isLocalShowcaseEnabled() || !parsed?.showcase) return null;
     return { id: parsed.sub, email: String(parsed.email || 'sandbox@local') };
   } catch {
     return null;
   }
 }
 
-// Planos canônicos de crédito
+// Planos canônicos de crédito (FILA 11: alinhados a 0,1 cr/msg = R$ 0,04–0,05/msg)
 export const CREDIT_PLANS = [
   {
     id: 'plan_100_brl',
     slug: 'plan_100_brl',
     name: 'Plano Profissional IA',
-    credits: 2500,
+    credits: 250,
     priceCents: 10000,
     priceFormatted: 'R$ 100,00',
-    pricePerCredit: 'R$ 0,04',
-    savingsPercent: '60%',
+    pricePerCredit: 'R$ 0,40',
+    pricePerMessage: 'R$ 0,04',
+    estimatedMessages: 2500,
+    savingsPercent: '20%',
     popular: true,
     kiwifyUrl: 'https://pay.kiwify.com.br/0USJqo5',
-    description: 'Ideal para atendimento contínuo no WhatsApp durante o mês todo (~80-90 pedidos/dia).',
+    description: '250 créditos (200 + 50 bônus): até 2.500 respostas da Sofia ou vitrine IA + 20 fotos + 2.260 msgs.',
   },
   {
     id: 'plan_micro_10',
     slug: 'plan_micro_10',
-    name: 'Recarga Rápida',
-    credits: 100,
+    name: 'Recarga Entrada',
+    credits: 20,
     priceCents: 990,
-    priceFormatted: 'R$ 9,90/mês',
-    pricePerCredit: 'R$ 0,10',
+    priceFormatted: 'R$ 9,90',
+    pricePerCredit: 'R$ 0,50',
+    pricePerMessage: 'R$ 0,05',
+    estimatedMessages: 200,
     savingsPercent: null,
     popular: false,
     kiwifyUrl: 'https://pay.kiwify.com.br/7fBDYu4',
-    description: 'Pacote de entrada para testar o fluxo de respostas com clientes reais.',
+    description: '20 créditos: até 200 respostas da Sofia ou 1 vitrine IA + 4 fotos + 120 msgs no WhatsApp.',
   },
   {
     id: 'plan_growth_25',
     slug: 'plan_growth_25',
-    name: 'Recarga Intermediária',
-    credits: 300,
+    name: 'Recarga Crescimento',
+    credits: 55,
     priceCents: 2490,
-    priceFormatted: 'R$ 24,90/mês',
-    pricePerCredit: 'R$ 0,08',
-    savingsPercent: '20%',
+    priceFormatted: 'R$ 24,90',
+    pricePerCredit: 'R$ 0,45',
+    pricePerMessage: 'R$ 0,045',
+    estimatedMessages: 550,
+    savingsPercent: '10%',
     popular: false,
     kiwifyUrl: 'https://pay.kiwify.com.br/O0ueDhe',
-    description: 'Bom para picos de movimento e campanhas pontuais de vendas.',
+    description: '55 créditos (50 + 5 bônus): até 550 respostas da Sofia ou 2 vitrines + 10 fotos + 370 msgs.',
   },
 ];
 
@@ -341,14 +371,14 @@ export async function getCreditBalance({
   const ledgerPath = path.join(directory, 'credits_ledger.json');
   const ledger = await readJsonFile(ledgerPath, []);
   if (!Array.isArray(ledger) || ledger.length === 0) return 0;
-  return Math.max(0, Number(ledger[ledger.length - 1]?.balance_after || 0));
+  return Math.max(0, roundCredits(ledger[ledger.length - 1]?.balance_after || 0));
 }
 
 export function resolveActionCost(action, amount) {
-  if (Number.isFinite(Number(amount)) && Number(amount) >= 0) {
-    return Math.round(Number(amount));
+  if (amount !== undefined && amount !== null && amount !== '' && Number.isFinite(Number(amount)) && Number(amount) >= 0) {
+    return roundCredits(amount);
   }
-  return Math.max(0, Number(CREDIT_ACTION_COSTS[action] ?? 0));
+  return Math.max(0, roundCredits(CREDIT_ACTION_COSTS[action] ?? 0));
 }
 
 export async function getCreditLockState({
@@ -380,7 +410,7 @@ export async function applyKiwifyReversalLocal({
   readJsonFile = defaultReadJsonFile,
   atomicWriteJson,
 }) {
-  const reversal = Math.max(0, Math.round(Number(creditsToReverse) || 0));
+  const reversal = Math.max(0, roundCredits(creditsToReverse || 0));
   const refId = `kiwify:${String(orderId || '').trim()}:${String(eventType || 'chargeback').trim()}`;
   return serializeCreditOp(directory, async () => {
     const ledgerPath = path.join(directory, 'credits_ledger.json');
@@ -393,25 +423,25 @@ export async function applyKiwifyReversalLocal({
       return {
         ok: true,
         duplicate: true,
-        balance: Math.max(0, Number(existing.balance_after || 0)),
+        balance: Math.max(0, roundCredits(existing.balance_after || 0)),
         appliedDelta: 0,
         shortfallCredits: lockState.shortfallCredits,
         reviewFlag: lockState.reviewFlag,
       };
     }
 
-    const prevBalance = ledger.length > 0 ? Math.max(0, Number(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
+    const prevBalance = ledger.length > 0 ? Math.max(0, roundCredits(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
     const prevLock = await readJsonFile(lockPath, null);
-    let shortfall = Math.max(0, Number(prevLock?.shortfallCredits || 0));
+    let shortfall = Math.max(0, roundCredits(prevLock?.shortfallCredits || 0));
     let nextBalance = 0;
     let appliedDelta = 0;
     if (prevBalance >= reversal) {
-      appliedDelta = -reversal;
-      nextBalance = prevBalance - reversal;
+      appliedDelta = roundCredits(-reversal);
+      nextBalance = roundCredits(prevBalance - reversal);
     } else {
-      appliedDelta = -prevBalance;
+      appliedDelta = roundCredits(-prevBalance);
       nextBalance = 0;
-      shortfall += reversal - prevBalance;
+      shortfall = roundCredits(shortfall + (reversal - prevBalance));
     }
 
     const now = new Date().toISOString();
@@ -657,13 +687,13 @@ export async function debitCredits({
         err.status = 503;
         throw err;
       }
-      const balanceBefore = Math.max(0, Number(res.payload.balance_before ?? res.payload.balance_after ?? 0));
-      const balanceAfter = Math.max(0, Number(res.payload.balance_after ?? 0));
+      const balanceBefore = Math.max(0, roundCredits(res.payload.balance_before ?? res.payload.balance_after ?? 0));
+      const balanceAfter = Math.max(0, roundCredits(res.payload.balance_after ?? 0));
       const entry = {
         id: debitRef,
         db_entry_id: res.payload.entry_id || null,
         user_id: user.id,
-        delta: -Number(res.payload.debited ?? cost),
+        delta: roundCredits(-Number(res.payload.debited ?? cost)),
         balance_after: balanceAfter,
         operation_type: `debit_${action}`,
         action,
@@ -672,11 +702,11 @@ export async function debitCredits({
         created_at: new Date().toISOString(),
       };
       let lowCreditAlert = null;
-      if (balanceAfter < 15) {
+      if (balanceAfter < 2) {
         lowCreditAlert = await writeAlertDispatchUnsafe({
           userId: user.id,
           directory,
-          alertType: 'low_credits_15',
+          alertType: 'low_credits_2',
           details: { balanceAfter, action },
           readJsonFile,
           atomicWriteJson,
@@ -684,7 +714,7 @@ export async function debitCredits({
       }
       return {
         ok: true,
-        debited: Number(res.payload.debited ?? cost),
+        debited: roundCredits(res.payload.debited ?? cost),
         balanceBefore,
         balanceAfter,
         entry,
@@ -697,8 +727,8 @@ export async function debitCredits({
     const ledgerPath = path.join(directory, 'credits_ledger.json');
     const rawLedger = await readJsonFile(ledgerPath, []);
     const ledger = Array.isArray(rawLedger) ? [...rawLedger] : [];
-    const balanceBefore = ledger.length > 0 ? Math.max(0, Number(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
-    if (balanceBefore < cost) {
+    const balanceBefore = ledger.length > 0 ? Math.max(0, roundCredits(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
+    if (balanceBefore + 1e-9 < cost) {
       return {
         ok: false,
         status: 402,
@@ -707,11 +737,11 @@ export async function debitCredits({
         balance: balanceBefore,
       };
     }
-    const balanceAfter = balanceBefore - cost;
+    const balanceAfter = Math.max(0, roundCredits(balanceBefore - cost));
     const entry = {
       id: randomUUID(),
       user_id: user?.id || 'local-user',
-      delta: -cost,
+      delta: roundCredits(-cost),
       balance_after: balanceAfter,
       operation_type: `debit_${action}`,
       action,
@@ -730,11 +760,11 @@ export async function debitCredits({
       await rename(tmp, ledgerPath);
     }
     let lowCreditAlert = null;
-    if (balanceAfter < 15) {
+    if (balanceAfter < 2) {
       lowCreditAlert = await writeAlertDispatchUnsafe({
         userId: user?.id || 'local-user',
         directory,
-        alertType: 'low_credits_15',
+        alertType: 'low_credits_2',
         details: { balanceAfter, action },
         readJsonFile,
         atomicWriteJson,
@@ -819,8 +849,8 @@ export async function refundCredits({
     const ledgerPath = path.join(directory, 'credits_ledger.json');
     const rawLedger = await readJsonFile(ledgerPath, []);
     const ledger = Array.isArray(rawLedger) ? [...rawLedger] : [];
-    const balanceBefore = ledger.length > 0 ? Math.max(0, Number(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
-    const balanceAfter = balanceBefore + credit;
+    const balanceBefore = ledger.length > 0 ? Math.max(0, roundCredits(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
+    const balanceAfter = roundCredits(balanceBefore + credit);
     const entry = {
       id: randomUUID(),
       user_id: user?.id || 'local-user',
@@ -854,9 +884,8 @@ export async function refundCredits({
 
 // Rate Limiter em memória por workspace + IP (5 tentativas reais por minuto; dryRun com balde dedicado)
 const rateLimitMap = new Map();
-function checkRateLimit(bucketKey, maxAttempts = 5) {
+function checkRateLimit(bucketKey, maxAttempts = 5, windowMs = 60 * 1000) {
   const now = Date.now();
-  const windowMs = 60 * 1000;
 
   const entry = rateLimitMap.get(bucketKey) || { count: 0, resetAt: now + windowMs };
   if (now > entry.resetAt) {
@@ -935,6 +964,83 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
   }
 
   // 0b. POST /api/access/local-showcase-login (Sandbox Dev explícito com ALLOW_LOCAL_SHOWCASE_PROFILES=1)
+  if (pathname === '/api/access/guest-start') {
+    if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
+    const clientIp = req.socket?.remoteAddress || '127.0.0.1';
+    const rate = checkRateLimit(`guest-start:${path.dirname(directory)}:${clientIp}`, 5, 3600_000);
+    if (!rate.allowed) {
+      res.setHeader('Retry-After', String(rate.retryAfterSeconds));
+      throw new ApiError(429, `Muitas sessões convidadas neste IP. Aguarde ${rate.retryAfterSeconds}s.`);
+    }
+    const body = await readJson(req, 4096);
+    const rawCode = String(body?.code || body?.inviteCode || '').trim().toUpperCase();
+    if (!/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(rawCode)) {
+      throw new ApiError(400, 'Informe um código de convite válido no formato AI10-XXXX-XXXX.');
+    }
+    const codes = await loadAccessCodes();
+    const codeHash = computeSha256(rawCode);
+    let found = codes.find((c) => c.hash === codeHash);
+
+    const adminCfg = resolveSupabaseAdminConfig();
+    if (!found && process.env.CG_PERSISTENCE !== 'local' && adminCfg.url && adminCfg.serviceRoleKey) {
+      const cloudRes = await supabaseRestFetch({
+        url: adminCfg.url,
+        apiKey: adminCfg.serviceRoleKey,
+        route: `/rest/v1/cg_access_codes?code_hash=eq.${encodeURIComponent(codeHash)}&select=id,credits,code_masked,max_redemptions,redemption_count,expires_at,status&limit=1`,
+        method: 'GET',
+        fetchImpl: cloudFetch,
+      }).catch(() => null);
+      const row = cloudRes?.ok && Array.isArray(cloudRes.payload) ? cloudRes.payload[0] : null;
+      if (row) {
+        found = {
+          hash: codeHash,
+          credits: Number(row.credits || 0),
+          masked: row.code_masked,
+          status: row.status,
+          active: row.status !== 'revoked',
+        };
+      }
+    }
+    if (!found && SHOWCASE_PROFILE_CODES.has(rawCode)) {
+      found = {
+        hash: codeHash,
+        credits: 100,
+        masked: rawCode,
+        active: true,
+      };
+    }
+    if (!found || found.active === false) {
+      throw new ApiError(404, 'Código de convite não encontrado ou inativo.');
+    }
+    const guestUserId = randomUUID();
+    const guestDir = path.resolve(path.dirname(directory), guestUserId);
+    const guestLedgerPath = path.join(guestDir, 'credits_ledger.json');
+    const initialCredits = Math.max(0, Number(found.credits) || 100);
+    await atomicWriteJson(guestLedgerPath, [
+      {
+        id: randomUUID(),
+        user_id: guestUserId,
+        delta: initialCredits,
+        balance_after: initialCredits,
+        operation_type: 'guest_invite_start',
+        reference_id: found.hash,
+        metadata: { code_masked: found.masked, isGuest: true },
+        created_at: new Date().toISOString(),
+      },
+    ]);
+    const guestEmail = `guest.${guestUserId.slice(0, 8)}@guest.companygen.store`;
+    const token = issueGuestInviteToken(guestUserId, guestEmail);
+    return send(res, 200, {
+      ok: true,
+      token,
+      user: { id: guestUserId, email: guestEmail, isGuest: true },
+      code: rawCode,
+      credits: initialCredits,
+      balance: initialCredits,
+      isGuest: true,
+    });
+  }
+
   if (pathname === '/api/access/local-showcase-login') {
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
     if (!isLocalShowcaseEnabled()) {
@@ -951,7 +1057,36 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
     if (!rawCode) throw new ApiError(400, 'Informe o código de acesso.');
     const codes = await loadAccessCodes();
     const codeHash = computeSha256(rawCode);
-    const found = codes.find((c) => c.hash === codeHash);
+    let found = codes.find((c) => c.hash === codeHash);
+
+    const adminCfg = resolveSupabaseAdminConfig();
+    if (!found && process.env.CG_PERSISTENCE !== 'local' && adminCfg.url && adminCfg.serviceRoleKey) {
+      const cloudRes = await supabaseRestFetch({
+        url: adminCfg.url,
+        apiKey: adminCfg.serviceRoleKey,
+        route: `/rest/v1/cg_access_codes?code_hash=eq.${encodeURIComponent(codeHash)}&select=id,credits,code_masked,max_redemptions,redemption_count,expires_at,status&limit=1`,
+        method: 'GET',
+        fetchImpl: cloudFetch,
+      }).catch(() => null);
+      const row = cloudRes?.ok && Array.isArray(cloudRes.payload) ? cloudRes.payload[0] : null;
+      if (row) {
+        found = {
+          hash: codeHash,
+          credits: Number(row.credits || 0),
+          masked: row.code_masked,
+          status: row.status,
+          active: row.status !== 'revoked',
+        };
+      }
+    }
+    if (!found && SHOWCASE_PROFILE_CODES.has(rawCode)) {
+      found = {
+        hash: codeHash,
+        credits: 100,
+        masked: rawCode,
+        active: true,
+      };
+    }
     if (!found || !SHOWCASE_PROFILE_CODES.has(rawCode)) {
       throw new ApiError(404, 'Código sandbox não encontrado.');
     }
@@ -1123,6 +1258,7 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
       if (!data.success) {
         const errMap = {
           invalid_code: [404, 'Código de acesso inexistente.'],
+          recharge_code_use_settings: [400, 'Este código é de recarga para quem já tem conta. Entre na sua conta e resgate em Ajustes → Resgatar Código.'],
           inactive_code: [400, 'Este código de acesso foi revogado ou desativado.'],
           expired_code: [400, 'Este código de acesso expirou.'],
           depleted_code: [400, 'Código de acesso indisponível para resgate.'],
@@ -1133,8 +1269,8 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
       }
       return send(res, 200, {
         success: true,
-        creditsAdded: Number(data.credits_added || 0),
-        newBalance: Number(data.new_balance || 0),
+        creditsAdded: roundCredits(data.credits_added || 0),
+        newBalance: roundCredits(data.new_balance || 0),
         codeMasked: data.code_masked || '',
       });
     }
@@ -1150,6 +1286,12 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         }
 
         const found = { ...codes[foundIndex] };
+        if (found.codeType === 'user_recharge') {
+          throw new ApiError(
+            400,
+            'Este código é de recarga para quem já tem conta. Entre na sua conta e resgate em Ajustes → Resgatar Código.',
+          );
+        }
         if (found.status === 'revoked') {
           throw new ApiError(400, 'Este código de acesso foi revogado pelo administrador.');
         }
@@ -1163,7 +1305,7 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         // Carrega o ledger do usuário
         const rawLedger = await readJsonFile(ledgerPath, []);
         const ledger = Array.isArray(rawLedger) ? [...rawLedger] : [];
-        const currentBalance = ledger.length > 0 ? Math.max(0, Number(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
+        const currentBalance = ledger.length > 0 ? Math.max(0, roundCredits(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
         const alreadyRedeemed = ledger.some((entry) => entry?.reference_id === found.hash);
         if (alreadyRedeemed) {
           if (found.reusableInDev) {
@@ -1179,7 +1321,10 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         }
 
         // Atualiza contagem do código
+        const nowIso = new Date().toISOString();
         found.redemptionCount = Number(found.redemptionCount || 0) + 1;
+        found.lastRedeemedByEmail = String(user?.email || user?.id || '').trim() || null;
+        found.lastRedeemedAt = nowIso;
         if (!found.reusableInDev && found.redemptionCount >= found.maxRedemptions) {
           found.status = 'depleted';
         }
@@ -1187,8 +1332,8 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         await atomicWriteJson(codesPath, codes);
 
         // Adiciona ao ledger do usuário
-        const creditsToAdd = Number(found.credits || 0);
-        const newBalance = currentBalance + creditsToAdd;
+        const creditsToAdd = roundCredits(found.credits || 0);
+        const newBalance = roundCredits(currentBalance + creditsToAdd);
         const ledgerEntry = {
           id: randomUUID(),
           user_id: user?.id,
@@ -1196,8 +1341,8 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
           balance_after: newBalance,
           operation_type: 'welcome_invite',
           reference_id: found.hash,
-          metadata: { code_masked: found.masked },
-          created_at: new Date().toISOString(),
+          metadata: { code_masked: found.masked, code_type: 'invite_only' },
+          created_at: nowIso,
         };
         ledger.push(ledgerEntry);
         await atomicWriteJson(ledgerPath, ledger);
@@ -1286,6 +1431,173 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
       ok: true,
       costs: CREDIT_ACTION_COSTS,
     });
+  }
+
+  // 4c. GET /api/credits/redemption-quota (Autenticado — limite máx. 3 resgates de códigos de recarga por conta)
+  if (pathname === '/api/credits/redemption-quota') {
+    if (req.method !== 'GET') throw new ApiError(405, 'Método indisponível.');
+    if (isCloudCreditMode({ user, bearer: effectiveBearer })) {
+      const { url: sbUrl, serviceRoleKey } = resolveSupabaseAdminConfig();
+      const quotaRes = await supabaseRestFetch({
+        url: sbUrl,
+        apiKey: serviceRoleKey,
+        route: '/rest/v1/rpc/cg_get_recharge_redemption_quota',
+        method: 'POST',
+        body: { p_user_id: user.id },
+        fetchImpl: cloudFetch,
+      }).catch(() => null);
+      if (quotaRes?.ok && quotaRes.payload && typeof quotaRes.payload === 'object') {
+        const used = Math.max(0, Number(quotaRes.payload.used || 0));
+        const limit = Math.max(1, Number(quotaRes.payload.limit || 3));
+        return send(res, 200, { ok: true, used, limit, remaining: Math.max(0, limit - used) });
+      }
+    }
+    const rawLedger = await readJsonFile(ledgerPath, []);
+    const ledger = Array.isArray(rawLedger) ? rawLedger : [];
+    const used = ledger.filter((e) => e?.operation_type === 'recharge_code').length;
+    return send(res, 200, { ok: true, used, limit: 3, remaining: Math.max(0, 3 - used) });
+  }
+
+  // 4d. POST /api/credits/redeem-code (Autenticado — resgate de código especial 'user_recharge', máx. 3 por conta)
+  if (pathname === '/api/credits/redeem-code') {
+    if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
+    const body = await readJson(req, 4096);
+    const rawCode = String(body?.code || '').trim();
+    if (!rawCode || rawCode.length > 64) {
+      throw new ApiError(400, 'Informe um código de recarga válido.');
+    }
+
+    const rateKey = `redeem-code:${user?.id || 'anon'}`;
+    const rl = checkRateLimit(rateKey, 5, 10 * 60 * 1000);
+    if (!rl.allowed) {
+      throw new ApiError(429, `Muitas tentativas de resgate. Aguarde ${rl.retryAfterSeconds}s e tente novamente.`);
+    }
+
+    const clientIp = String(req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1')
+      .split(',')[0]
+      .trim();
+
+    if (isCloudCreditMode({ user, bearer: effectiveBearer })) {
+      const { url: sbUrl, publishableKey, serviceRoleKey } = resolveSupabaseAdminConfig();
+      const rpcRes = await supabaseRestFetch({
+        url: sbUrl,
+        apiKey: publishableKey || serviceRoleKey,
+        authToken: effectiveBearer,
+        route: '/rest/v1/rpc/cg_redeem_recharge_code',
+        method: 'POST',
+        body: { p_code: rawCode, p_ip_hash: computeSha256(clientIp) },
+        fetchImpl: cloudFetch,
+      }).catch(() => null);
+      if (!rpcRes) {
+        throw new ApiError(503, 'Não foi possível resgatar o código no momento.');
+      }
+      if (!rpcRes.ok) {
+        if (rpcRes.status === 401 || rpcRes.status === 403) {
+          throw new ApiError(401, 'Sessão inválida para resgate de código.');
+        }
+        throw new ApiError(503, rpcRes.payload?.message || 'Erro ao resgatar código no Supabase.');
+      }
+      const data = rpcRes.payload || {};
+      if (!data.success) {
+        const errMap = {
+          invalid_code: [404, 'Código de recarga não encontrado.'],
+          invite_only_code: [400, 'Este código é exclusivo de convite para novas contas e não pode ser resgatado aqui.'],
+          recharge_limit_reached: [409, 'Você já atingiu o limite máximo de 3 resgates de códigos por conta.'],
+          already_redeemed: [409, 'Você já resgatou este código anteriormente.'],
+          depleted_code: [410, 'Este código já foi utilizado e atingiu o limite de usos.'],
+          inactive_code: [410, 'Este código foi revogado ou desativado.'],
+          expired_code: [410, 'Este código expirou.'],
+        };
+        const [st, msg] = errMap[data.error] || [400, 'Não foi possível resgatar este código.'];
+        throw new ApiError(st, msg);
+      }
+      return send(res, 200, {
+        success: true,
+        creditsAdded: roundCredits(data.credits_added || 0),
+        newBalance: roundCredits(data.new_balance || 0),
+        codeMasked: data.code_masked || '',
+        redemptionsUsed: Number(data.redemptions_used || 1),
+        redemptionsRemaining: Number(data.redemptions_remaining ?? 0),
+        limit: Number(data.limit || 3),
+      });
+    }
+
+    const codeHash = computeSha256(rawCode);
+    const redeemResult = await serializeCreditOp(codesPath, () =>
+      serializeCreditOp(directory, async () => {
+        const codes = await loadAccessCodes();
+        const foundIndex = codes.findIndex((c) => c.hash === codeHash);
+        if (foundIndex === -1) {
+          throw new ApiError(404, 'Código de recarga não encontrado.');
+        }
+        const found = { ...codes[foundIndex] };
+        const effectiveType = found.codeType || 'invite_only';
+        if (effectiveType !== 'user_recharge') {
+          throw new ApiError(
+            400,
+            'Este código é exclusivo de convite para novas contas e não pode ser resgatado aqui.',
+          );
+        }
+        if (found.status === 'revoked') {
+          throw new ApiError(410, 'Este código foi revogado pelo administrador.');
+        }
+        if (found.expiresAt && new Date(found.expiresAt) < new Date()) {
+          throw new ApiError(410, 'Este código expirou.');
+        }
+        if (found.redemptionCount >= found.maxRedemptions || found.status !== 'active') {
+          throw new ApiError(410, 'Este código já foi utilizado e atingiu o limite de usos.');
+        }
+
+        const rawLedger = await readJsonFile(ledgerPath, []);
+        const ledger = Array.isArray(rawLedger) ? [...rawLedger] : [];
+        const usedRechargeCount = ledger.filter((entry) => entry?.operation_type === 'recharge_code').length;
+        if (usedRechargeCount >= 3) {
+          throw new ApiError(409, 'Você já atingiu o limite máximo de 3 resgates de códigos por conta.');
+        }
+        const alreadyRedeemed = ledger.some((entry) => entry?.reference_id === `recharge:${found.hash}`);
+        if (alreadyRedeemed) {
+          throw new ApiError(409, 'Você já resgatou este código anteriormente.');
+        }
+
+        const nowIso = new Date().toISOString();
+        found.redemptionCount = Number(found.redemptionCount || 0) + 1;
+        found.lastRedeemedByEmail = String(user?.email || user?.id || '').trim() || null;
+        found.lastRedeemedAt = nowIso;
+        if (found.redemptionCount >= found.maxRedemptions) {
+          found.status = 'depleted';
+        }
+        codes[foundIndex] = found;
+        await atomicWriteJson(codesPath, codes);
+
+        const currentBalance = ledger.length > 0 ? Math.max(0, roundCredits(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
+        const creditsToAdd = roundCredits(found.credits || 0);
+        const newBalance = roundCredits(currentBalance + creditsToAdd);
+        ledger.push({
+          id: randomUUID(),
+          user_id: user?.id,
+          delta: creditsToAdd,
+          balance_after: newBalance,
+          operation_type: 'recharge_code',
+          reference_id: `recharge:${found.hash}`,
+          metadata: { code_masked: found.masked, code_type: 'user_recharge' },
+          created_at: nowIso,
+        });
+        await atomicWriteJson(ledgerPath, ledger);
+
+        const nextUsed = usedRechargeCount + 1;
+        return {
+          success: true,
+          creditsAdded: creditsToAdd,
+          newBalance,
+          codeMasked: found.masked,
+          redemptionsUsed: nextUsed,
+          redemptionsRemaining: Math.max(0, 3 - nextUsed),
+          limit: 3,
+        };
+      }),
+    );
+
+    return send(res, 200, redeemResult);
   }
 
   // 5. POST /api/checkout/order (Autenticado)

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  buildWebviewAudioExtractScript,
   buildWebviewCheckMediaPreviewScript,
   buildWebviewClickMediaSendScript,
   buildWebviewClickSendScript,
@@ -11,10 +12,16 @@ import {
   buildWebviewIdentityScript,
   buildWebviewPollScript,
   buildWebviewSendScript,
-} from './whatsapp-webview-script.mjs';
+} from '../shared/whatsapp-webview-script.mjs';
+import { verifyWebviewScriptsPayload } from '../shared/webview-scripts-signer.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const appUrl = process.env.COMPANYGEN_URL || 'http://127.0.0.1:1245/';
+const DEFAULT_CLOUD_APP_URL = 'https://companygen-app-468840292234.southamerica-east1.run.app/';
+const appUrl =
+  process.env.COMPANYGEN_URL ||
+  (app.isPackaged && process.env.COMPANYGEN_LOCAL_ONLY !== '1'
+    ? DEFAULT_CLOUD_APP_URL
+    : 'http://127.0.0.1:1245/');
 const whatsappOrigin = 'https://web.whatsapp.com';
 const exitOnClose = process.env.COMPANYGEN_EXIT_ON_CLOSE === '1';
 let serverProcess;
@@ -34,7 +41,40 @@ let healthMetrics = {
   lastPollMs: 0,
   lastPollAt: 0,
   soundEnabled: true,
+  scriptsVersion: 'local',
 };
+let remoteScriptsCache = null;
+
+async function refreshRemoteWebviewScripts() {
+  try {
+    const endpoint = `${new URL(appUrl).origin}/api/desktop/webview-scripts`;
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return false;
+    const data = await res.json().catch(() => null);
+    const verified = verifyWebviewScriptsPayload(data);
+    if (!verified.ok) {
+      console.warn('[companygen:webview-scripts] Assinatura remota rejeitada:', verified.reason);
+      return false;
+    }
+    remoteScriptsCache = verified.scripts;
+    healthMetrics.scriptsVersion = verified.version;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getEffectiveIdentityScript() {
+  return remoteScriptsCache?.identityScript || buildWebviewIdentityScript();
+}
+
+function getEffectivePollScript() {
+  return remoteScriptsCache?.pollScript || buildWebviewPollScript();
+}
 
 app.setName('CompanyGen');
 app.setPath('userData', process.env.COMPANYGEN_USER_DATA || path.join(app.getPath('appData'), 'CompanyGen'));
@@ -47,6 +87,15 @@ app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+
+function isLoopbackAppUrl(rawUrl) {
+  try {
+    const host = new URL(rawUrl).hostname.toLowerCase();
+    return host === '127.0.0.1' || host === 'localhost' || host === '::1';
+  } catch {
+    return true;
+  }
+}
 
 async function serverAvailable() {
   try {
@@ -78,6 +127,7 @@ function resolvePackagedPaths() {
 }
 
 async function ensureServer() {
+  if (!isLoopbackAppUrl(appUrl)) return;
   if (await serverAvailable()) return;
   const resolved = resolvePackagedPaths();
   const hasBuiltDist = fs.existsSync(path.join(resolved.distDir, 'index.html'));
@@ -152,7 +202,7 @@ function getWhatsappWebviews() {
 
 async function readEmbeddedWhatsappIdentity() {
   const guests = getWhatsappWebviews();
-  const script = buildWebviewIdentityScript();
+  const script = getEffectiveIdentityScript();
 
   for (const guest of guests) {
     try {
@@ -183,13 +233,14 @@ async function pollEmbeddedWhatsappInbox() {
   }
 
   try {
-    let outcome = await guest.executeJavaScript(buildWebviewPollScript(), true);
+    const pollScript = getEffectivePollScript();
+    let outcome = await guest.executeJavaScript(pollScript, true);
     if (outcome?.action === 'opened_unread_chat') {
-      await new Promise(resolve => setTimeout(resolve, 550));
-      let second = await guest.executeJavaScript(buildWebviewPollScript(), true);
+      await new Promise(resolve => setTimeout(resolve, 450));
+      let second = await guest.executeJavaScript(pollScript, true);
       if (second?.action === 'idle') {
-        await new Promise(resolve => setTimeout(resolve, 450));
-        second = await guest.executeJavaScript(buildWebviewPollScript(), true);
+        await new Promise(resolve => setTimeout(resolve, 400));
+        second = await guest.executeJavaScript(pollScript, true);
       }
       outcome = second || outcome;
     }
@@ -378,6 +429,9 @@ async function typeTextHumanLike(guest, text, options = {}) {
 
         await guest.insertText(ch);
         typedChars += 1;
+        if (g === 0) {
+          await new Promise(resolve => setTimeout(resolve, 45));
+        }
 
         if (onProgress && (typedChars % 4 === 0 || typedChars === totalChars)) {
           try {
@@ -532,7 +586,17 @@ async function sendEmbeddedWhatsappReply(payload) {
         c.focus();
         return { found: true, text: String(c.innerText || c.textContent || '').trim() };
       })()`, true);
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 160));
+      const composerFocused = await guest.executeJavaScript(`(() => {
+        const footer = document.querySelector('#main footer') || document;
+        const c = footer.querySelector('div[contenteditable="true"][data-lexical-editor="true"], [role="textbox"][contenteditable="true"], div[contenteditable="true"]');
+        if (!c) return false;
+        c.focus();
+        return document.activeElement === c || c.contains(document.activeElement);
+      })()`, true).catch(() => false);
+      if (!composerFocused) {
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
 
       const alreadyHasDraft = Boolean(
         composerState?.text &&
@@ -549,6 +613,23 @@ async function sendEmbeddedWhatsappReply(payload) {
           await new Promise(resolve => setTimeout(resolve, 80));
         }
         await typeTextHumanLike(guest, bubbleText, { onProgress: emitProgress });
+        const expectedPrefix = String(bubbleText || '').trim().slice(0, 5);
+        if (expectedPrefix) {
+          const typedNow = await guest.executeJavaScript(`(() => {
+            const footer = document.querySelector('#main footer') || document;
+            const c = footer.querySelector('div[contenteditable="true"][data-lexical-editor="true"], [role="textbox"][contenteditable="true"], div[contenteditable="true"]');
+            return String(c?.innerText || c?.textContent || '').trim();
+          })()`, true).catch(() => '');
+          if (typedNow && !typedNow.startsWith(expectedPrefix)) {
+            guest.sendInputEvent({ type: 'keyDown', keyCode: 'A', modifiers: ['control'] });
+            guest.sendInputEvent({ type: 'keyUp', keyCode: 'A', modifiers: ['control'] });
+            guest.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
+            guest.sendInputEvent({ type: 'keyUp', keyCode: 'Backspace' });
+            await new Promise(resolve => setTimeout(resolve, 120));
+            await guest.insertText(bubbleText);
+            await new Promise(resolve => setTimeout(resolve, 80));
+          }
+        }
       }
 
       for (let attempt = 0; attempt < 6; attempt += 1) {
@@ -603,6 +684,37 @@ async function sendEmbeddedWhatsappReply(payload) {
   }
 }
 
+async function extractEmbeddedWhatsappAudio(payload) {
+  const guests = getWhatsappWebviews();
+  const guest = guests[0];
+  if (!guest) return { ok: false, reason: 'no_webview' };
+  try {
+    const msgKey = String(payload?.msgKey || '');
+    const script = buildWebviewAudioExtractScript({ msgKey });
+    const result = await guest.executeJavaScript(script, true);
+    return result && typeof result === 'object' ? result : { ok: false, reason: 'empty_audio_result' };
+  } catch (err) {
+    return { ok: false, reason: err?.message || 'audio_ipc_error' };
+  }
+}
+
+async function repairEmbeddedWhatsappWebview() {
+  const guests = getWhatsappWebviews();
+  if (guests.length === 0) return { ok: false, reason: 'no_webview' };
+  for (const guest of guests) {
+    try {
+      await guest.session.clearCache();
+      // Preserva localStorage e IndexedDB para manter o WhatsApp conectado sem pedir novo QR Code
+      await guest.session.clearStorageData({
+        storages: ['serviceworkers', 'cachestorage', 'shadercache'],
+      });
+      guest.reloadIgnoringCache();
+    } catch {}
+  }
+  void refreshRemoteWebviewScripts();
+  return { ok: true, preservedSession: true };
+}
+
 async function logoutEmbeddedWhatsappWebview() {
   const guests = getWhatsappWebviews();
   for (const guest of guests) {
@@ -614,15 +726,38 @@ async function logoutEmbeddedWhatsappWebview() {
   return { ok: true };
 }
 
+function resolveBrandAssetPath(filename) {
+  const candidates = [
+    path.join(projectRoot, 'dist', 'brand', filename),
+    path.join(projectRoot, 'public', 'brand', filename),
+    process.resourcesPath ? path.join(process.resourcesPath, 'dist', 'brand', filename) : '',
+    process.resourcesPath ? path.join(process.resourcesPath, 'app.asar.unpacked', 'dist', 'brand', filename) : '',
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch {}
+  }
+  return '';
+}
+
 function createTrayIconImage() {
-  try {
-    const trayIconPath = path.join(projectRoot, 'public', 'brand', 'favicon-32.png');
-    if (fs.existsSync(trayIconPath)) {
-      const img = nativeImage.createFromPath(trayIconPath);
-      if (img && !img.isEmpty()) return img;
+  for (const candidateName of ['favicon-32.png', 'app-icon-512.png', 'apple-touch-icon.png']) {
+    try {
+      const trayIconPath = resolveBrandAssetPath(candidateName);
+      if (trayIconPath) {
+        const img = nativeImage.createFromPath(trayIconPath);
+        if (img && !img.isEmpty()) {
+          const size = img.getSize();
+          if (size.width > 32 || size.height > 32) {
+            return img.resize({ width: 32, height: 32, quality: 'best' });
+          }
+          return img;
+        }
+      }
+    } catch {
+      // Tenta próximo candidato
     }
-  } catch {
-    // Fallback para bitmap gerado em memória abaixo
   }
   const size = 16;
   const buf = Buffer.alloc(size * size * 4);
@@ -712,14 +847,14 @@ function showDesktopNotification({ title = 'CompanyGen Sofia IA', body = '' } = 
 }
 
 function createWindow() {
-  const winIconPath = path.join(projectRoot, 'public', 'brand', 'app-icon-512.png');
+  const winIconPath = resolveBrandAssetPath('app-icon-512.png') || resolveBrandAssetPath('favicon-32.png');
   const window = new BrowserWindow({
     width: 1480,
     height: 940,
     minWidth: 1024,
     minHeight: 700,
     title: 'CompanyGen',
-    ...(fs.existsSync(winIconPath) ? { icon: winIconPath } : {}),
+    ...(winIconPath ? { icon: winIconPath } : {}),
     backgroundColor: '#f4f7f5',
     autoHideMenuBar: true,
     webPreferences: {
@@ -781,8 +916,16 @@ function createWindow() {
     if (/^https:\/\//i.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
+  let remoteRetryCount = 0;
   window.webContents.on('did-fail-load', (_event, code, description, url) => {
     console.error('[companygen:did-fail-load]', code, description, url);
+    if (code === -3 || isLoopbackAppUrl(appUrl)) return;
+    if (remoteRetryCount < 3 && !window.isDestroyed()) {
+      remoteRetryCount += 1;
+      setTimeout(() => {
+        if (!window.isDestroyed()) void window.loadURL(appUrl);
+      }, 2000 * remoteRetryCount);
+    }
   });
   window.webContents.on('render-process-gone', (_event, details) => {
     console.error('[companygen:render-process-gone]', details);
@@ -801,7 +944,9 @@ app.on('web-contents-created', (_event, contents) => {
 ipcMain.handle('companygen:open-whatsapp', () => shell.openExternal('https://web.whatsapp.com/'));
 ipcMain.handle('companygen:whatsapp-identity', () => readEmbeddedWhatsappIdentity());
 ipcMain.handle('companygen:whatsapp-poll-inbox', () => pollEmbeddedWhatsappInbox());
+ipcMain.handle('companygen:whatsapp-extract-audio', (_event, payload) => extractEmbeddedWhatsappAudio(payload));
 ipcMain.handle('companygen:whatsapp-send-reply', (_event, payload) => sendEmbeddedWhatsappReply(payload));
+ipcMain.handle('companygen:whatsapp-repair', () => repairEmbeddedWhatsappWebview());
 ipcMain.handle('companygen:whatsapp-logout', () => logoutEmbeddedWhatsappWebview());
 ipcMain.handle('companygen:show-window', (_event, tab) => {
   showAndFocusMainWindow(typeof tab === 'string' ? tab : '');
@@ -879,6 +1024,7 @@ if (hasSingleInstanceLock) {
     await ensureServer();
     ensureTray();
     createWindow();
+    void refreshRemoteWebviewScripts();
     void setupSilentAutoUpdater();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

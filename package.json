@@ -1,7 +1,9 @@
 {
   "name": "companygen-post-studio",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "description": "CompanyGen Desktop — Vitrine com IA e Atendimento Automático Sofia no WhatsApp",
+  "author": "CompanyGen",
   "type": "module",
   "main": "desktop/main.mjs",
   "scripts": {
@@ -23,6 +25,7 @@
   "build": {
     "appId": "store.companygen.desktop",
     "productName": "CompanyGen",
+    "copyright": "Copyright © 2026 CompanyGen",
     "asar": true,
     "asarUnpack": [
       "server/**",
@@ -33,6 +36,7 @@
     "directories": {
       "output": "release"
     },
+    "afterPack": "./scripts/slim-electron-locales.mjs",
     "files": [
       "desktop/**/*",
       "dist/**/*",
@@ -40,6 +44,10 @@
       "shared/**/*",
       "src/config/supabase-public.json",
       "package.json",
+      "!**/*.map",
+      "!**/*.md",
+      "!**/tests/**",
+      "!**/__tests__/**",
       "!release/**"
     ],
     "extraResources": [
@@ -69,12 +77,18 @@
           ]
         }
       ],
-      "icon": "public/brand/app-icon-512.png"
+      "icon": "public/brand/app-icon-512.png",
+      "requestedExecutionLevel": "asInvoker",
+      "signAndEditExecutable": false
     },
     "nsis": {
+      "compression": "maximum",
       "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   },
   "dependencies": {
@@ -87,6 +101,7 @@
     "electron-updater": "^6.8.11",
     "jszip": "^3.10.2",
     "lucide-react": "^1.70.0",
+    "nodemailer": "^6.10.1",
     "qrcode": "^1.5.4",
     "radix-ui": "^1.8.1",
     "react": "^19.3.1",

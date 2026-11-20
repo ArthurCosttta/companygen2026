@@ -94,6 +94,44 @@ def download_avatar(url: str, output_dir: Path, handle: str) -> str | None:
         return None
 
 
+def extract_logo_colors_and_data_url(image_path: Path):
+    if not image_path.exists():
+        return [], ""
+    try:
+        raw = image_path.read_bytes()
+        ext = image_path.suffix.lstrip(".").lower() or "jpeg"
+        if ext == "jpg":
+            ext = "jpeg"
+        import base64
+        data_url = ""
+        if len(raw) <= 600_000:
+            data_url = f"data:image/{ext};base64,{base64.b64encode(raw).decode('ascii')}"
+        colors = []
+        try:
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(raw)).convert("RGB").resize((48, 48))
+            buckets = {}
+            for r, g, b in img.getdata():
+                mx, mn = max(r, g, b), min(r, g, b)
+                if mx < 28 or mn > 235 or (mx - mn) < 22:
+                    continue
+                qr, qg, qb = (r // 24) * 24, (g // 24) * 24, (b // 24) * 24
+                key = f"#{qr:02x}{qg:02x}{qb:02x}"
+                buckets[key] = buckets.get(key, 0) + 1
+            ranked = sorted(buckets.items(), key=lambda kv: kv[1], reverse=True)
+            for hx, _ in ranked:
+                if hx not in colors:
+                    colors.append(hx)
+                if len(colors) >= 2:
+                    break
+        except Exception:
+            pass
+        return colors, data_url
+    except Exception:
+        return [], ""
+
+
 def fetch_instagram_api(handle: str) -> dict | None:
     api_url = f"https://i.instagram.com/api/v1/users/web_profile_info/?username={urllib.parse.quote(handle)}"
     req = urllib.request.Request(
@@ -274,6 +312,7 @@ def main():
         return
 
     hints = extract_business_hints((meta or {}).get("bio", ""))
+    dominant_colors, logo_data_url = extract_logo_colors_and_data_url(out_dir / photo_file) if photo_file else ([], "")
     print(json.dumps({
         "ok": bool(photo_file or (meta or {}).get("fullName") or (meta or {}).get("bio")),
         "handle": f"@{handle}",
@@ -281,6 +320,8 @@ def main():
         "bio": (meta or {}).get("bio", ""),
         "category": (meta or {}).get("category", ""),
         "photoFile": photo_file or "",
+        "logoDataUrl": logo_data_url,
+        "dominantColors": dominant_colors,
         "source": (meta or {}).get("source", "unknown"),
         **hints,
     }, ensure_ascii=False))

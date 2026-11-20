@@ -4,6 +4,7 @@ import {
   Compass,
   Eye,
   LifeBuoy,
+  LogOut,
   MessageSquare,
   Moon,
   Package,
@@ -38,6 +39,7 @@ export interface CommandPaletteModalProps {
   onOpenSupport: () => void;
   onToggleDarkMode: () => void;
   onOpenTour: () => void;
+  onLogout?: () => void;
 }
 
 interface PaletteEntry {
@@ -71,6 +73,7 @@ export function CommandPaletteModal({
   onOpenSupport,
   onToggleDarkMode,
   onOpenTour,
+  onLogout,
 }: CommandPaletteModalProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -188,6 +191,19 @@ export function CommandPaletteModal({
         icon: Compass,
         run: onOpenTour,
       },
+      ...(onLogout
+        ? [
+            {
+              id: 'action-logout',
+              group: 'Ações Rápidas' as const,
+              label: 'Sair da Conta (Logout)',
+              hint: 'Encerrar sessão',
+              keywords: 'sair logout desconectar conta trocar usuario',
+              icon: LogOut,
+              run: onLogout,
+            },
+          ]
+        : []),
     ];
 
     if (!isCatalogEmpty) {

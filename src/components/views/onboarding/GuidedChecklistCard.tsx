@@ -133,7 +133,7 @@ export function GuidedChecklistCard({
   const step2Done = activeProductsCount >= 1;
 
   const isStorePublished = Boolean(profile.publishedStore?.published);
-  const step3Done = isStorePublished || phase === 'LIVE_READY';
+  const step3Done = isStorePublished && step1Done && step2Done;
   const canPublish = step1Done && step2Done && hasValidPhone;
 
   const phaseLabel = humanLabelPT(phase);
@@ -179,7 +179,7 @@ export function GuidedChecklistCard({
   };
 
   const stageBanner = (() => {
-    if (maturityState === 'ESTADO_4' || step3Done) {
+    if ((maturityState === 'ESTADO_4' || step3Done) && step1Done && step2Done) {
       return {
         eyebrow: 'Tudo pronto · Loja ativa',
         title: `${businessName || 'Sua loja'} está no ar!`,
@@ -229,7 +229,7 @@ export function GuidedChecklistCard({
 
   const formattedPhone = formatBrazilPhoneDisplay(phoneE164);
 
-  if (maturityState === 'ESTADO_4' || step3Done) {
+  if ((maturityState === 'ESTADO_4' || step3Done) && step1Done && step2Done) {
     return (
       <section
         role="region"

@@ -33,6 +33,20 @@ export default defineConfig(({ mode }) => {
       fs: { deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/.companygen/**', '**/sessao_whatsapp/**', '**/studio.json'] },
     },
     preview: { port: 4173 },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: {
+      chunkSizeWarningLimit: 650,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/react-dom/') || id.includes('node_modules/react/')) {
+              return 'vendor-react';
+            }
+            if (id.includes('node_modules/lucide-react/')) {
+              return 'vendor-icons';
+            }
+          },
+        },
+      },
+    },
   };
 });

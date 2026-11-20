@@ -362,6 +362,56 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
           >
             VALIDAR CÓDIGO E CONTINUAR →
           </ActionButton>
+
+          {/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(code.trim()) && state !== 'activated' ? (
+            <button
+              type="button"
+              data-testid="access-guest-start-btn"
+              onClick={async () => {
+                if (submittingRef.current) return;
+                submittingRef.current = true;
+                setState('loading');
+                setErrorMessage('');
+                try {
+                  const res = await fetch('/api/access/guest-start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: code.trim() }),
+                  });
+                  const guestData = await res.json().catch(() => null);
+                  if (!res.ok || !guestData?.ok || !guestData.token) {
+                    setState('invalid');
+                    setErrorMessage(guestData?.error || 'Não foi possível iniciar com este convite.');
+                    return;
+                  }
+                  saveLocalShowcaseSession({
+                    token: guestData.token,
+                    user: guestData.user,
+                    code: code.trim(),
+                    credits: Number(guestData.credits) || 100,
+                    balance: Number(guestData.balance ?? guestData.credits) || 100,
+                    savedAt: new Date().toISOString(),
+                  });
+                  setState('activated');
+                  setCreditsAwarded(Number(guestData.credits) || 100);
+                  showToast({
+                    type: 'success',
+                    message: 'Acesso liberado sem e-mail! Monte sua loja agora e vincule seu e-mail só quando publicar.',
+                    durationMs: 4000,
+                  });
+                  onSuccess?.({ code: code.trim(), credits: Number(guestData.credits) || 100 });
+                } catch {
+                  setState('invalid');
+                  setErrorMessage('Erro de conexão ao iniciar modo convidado.');
+                } finally {
+                  submittingRef.current = false;
+                }
+              }}
+              className="w-full min-h-[44px] rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs font-extrabold text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-300"
+            >
+              Começar Minha Loja Agora (sem e-mail) →
+            </button>
+          ) : null}
         </form>
 
         {/* Checklist de Benefícios */}

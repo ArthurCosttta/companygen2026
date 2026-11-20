@@ -7,6 +7,7 @@ import {
   getCreditLockState,
   isLocalShowcaseEnabled,
   resolveSupabaseAdminConfig,
+  roundCredits,
   serializeCreditOp,
 } from './access-and-checkout.mjs';
 import { scrubObject, scrubPii } from './pii-scrubber.mjs';
@@ -21,6 +22,68 @@ import {
   toggleOrDeleteQrCampaign,
 } from './support-and-qr.mjs';
 import { TIER_LIMITS } from './middleware/ai-budget.mjs';
+import { sendEmail } from './email-mailer.mjs';
+import { creditsAddedEmail } from './email-templates.mjs';
+import { loadStorefrontSnapshot } from './public-storefront-loader.mjs';
+
+const REASON_LABELS_PT = Object.freeze({
+  support_comp: 'Compensação de Suporte',
+  bonus: 'Bônus Promocional / Parceria',
+  refund_fix: 'Estorno / Falha de Motor IA',
+  chargeback_adjust: 'Ajuste de Chargeback',
+  manual_audit: 'Auditoria Manual Administrativa',
+});
+
+async function persistAuditEntryToCloud({ entry, fetchImpl = globalThis.fetch }) {
+  const { url: sbUrl, serviceRoleKey } = resolveSupabaseAdminConfig();
+  if (process.env.CG_PERSISTENCE === 'local' || !sbUrl || !serviceRoleKey) return false;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(entry?.targetUserId || ''));
+  try {
+    const res = await fetchImpl(`${sbUrl}/rest/v1/cg_admin_audit_log`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: String(entry?.action || 'admin_action'),
+        target_user_id: isUuid ? entry.targetUserId : null,
+        actor: String(entry?.by || 'admin'),
+        payload: scrubObject(entry || {}),
+      }),
+      signal: AbortSignal.timeout(4500),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function persistRegistryKeyToCloud({ key, value, fetchImpl = globalThis.fetch }) {
+  const { url: sbUrl, serviceRoleKey } = resolveSupabaseAdminConfig();
+  if (process.env.CG_PERSISTENCE === 'local' || !sbUrl || !serviceRoleKey) return false;
+  try {
+    const res = await fetchImpl(`${sbUrl}/rest/v1/cg_admin_registry?on_conflict=key`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({
+        key: String(key),
+        value: value ?? {},
+        updated_at: new Date().toISOString(),
+      }),
+      signal: AbortSignal.timeout(4500),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 export const UNIT_ECONOMICS_CONFIG = Object.freeze({
   COST_GLM_PAGE_USD: Number(process.env.CG_COST_GLM_PAGE_USD || 0.015),
@@ -29,7 +92,7 @@ export const UNIT_ECONOMICS_CONFIG = Object.freeze({
   KIWIFY_FEE_PCT: Number(process.env.CG_KIWIFY_FEE_PCT || 0.0899),
   COST_GLM_PAGE_CENTS: Math.round(Number(process.env.CG_COST_GLM_PAGE_USD || 0.015) * Number(process.env.CG_USD_TO_BRL || 5.8) * 100),
   COST_RUNPOD_IMAGE_CENTS: Math.round(Number(process.env.CG_COST_RUNPOD_IMAGE_USD || 0.012) * Number(process.env.CG_USD_TO_BRL || 5.8) * 100),
-  COST_WHATSAPP_REPLY_CENTS: 2,
+  COST_WHATSAPP_REPLY_CENTS: 1,
 });
 
 const VALID_CREDIT_REASON_CODES = new Set([
@@ -271,7 +334,8 @@ export async function isAdminRequest({ root, user, readJsonFile }) {
   return computeIsAdmin(user, email, registry);
 }
 
-function generateAccessCode() {
+function generateAccessCode(prefix = 'AI10') {
+  const safePrefix = prefix === 'RC10' ? 'RC10' : 'AI10';
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const pick = (len) => {
     const bytes = randomBytes(len);
@@ -281,7 +345,76 @@ function generateAccessCode() {
     }
     return out;
   };
-  return `AI10-${pick(4)}-${pick(4)}`;
+  return `${safePrefix}-${pick(4)}-${pick(4)}`;
+}
+
+function resolvePublicOrigin(req) {
+  const envOrigin = String(process.env.COMPANYGEN_URL || '').trim().replace(/\/+$/, '');
+  if (envOrigin && !/127\.0\.0\.1|localhost/i.test(envOrigin)) {
+    return envOrigin;
+  }
+  const host = String(req?.headers?.['x-forwarded-host'] || req?.headers?.host || '').split(',')[0].trim();
+  const proto = String(req?.headers?.['x-forwarded-proto'] || 'https').split(',')[0].trim();
+  if (host && !/127\.0\.0\.1|localhost/i.test(host)) {
+    return `${proto}://${host}`;
+  }
+  return envOrigin || 'https://companygen.store';
+}
+
+function computeCodeStatusTag(entry) {
+  const rawStatus = String(entry?.status || 'active').toLowerCase();
+  const count = Math.max(0, Number(entry?.redemptionCount ?? entry?.redemption_count ?? 0));
+  const max = Math.max(1, Number(entry?.maxRedemptions ?? entry?.max_redemptions ?? 1));
+  const expiresAt = entry?.expiresAt ?? entry?.expires_at ?? null;
+  if (rawStatus === 'revoked') return { status: 'revoked', statusLabel: 'Revogado' };
+  if (rawStatus === 'expired' || (expiresAt && new Date(expiresAt) < new Date())) {
+    return { status: 'expired', statusLabel: 'Expirado' };
+  }
+  if (rawStatus === 'depleted' || count >= max) {
+    return { status: 'depleted', statusLabel: max === 1 ? 'Utilizado (1/1)' : `Esgotado (${count}/${max})` };
+  }
+  if (count > 0) {
+    return { status: 'used_partial', statusLabel: `Usado (${count}/${max})` };
+  }
+  return { status: 'active', statusLabel: 'Disponível' };
+}
+
+function formatInviteRow(raw, originBase) {
+  const code = raw?.code_display || raw?.code || null;
+  const codeType = (raw?.code_type || raw?.codeType) === 'user_recharge' ? 'user_recharge' : 'invite_only';
+  const masked = raw?.code_masked || raw?.masked || (codeType === 'user_recharge' ? 'RC10-****' : 'AI10-****');
+  const maxRedemptions = Math.max(1, Number(raw?.max_redemptions ?? raw?.maxRedemptions ?? 1));
+  const redemptionCount = Math.max(0, Number(raw?.redemption_count ?? raw?.redemptionCount ?? 0));
+  const { status, statusLabel } = computeCodeStatusTag({
+    status: raw?.status,
+    redemptionCount,
+    maxRedemptions,
+    expiresAt: raw?.expires_at ?? raw?.expiresAt ?? null,
+  });
+  const base = originBase || 'https://companygen.store';
+  const inviteUrl =
+    code && codeType === 'invite_only' ? `${base}/?route=access&code=${encodeURIComponent(code)}` : null;
+  const redeemUrl =
+    code && codeType === 'user_recharge' ? `${base}/?route=settings&redeem=${encodeURIComponent(code)}` : null;
+
+  return {
+    id: raw?.id || raw?.hash || masked,
+    code,
+    masked,
+    codeType,
+    credits: roundCredits(raw?.credits || 0),
+    maxRedemptions,
+    redemptionCount,
+    status,
+    statusLabel,
+    createdAt: raw?.created_at || raw?.createdAt || null,
+    createdBy: raw?.created_by_email || raw?.createdBy || null,
+    note: raw?.note || (raw?.source_order_id ? `Kiwify ${raw.source_order_id}` : ''),
+    lastRedeemedByEmail: raw?.last_redeemed_by_email || raw?.lastRedeemedByEmail || null,
+    lastRedeemedAt: raw?.last_redeemed_at || raw?.lastRedeemedAt || null,
+    inviteUrl,
+    redeemUrl,
+  };
 }
 
 function computeSha256(text) {
@@ -379,19 +512,19 @@ function estimateLedgerEconomics(ledger = []) {
     const atMs = new Date(entry?.created_at || 0).getTime();
 
     if (op === 'purchase_kiwify' || op === 'subscription_renewed' || op === 'checkout_purchase') {
-      // Approx R$0.04 per purchased credit baseline if price not explicitly recorded
+      // Approx R$0.45 per purchased credit baseline if price not explicitly recorded
       const priceCents = Number(entry?.metadata?.priceCents || 0);
-      grossRevenueCents += priceCents > 0 ? priceCents : Math.round(Math.max(0, delta) * 4);
+      grossRevenueCents += priceCents > 0 ? priceCents : Math.round(Math.max(0, delta) * 45);
     } else if (op === 'chargeback' || op === 'order_refunded') {
       const revCents = Number(entry?.metadata?.priceCents || 0);
-      grossRevenueCents -= revCents > 0 ? revCents : Math.round(Math.abs(delta) * 4);
+      grossRevenueCents -= revCents > 0 ? revCents : Math.round(Math.abs(delta) * 45);
     } else if (delta < 0) {
       if (action.includes('image') || op === 'generate_image' || op === 'debit_generate_image_schnell' || op === 'debit_generate_hero_dev' || op === 'debit_edit_image_qwen') {
         aiCostCents += UNIT_ECONOMICS_CONFIG.COST_RUNPOD_IMAGE_CENTS;
       } else if (action.includes('storefront') || action.includes('subpage') || op === 'generate_storefront' || op === 'debit_generate_full_storefront') {
         aiCostCents += UNIT_ECONOMICS_CONFIG.COST_GLM_PAGE_CENTS;
       } else if (action.includes('whatsapp') || op === 'whatsapp_reply_consumed' || op === 'debit_glm_whatsapp') {
-        aiCostCents += UNIT_ECONOMICS_CONFIG.COST_WHATSAPP_MSG_CENTS;
+        aiCostCents += UNIT_ECONOMICS_CONFIG.COST_WHATSAPP_REPLY_CENTS;
       } else {
         aiCostCents += 3;
       }
@@ -687,9 +820,15 @@ export async function handleAdminRoutes(req, res, ctx) {
           { headers: sbHeaders, signal: AbortSignal.timeout(4000) },
         ),
         sbFetch(
-          `${sbUrl}/rest/v1/cg_access_codes?order=created_at.desc&limit=40&select=id,code_masked,credits,max_redemptions,redemption_count,status,created_at,source_order_id`,
+          `${sbUrl}/rest/v1/cg_access_codes?order=created_at.desc&limit=300&select=id,code_masked,code_display,code_type,credits,max_redemptions,redemption_count,status,expires_at,note,created_by_email,last_redeemed_by_email,last_redeemed_at,created_at,source_order_id`,
           { headers: sbHeaders, signal: AbortSignal.timeout(4000) },
-        ),
+        ).then(async (r) => {
+          if (r.ok) return r;
+          return sbFetch(
+            `${sbUrl}/rest/v1/cg_access_codes?order=created_at.desc&limit=300&select=id,code_masked,credits,max_redemptions,redemption_count,status,expires_at,created_at,source_order_id`,
+            { headers: sbHeaders, signal: AbortSignal.timeout(4000) },
+          );
+        }),
         sbFetch(
           `${sbUrl}/auth/v1/admin/users?page=1&per_page=100`,
           { headers: sbHeaders, signal: AbortSignal.timeout(5000) },
@@ -722,20 +861,11 @@ export async function handleAdminRoutes(req, res, ctx) {
           }));
         }
       }
+      const overviewOrigin = resolvePublicOrigin(req);
       if (codeRes.status === 'fulfilled' && codeRes.value.ok) {
         const cRows = await codeRes.value.json().catch(() => []);
         if (Array.isArray(cRows)) {
-          cloudInvites = cRows.map((c) => ({
-            code: null,
-            masked: c.code_masked || 'AI10-****',
-            credits: Number(c.credits || 0),
-            maxRedemptions: Number(c.max_redemptions || 1),
-            redemptionCount: Number(c.redemption_count || 0),
-            status: c.status || 'active',
-            createdAt: c.created_at || null,
-            note: c.source_order_id ? `Kiwify ${c.source_order_id}` : 'Supabase',
-            inviteUrl: null,
-          }));
+          cloudInvites = cRows.map((c) => formatInviteRow(c, overviewOrigin));
         }
       }
 
@@ -812,18 +942,9 @@ export async function handleAdminRoutes(req, res, ctx) {
       users.sort((a, b) => new Date(b.lastSeenAt || 0).getTime() - new Date(a.lastSeenAt || 0).getTime());
     }
 
+    const localOrigin = resolvePublicOrigin(req);
     const localInvites = storedCodes
-      .map((c) => ({
-        code: null,
-        masked: c.masked || 'AI10-****',
-        credits: Number(c.credits || 0),
-        maxRedemptions: Number(c.maxRedemptions || 1),
-        redemptionCount: Number(c.redemptionCount || 0),
-        status: c.status || 'active',
-        createdAt: c.createdAt || null,
-        note: c.note || '',
-        inviteUrl: null,
-      }))
+      .map((c) => formatInviteRow(c, localOrigin))
       .reverse();
     const invites = cloudInvites.length > 0 ? cloudInvites : localInvites;
 
@@ -1007,13 +1128,52 @@ export async function handleAdminRoutes(req, res, ctx) {
     });
   }
 
+  // GET /api/admin/users/:userId/storefront (Visualizar loja real do cliente, inclusive rascunho)
+  const adminStoreMatch = /^\/api\/admin\/users\/([^/]+)\/storefront$/i.exec(pathname);
+  if (adminStoreMatch) {
+    if (req.method !== 'GET') throw new ApiError(405, 'Método indisponível.');
+    const targetUserId = decodeURIComponent(adminStoreMatch[1]).trim();
+    if (!targetUserId || targetUserId.includes('..') || targetUserId.includes('/') || targetUserId.includes('\\')) {
+      throw new ApiError(400, 'Usuário inválido.');
+    }
+    const sbFetch = ctx.fetchImpl || globalThis.fetch;
+    const snap = await loadStorefrontSnapshot({
+      lookupKey: targetUserId,
+      allowDraft: true,
+      root,
+      readJsonFile,
+      fetchImpl: sbFetch,
+    });
+    if (!snap.ok) {
+      throw new ApiError(snap.status || 404, snap.error || 'Vitrine do cliente não encontrada.');
+    }
+    const auditEntry = {
+      id: randomUUID(),
+      action: 'admin_view_storefront',
+      targetUserId,
+      draft: snap.draft,
+      source: snap.source,
+      by: email || user.id,
+      at: new Date().toISOString(),
+    };
+    void persistAuditEntryToCloud({ entry: auditEntry, fetchImpl: sbFetch });
+    return send(res, 200, snap);
+  }
+
   // POST /api/admin/users/credits
   if (pathname === '/api/admin/users/credits') {
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
     const body = await readJson(req, 16 * 1024);
     const targetUserId = String(body?.userId || '').trim();
     const mode = body?.mode === 'set' ? 'set' : 'add';
-    const amount = Math.round(Number(body?.amount) || 0);
+    const rawAmount = Number(body?.amount);
+    if (!Number.isFinite(rawAmount) || Math.abs(rawAmount) > 100000) {
+      throw new ApiError(400, 'Informe uma quantidade válida de créditos.');
+    }
+    const amount = roundCredits(rawAmount);
+    if (mode === 'set' && amount < 0) {
+      throw new ApiError(400, 'O saldo definido não pode ser negativo.');
+    }
     const reasonCode = String(body?.reasonCode || '').trim();
     const note = scrubPii(String(body?.note || '').trim()).slice(0, 200);
     const idempotencyKey = String(body?.idempotencyKey || '').trim().slice(0, 80);
@@ -1029,17 +1189,28 @@ export async function handleAdminRoutes(req, res, ctx) {
       throw new ApiError(400, 'Informe uma justificativa com pelo menos 5 caracteres para auditoria.');
     }
 
-    if (idempotencyKey && registry.appliedIdempotencyKeys.includes(`${targetUserId}:${idempotencyKey}`)) {
-      const targetDir = path.join(root, targetUserId);
-      const ledgerRaw = await readJsonFile(path.join(targetDir, 'credits_ledger.json'), []);
-      const curBal = Array.isArray(ledgerRaw) && ledgerRaw.length > 0 ? Number(ledgerRaw[ledgerRaw.length - 1]?.balance_after || 0) : 0;
-      return send(res, 200, { ok: true, duplicate: true, userId: targetUserId, newBalance: curBal });
+    const idemComposite = idempotencyKey ? `${targetUserId}:${idempotencyKey}` : '';
+    if (idemComposite) {
+      const latestRegCheck = normalizeAdminRegistry(await readJsonFile(registryPath, emptyAdminRegistry()));
+      if (latestRegCheck.appliedIdempotencyKeys.includes(idemComposite)) {
+        const targetDir = path.join(root, targetUserId);
+        const ledgerRaw = await readJsonFile(path.join(targetDir, 'credits_ledger.json'), []);
+        const curBal = Array.isArray(ledgerRaw) && ledgerRaw.length > 0 ? roundCredits(ledgerRaw[ledgerRaw.length - 1]?.balance_after || 0) : 0;
+        return send(res, 200, { ok: true, duplicate: true, userId: targetUserId, newBalance: curBal, emailSent: false, emailError: null });
+      }
     }
 
     const { url: sbUrl, serviceRoleKey } = resolveSupabaseAdminConfig();
+    const sbFetch = ctx.fetchImpl || globalThis.fetch;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId);
-    if (process.env.CG_PERSISTENCE !== 'local' && sbUrl && serviceRoleKey && isUuid) {
-      const sbFetch = ctx.fetchImpl || globalThis.fetch;
+    const isCloudEligible = process.env.CG_PERSISTENCE !== 'local' && Boolean(sbUrl && serviceRoleKey && isUuid);
+
+    let appliedCloud = false;
+    let nextBalance = 0;
+    let delta = 0;
+    let now = new Date().toISOString();
+
+    if (isCloudEligible) {
       const sbHeaders = { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, 'Content-Type': 'application/json' };
       const balRes = await sbFetch(`${sbUrl}/rest/v1/rpc/cg_get_user_credit_balance`, {
         method: 'POST',
@@ -1048,9 +1219,9 @@ export async function handleAdminRoutes(req, res, ctx) {
         signal: AbortSignal.timeout(5000),
       });
       if (balRes.ok) {
-        const curBal = Number(await balRes.json().catch(() => 0)) || 0;
-        const targetBal = mode === 'set' ? Math.max(0, amount) : Math.max(0, curBal + amount);
-        const cloudDelta = targetBal - curBal;
+        const curBal = roundCredits(await balRes.json().catch(() => 0));
+        const targetBal = mode === 'set' ? Math.max(0, amount) : Math.max(0, roundCredits(curBal + amount));
+        const cloudDelta = roundCredits(targetBal - curBal);
         const refId = `admin:${user.id}:${idempotencyKey || randomUUID()}`;
         if (cloudDelta > 0) {
           const r = await sbFetch(`${sbUrl}/rest/v1/rpc/cg_refund_credits`, {
@@ -1060,7 +1231,8 @@ export async function handleAdminRoutes(req, res, ctx) {
               p_user_id: targetUserId,
               p_amount: cloudDelta,
               p_reference_id: refId,
-              p_metadata: { source: 'admin_adjustment', reasonCode, by: email || user.id, mode, note },
+              p_operation_type: 'manual_adjustment',
+              p_metadata: { source: 'admin_adjustment', reasonCode, by: email || user.id, mode, note, notifyByEmail },
             }),
             signal: AbortSignal.timeout(5000),
           });
@@ -1074,39 +1246,95 @@ export async function handleAdminRoutes(req, res, ctx) {
               p_cost: Math.abs(cloudDelta),
               p_operation_type: 'edit_storefront',
               p_reference_id: refId,
-              p_metadata: { source: 'admin_adjustment', reasonCode, by: email || user.id, mode, note },
+              p_metadata: { source: 'admin_adjustment', reasonCode, by: email || user.id, mode, note, notifyByEmail },
             }),
             signal: AbortSignal.timeout(5000),
           });
           if (!r.ok) throw new ApiError(502, 'Falha ao ajustar créditos no Supabase.');
         }
-        return send(res, 200, { ok: true, userId: targetUserId, newBalance: targetBal, reasonCode, note, cloud: true });
+        appliedCloud = true;
+        nextBalance = targetBal;
+        delta = cloudDelta;
+        now = new Date().toISOString();
       }
     }
 
-    const targetDir = path.join(root, targetUserId);
-    const ledgerPath = path.join(targetDir, 'credits_ledger.json');
-    const { nextBalance, delta, now } = await serializeCreditOp(targetDir, async () => {
-      const ledgerRaw = await readJsonFile(ledgerPath, []);
-      const ledger = Array.isArray(ledgerRaw) ? [...ledgerRaw] : [];
-      const currentBalance = ledger.length > 0 ? Number(ledger[ledger.length - 1]?.balance_after || 0) : 0;
-      const nextBal = mode === 'set' ? Math.max(0, amount) : Math.max(0, currentBalance + amount);
-      const d = nextBal - currentBalance;
+    if (!appliedCloud) {
+      const targetDir = path.join(root, targetUserId);
+      const ledgerPath = path.join(targetDir, 'credits_ledger.json');
+      const localRes = await serializeCreditOp(targetDir, async () => {
+        const ledgerRaw = await readJsonFile(ledgerPath, []);
+        const ledger = Array.isArray(ledgerRaw) ? [...ledgerRaw] : [];
+        const currentBalance = ledger.length > 0 ? roundCredits(ledger[ledger.length - 1]?.balance_after || 0) : 0;
+        const nextBal = mode === 'set' ? Math.max(0, amount) : Math.max(0, roundCredits(currentBalance + amount));
+        const d = roundCredits(nextBal - currentBalance);
 
-      const ts = new Date().toISOString();
-      ledger.push({
-        id: randomUUID(),
-        user_id: targetUserId,
-        delta: d,
-        balance_after: nextBal,
-        operation_type: 'admin_adjustment',
-        reference_id: idempotencyKey ? `admin:${targetUserId}:${idempotencyKey}` : `admin:${user.id}:${ts}`,
-        metadata: { by: email || user.id, mode, reasonCode, note, notifyByEmail },
-        created_at: ts,
+        const ts = new Date().toISOString();
+        ledger.push({
+          id: randomUUID(),
+          user_id: targetUserId,
+          delta: d,
+          balance_after: nextBal,
+          operation_type: 'admin_adjustment',
+          reference_id: idempotencyKey ? `admin:${targetUserId}:${idempotencyKey}` : `admin:${user.id}:${ts}`,
+          metadata: { by: email || user.id, mode, reasonCode, note, notifyByEmail },
+          created_at: ts,
+        });
+        await atomicWriteJson(ledgerPath, ledger);
+        return { nextBalance: nextBal, delta: d, now: ts };
       });
-      await atomicWriteJson(ledgerPath, ledger);
-      return { nextBalance: nextBal, delta: d, now: ts };
-    });
+      nextBalance = localRes.nextBalance;
+      delta = localRes.delta;
+      now = localRes.now;
+    }
+
+    // Disparo real de e-mail via Gmail SMTP quando notifyByEmail === true e delta > 0
+    let emailSent = false;
+    let emailError = null;
+    let recipientEmail = '';
+    if (notifyByEmail && delta > 0) {
+      const localProf = await readJsonFile(path.join(root, targetUserId, 'profile.json'), null);
+      const profData = localProf?.data || localProf?.profile || localProf || {};
+      let storeName = String(profData?.business?.name || registry.usersMeta?.[targetUserId]?.displayName || 'Sua Loja');
+      recipientEmail = String(
+        body?.targetEmail ||
+          registry.usersMeta?.[targetUserId]?.email ||
+          profData?.business?.email ||
+          '',
+      ).trim();
+
+      if (!recipientEmail && isCloudEligible) {
+        try {
+          const authRes = await sbFetch(`${sbUrl}/auth/v1/admin/users/${encodeURIComponent(targetUserId)}`, {
+            headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+            signal: AbortSignal.timeout(4000),
+          });
+          if (authRes.ok) {
+            const au = await authRes.json().catch(() => null);
+            recipientEmail = String(au?.email || '').trim();
+            if (!storeName || storeName === 'Sua Loja') {
+              storeName = String(au?.user_metadata?.full_name || storeName);
+            }
+          }
+        } catch {}
+      }
+
+      const mailContent = creditsAddedEmail({
+        storeName,
+        amount: delta,
+        newBalance: nextBalance,
+        reasonLabel: REASON_LABELS_PT[reasonCode] || reasonCode,
+        note,
+        appUrl: `${resolvePublicOrigin(req)}/?route=access`,
+      });
+      const mailResult = await sendEmail({
+        to: recipientEmail,
+        ...mailContent,
+        transportOverride: ctx.emailTransportOverride || null,
+      });
+      emailSent = Boolean(mailResult.sent);
+      emailError = mailResult.error || null;
+    }
 
     const auditEntry = {
       id: randomUUID(),
@@ -1117,6 +1345,9 @@ export async function handleAdminRoutes(req, res, ctx) {
       reasonCode,
       note,
       notifyByEmail,
+      emailSent,
+      emailError,
+      cloud: appliedCloud,
       by: email || user.id,
       at: now,
     };
@@ -1124,14 +1355,26 @@ export async function handleAdminRoutes(req, res, ctx) {
     await serializeCreditOp(registryPath, async () => {
       const latestRegistry = normalizeAdminRegistry(await readJsonFile(registryPath, emptyAdminRegistry()));
       latestRegistry.auditLog.push(auditEntry);
-      if (idempotencyKey) {
-        latestRegistry.appliedIdempotencyKeys.push(`${targetUserId}:${idempotencyKey}`);
+      if (idemComposite && !latestRegistry.appliedIdempotencyKeys.includes(idemComposite)) {
+        latestRegistry.appliedIdempotencyKeys.push(idemComposite);
       }
       latestRegistry.updatedAt = now;
       await atomicWriteJson(registryPath, latestRegistry);
     });
+    await persistAuditEntryToCloud({ entry: auditEntry, fetchImpl: sbFetch });
 
-    return send(res, 200, { ok: true, userId: targetUserId, newBalance: nextBalance, auditEntry });
+    return send(res, 200, {
+      ok: true,
+      userId: targetUserId,
+      delta,
+      newBalance: nextBalance,
+      reasonCode,
+      note,
+      cloud: appliedCloud,
+      emailSent,
+      emailError,
+      auditEntry,
+    });
   }
 
   // POST /api/admin/users/limits
@@ -1460,6 +1703,15 @@ export async function handleAdminRoutes(req, res, ctx) {
     }
 
     const now = new Date().toISOString();
+    const banAuditEntry = {
+      id: randomUUID(),
+      action: banned ? 'ban_user' : 'unban_user',
+      targetUserId,
+      reason,
+      by: email || user.id,
+      at: now,
+    };
+    let persistedBannedUsers = {};
     await serializeCreditOp(registryPath, async () => {
       const latestRegistry = normalizeAdminRegistry(await readJsonFile(registryPath, emptyAdminRegistry()));
       if (banned) {
@@ -1472,37 +1724,86 @@ export async function handleAdminRoutes(req, res, ctx) {
       } else {
         delete latestRegistry.bannedUsers[targetUserId];
       }
-      latestRegistry.auditLog.push({
-        id: randomUUID(),
-        action: banned ? 'ban_user' : 'unban_user',
-        targetUserId,
-        reason,
-        by: email || user.id,
-        at: now,
-      });
+      latestRegistry.auditLog.push(banAuditEntry);
       latestRegistry.updatedAt = now;
+      persistedBannedUsers = latestRegistry.bannedUsers;
       await atomicWriteJson(registryPath, latestRegistry);
+    });
+    const sbFetch = ctx.fetchImpl || globalThis.fetch;
+    await persistAuditEntryToCloud({ entry: banAuditEntry, fetchImpl: sbFetch });
+    await persistRegistryKeyToCloud({
+      key: 'banned_users',
+      value: persistedBannedUsers,
+      updatedBy: email || user.id,
+      fetchImpl: sbFetch,
     });
 
     return send(res, 200, { ok: true, userId: targetUserId, banned });
   }
 
-  // POST /api/admin/invites
+  // GET / POST /api/admin/invites (Códigos especiais: invite_only vs user_recharge)
   if (pathname === '/api/admin/invites') {
+    const originBase = resolvePublicOrigin(req);
+    const { url: sbUrl, serviceRoleKey } = resolveSupabaseAdminConfig();
+    const isCloudActive = process.env.CG_PERSISTENCE !== 'local' && Boolean(sbUrl && serviceRoleKey);
+    const sbFetch = ctx.fetchImpl || globalThis.fetch;
+    const sbHeaders = {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+    };
+
+    if (req.method === 'GET') {
+      if (isCloudActive) {
+        let r = await sbFetch(
+          `${sbUrl}/rest/v1/cg_access_codes?order=created_at.desc&limit=300&select=id,code_masked,code_display,code_type,credits,max_redemptions,redemption_count,status,expires_at,note,created_by_email,last_redeemed_by_email,last_redeemed_at,created_at,source_order_id`,
+          { headers: sbHeaders, signal: AbortSignal.timeout(5000) },
+        ).catch(() => null);
+        if (r && !r.ok) {
+          r = await sbFetch(
+            `${sbUrl}/rest/v1/cg_access_codes?order=created_at.desc&limit=300&select=id,code_masked,credits,max_redemptions,redemption_count,status,expires_at,created_at,source_order_id`,
+            { headers: sbHeaders, signal: AbortSignal.timeout(5000) },
+          ).catch(() => null);
+        }
+        if (r?.ok) {
+          const rows = await r.json().catch(() => []);
+          const list = Array.isArray(rows) ? rows.map((row) => formatInviteRow(row, originBase)) : [];
+          return send(res, 200, { ok: true, invites: list, cloud: true });
+        }
+      }
+      const storedRaw = await readJsonFile(codesPath, null);
+      const stored =
+        Array.isArray(storedRaw) && storedRaw.length > 0
+          ? storedRaw
+          : DEFAULT_ACCESS_CODES.map((c) => ({ ...c }));
+      const list = stored.map((c) => formatInviteRow(c, originBase)).reverse();
+      return send(res, 200, { ok: true, invites: list, cloud: false });
+    }
+
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
     const body = await readJson(req, 16 * 1024);
-    const credits = Math.max(10, Math.min(100000, Math.round(Number(body?.credits) || 250)));
+    const rawCredits = Number(body?.credits);
+    if (!Number.isFinite(rawCredits) || rawCredits <= 0 || rawCredits > 10000) {
+      throw new ApiError(400, 'Informe uma quantidade de créditos válida entre 0,5 e 10.000.');
+    }
+    const credits = Math.max(0.5, roundCredits(rawCredits));
     const maxRedemptions = Math.max(1, Math.min(500, Math.round(Number(body?.maxRedemptions) || 1)));
-    const note = String(body?.note || '').trim().slice(0, 120);
+    const codeType = body?.codeType === 'user_recharge' ? 'user_recharge' : 'invite_only';
+    const note = scrubPii(String(body?.note || '').trim()).slice(0, 120);
 
-    const code = generateAccessCode();
+    const prefix = codeType === 'user_recharge' ? 'RC10' : 'AI10';
+    const code = generateAccessCode(prefix);
     const parts = code.split('-');
     const masked = `${parts[0]}-****-${parts[2]}`;
+    const hash = computeSha256(code);
     const now = new Date().toISOString();
 
     const storedEntry = {
-      hash: computeSha256(code),
+      id: randomUUID(),
+      code,
+      hash,
       masked,
+      codeType,
       credits,
       maxRedemptions,
       redemptionCount: 0,
@@ -1511,7 +1812,57 @@ export async function handleAdminRoutes(req, res, ctx) {
       note,
       createdBy: email || user.id,
       createdAt: now,
+      lastRedeemedByEmail: null,
+      lastRedeemedAt: null,
     };
+
+    let cloudPersisted = false;
+    if (isCloudActive) {
+      const insertPayload = {
+        code_hash: hash,
+        code_masked: masked,
+        code_display: code,
+        code_type: codeType,
+        credits,
+        max_redemptions: maxRedemptions,
+        redemption_count: 0,
+        status: 'active',
+        note,
+        created_by_email: email || null,
+      };
+      const insRes = await sbFetch(`${sbUrl}/rest/v1/cg_access_codes`, {
+        method: 'POST',
+        headers: { ...sbHeaders, Prefer: 'return=representation' },
+        body: JSON.stringify(insertPayload),
+        signal: AbortSignal.timeout(5000),
+      }).catch(() => null);
+      if (insRes?.ok) {
+        const createdRows = await insRes.json().catch(() => []);
+        if (Array.isArray(createdRows) && createdRows[0]?.id) {
+          storedEntry.id = createdRows[0].id;
+        }
+        cloudPersisted = true;
+      } else {
+        // Fallback compatível caso migration ainda não tenha sido aplicada no banco remoto
+        const fallbackRes = await sbFetch(`${sbUrl}/rest/v1/cg_access_codes`, {
+          method: 'POST',
+          headers: { ...sbHeaders, Prefer: 'return=representation' },
+          body: JSON.stringify({
+            code_hash: hash,
+            code_masked: masked,
+            credits: Math.max(1, Math.round(credits)),
+            max_redemptions: maxRedemptions,
+            redemption_count: 0,
+            status: 'active',
+          }),
+          signal: AbortSignal.timeout(5000),
+        }).catch(() => null);
+        if (fallbackRes?.ok) {
+          cloudPersisted = true;
+        }
+      }
+    }
+
     await serializeCreditOp(codesPath, async () => {
       const storedRaw = await readJsonFile(codesPath, null);
       const stored =
@@ -1526,10 +1877,12 @@ export async function handleAdminRoutes(req, res, ctx) {
       const latestRegistry = normalizeAdminRegistry(await readJsonFile(registryPath, emptyAdminRegistry()));
       latestRegistry.auditLog.push({
         id: randomUUID(),
-        action: 'create_invite',
+        action: codeType === 'user_recharge' ? 'create_recharge_code' : 'create_invite',
         masked,
+        codeType,
         credits,
         maxRedemptions,
+        cloudPersisted,
         by: email || user.id,
         at: now,
       });
@@ -1539,11 +1892,8 @@ export async function handleAdminRoutes(req, res, ctx) {
 
     return send(res, 200, {
       ok: true,
-      invite: {
-        ...storedEntry,
-        code,
-        inviteUrl: `http://127.0.0.1:1245/access?code=${encodeURIComponent(code)}`,
-      },
+      cloud: cloudPersisted,
+      invite: formatInviteRow(storedEntry, originBase),
     });
   }
 
@@ -1551,20 +1901,54 @@ export async function handleAdminRoutes(req, res, ctx) {
   if (pathname === '/api/admin/invites/revoke') {
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
     const body = await readJson(req, 8 * 1024);
+    const id = String(body?.id || '').trim();
     const code = String(body?.code || '').trim();
     const masked = String(body?.masked || '').trim();
+    const hash = code ? computeSha256(code) : '';
 
-    const updated = await serializeCreditOp(codesPath, async () => {
+    const { url: sbUrl, serviceRoleKey } = resolveSupabaseAdminConfig();
+    const isCloudActive = process.env.CG_PERSISTENCE !== 'local' && Boolean(sbUrl && serviceRoleKey);
+    const sbFetch = ctx.fetchImpl || globalThis.fetch;
+    let cloudRevoked = false;
+    if (isCloudActive && (id || hash || masked)) {
+      const sbHeaders = {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+      };
+      const isUuidId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      const filter = isUuidId
+        ? `id=eq.${encodeURIComponent(id)}`
+        : hash
+          ? `code_hash=eq.${encodeURIComponent(hash)}`
+          : `code_masked=eq.${encodeURIComponent(masked)}&status=eq.active`;
+      const revRes = await sbFetch(`${sbUrl}/rest/v1/cg_access_codes?${filter}`, {
+        method: 'PATCH',
+        headers: sbHeaders,
+        body: JSON.stringify({ status: 'revoked' }),
+        signal: AbortSignal.timeout(5000),
+      }).catch(() => null);
+      if (revRes?.ok) {
+        const updatedRows = await revRes.json().catch(() => []);
+        cloudRevoked = Array.isArray(updatedRows) && updatedRows.length > 0;
+      }
+    }
+
+    const localRevoked = await serializeCreditOp(codesPath, async () => {
       const storedRaw = await readJsonFile(codesPath, null);
       const stored =
         Array.isArray(storedRaw) && storedRaw.length > 0
           ? storedRaw.map((c) => ({ ...c }))
           : DEFAULT_ACCESS_CODES.map((c) => ({ ...c }));
       let didUpdate = false;
-      const hash = code ? computeSha256(code) : '';
 
       for (const item of stored) {
-        if ((hash && item.hash === hash) || (masked && item.masked === masked && item.status === 'active')) {
+        if (
+          (id && (item.id === id || item.hash === id)) ||
+          (hash && item.hash === hash) ||
+          (masked && item.masked === masked && item.status === 'active')
+        ) {
           item.status = 'revoked';
           didUpdate = true;
         }
@@ -1575,7 +1959,7 @@ export async function handleAdminRoutes(req, res, ctx) {
       return didUpdate;
     });
 
-    return send(res, 200, { ok: true, revoked: updated });
+    return send(res, 200, { ok: true, revoked: cloudRevoked || localRevoked });
   }
 
   // POST /api/admin/tickets/resolve

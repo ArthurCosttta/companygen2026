@@ -52,6 +52,8 @@ export const CatalogProductSchema = z.object({
   priceCents: z.number().int().min(0),
   variation: z.string().default('Padrão'),
   stock: z.number().int().min(0).default(0),
+  stockQty: z.number().int().min(0).optional(),
+  trackStock: z.boolean().default(false).optional(),
   lowStockThreshold: z.number().int().min(0).default(3).optional(),
   autoPausedOutOfStock: z.boolean().default(false).optional(),
   imageFocalPoint: ProductFocalPointSchema.default({ x: 50, y: 50 }).optional(),
@@ -245,6 +247,7 @@ export const BusinessProfileSchema = z.object({
     visualMood: z.enum(['boutique', 'direct', 'warm']).default('boutique').optional(),
     generateAiLogo: z.boolean().default(false),
     themePreset: z.string().default('minimal-luxury'),
+    storeIdentityId: z.string().optional(),
   }).default({
     instagram: '',
     logoUrl: '',

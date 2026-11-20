@@ -13,10 +13,18 @@ import {
 } from '../shared/formula-ir/composer-schema.mjs';
 import { validateFormulaIrDocument } from '../shared/formula-ir/schema.mjs';
 import {
+  CREDIT_ACTION_COSTS,
   debitCredits,
   getCreditBalance,
   refundCredits,
 } from './access-and-checkout.mjs';
+import {
+  EXPERIENCE_MATRIX,
+  auditCopyConversion,
+  computeStoreIdentityId,
+  pickExperienceCombo,
+  sanitizeCustomHtmlBlock,
+} from './storefront-experience-matrix.mjs';
 import { recordSystemIncident } from './admin-console.mjs';
 import { runDesignCritic } from './design-critic.mjs';
 import { generateRunPodImage } from './runpod-media.mjs';
@@ -636,7 +644,7 @@ export async function generateFullStorefrontMolde({
       user,
       directory,
       action: 'generate_full_storefront',
-      amount: 30,
+      amount: CREDIT_ACTION_COSTS.generate_full_storefront,
       metadata: {
         version: FORMULA_V9_VERSION,
         phase: 'reserve',
@@ -666,25 +674,109 @@ export async function generateFullStorefrontMolde({
     let glmAttemptedAndFailed = false;
     setStoreMoldeJobStage(clientJobId, 'designing_experience', 'Desenhando experiência');
     if (useGlm) {
-      const { systemPrompt, userPrompt } = buildGlmArchitectMessages(profile);
+      const storeIdentityId =
+        profile?.brand?.storeIdentityId ||
+        computeStoreIdentityId({
+          slug: profile?.publishedStore?.slug || profile?.business?.name || '',
+          niche: profile?.business?.segment || '',
+          name: profile?.business?.name || '',
+        });
+      const allProds = Array.isArray(profile?.catalog?.products) ? profile.catalog.products : [];
+      const catStats = new Map();
+      for (const p of allProds) {
+        const cat = String(p?.category || 'Geral').trim() || 'Geral';
+        const price = Number(p?.priceCents || 0) / 100;
+        const cur = catStats.get(cat) || { count: 0, min: price, max: price, sample: [] };
+        cur.count += 1;
+        if (price > 0) {
+          cur.min = cur.min > 0 ? Math.min(cur.min, price) : price;
+          cur.max = Math.max(cur.max, price);
+        }
+        if (cur.sample.length < 2 && p?.name) cur.sample.push(p.name);
+        catStats.set(cat, cur);
+      }
+      const categorySummary = Array.from(catStats.entries())
+        .map(([cat, st]) => `${cat} (${st.count} itens, R$ ${st.min.toFixed(2)}–R$ ${st.max.toFixed(2)}; ex: ${st.sample.join(', ')})`)
+        .join(' | ');
+      const instaHandle = String(profile?.brand?.instagram || profile?.business?.instagram || '').trim();
+      const bizDesc = String(profile?.business?.description || '').trim();
+      const comboPrompt = [
+        `Loja: "${profile?.business?.name || 'Loja'}", Ramo: "${profile?.business?.segment || 'Geral'}"${instaHandle ? `, Instagram: "${instaHandle}"` : ''}.`,
+        bizDesc ? `Contexto/Bio: "${bizDesc.slice(0, 280)}".` : '',
+        categorySummary ? `Categorias do catálogo (${allProds.length} SKUs): ${categorySummary}.` : '',
+        `Escolha 1 combinação da matriz:`,
+        `heroVariant: ${EXPERIENCE_MATRIX.heroVariants.join('|')}`,
+        `cardVariant: ${EXPERIENCE_MATRIX.cardVariants.join('|')}`,
+        `rhythm: ${EXPERIENCE_MATRIX.rhythmVariants.join('|')}`,
+        `Responda APENAS JSON válido PT-BR compacto que represente TODAS as categorias principais da loja:`,
+        `{"experienceCombo":{"heroVariant":"...","cardVariant":"...","rhythm":"..."},"hero":{"eyebrow":"...","title":"...","subtitle":"...","ctaLabel":"..."},"differentials":[{"title":"...","text":"..."},{"title":"...","text":"..."},{"title":"...","text":"..."}],"closingTitle":"...","closingSubtitle":"..."}`,
+      ].filter(Boolean).join('\n');
+
       const glmRes = await callGlm53Json({
-        systemPrompt,
-        userPrompt,
-        maxTokens: 2800,
-        timeoutMs: 60000,
+        systemPrompt: 'Arquiteto de vitrines e-commerce PT-BR. Responda apenas JSON válido e conciso.',
+        userPrompt: comboPrompt,
+        maxTokens: 900,
+        timeoutMs: 35000,
       });
       if (glmRes.ok && glmRes.data) {
+        const baseDoc = buildNeutralFallbackV9Document(profile);
+        const combo = pickExperienceCombo(storeIdentityId, glmRes.data.experienceCombo || {});
+        const d = glmRes.data;
+        const mergedSections = baseDoc.sections.map((sec) => {
+          if (sec.type === 'HeroSection' && d.hero) {
+            return {
+              ...sec,
+              config: {
+                ...sec.config,
+                eyebrow: String(d.hero.eyebrow || sec.config.eyebrow).slice(0, 60),
+                title: String(d.hero.title || sec.config.title).slice(0, 90),
+                subtitle: String(d.hero.subtitle || sec.config.subtitle).slice(0, 180),
+                primaryCta: {
+                  ...sec.config.primaryCta,
+                  label: String(d.hero.ctaLabel || sec.config.primaryCta?.label || 'Ver catálogo').slice(0, 36),
+                },
+              },
+            };
+          }
+          if (sec.type === 'DifferentialsStrip' && Array.isArray(d.differentials) && d.differentials.length >= 2) {
+            return {
+              ...sec,
+              config: {
+                items: d.differentials.slice(0, 3).map((item, idx) => ({
+                  icon: sec.config.items?.[idx]?.icon || 'sparkles',
+                  title: String(item?.title || 'Diferencial').slice(0, 50),
+                  text: String(item?.text || '').slice(0, 120),
+                })),
+              },
+            };
+          }
+          if (sec.type === 'ClosingScheduleSplit' && (d.closingTitle || d.closingSubtitle)) {
+            return {
+              ...sec,
+              config: {
+                ...sec.config,
+                title: String(d.closingTitle || sec.config.title).slice(0, 90),
+                subtitle: String(d.closingSubtitle || sec.config.subtitle).slice(0, 180),
+              },
+            };
+          }
+          return sec;
+        });
+
         const sanitized = sanitizeFormulaV9Document(
           {
-            ...glmRes.data,
-            generatedBy: 'glm-architect-v9',
+            ...baseDoc,
+            storeIdentityId,
+            experienceCombo: combo,
+            sections: mergedSections,
+            generatedBy: 'glm-combinatorial-v9',
             modelUsed: glmRes.model || 'zai-org/GLM-5.3',
           },
           profile,
         );
-        if (sanitized.sections.length >= 2) {
+        if (sanitized.sections.length >= 4) {
           doc = sanitized;
-          generatedBy = 'glm-architect-v9';
+          generatedBy = 'glm-combinatorial-v9';
           modelUsed = glmRes.model || 'zai-org/GLM-5.3';
         } else {
           glmAttemptedAndFailed = true;
@@ -785,7 +877,7 @@ export async function generateFullStorefrontMolde({
         user,
         directory,
         action: 'generate_full_storefront',
-        amount: 30,
+        amount: CREDIT_ACTION_COSTS.generate_full_storefront,
         metadata: {
           reason: 'glm_fallback_no_charge',
           referenceId: creditResult?.entry?.id,
@@ -801,7 +893,7 @@ export async function generateFullStorefrontMolde({
         root,
         type: 'glm_fallback_triggered',
         userId: user?.id,
-        detail: 'generateFullStorefrontMolde caiu em structural-fallback e estornou 30 cr',
+        detail: `generateFullStorefrontMolde caiu em structural-fallback e estornou ${CREDIT_ACTION_COSTS.generate_full_storefront} cr`,
         readJsonFile,
         atomicWriteJson,
       });
@@ -1010,7 +1102,7 @@ export async function handleStorefrontMoldeRoutes(req, res, ctx) {
     return send(res, 200, result);
   }
 
-  // 3. POST /api/store-molde/create-page (-15 cr)
+  // 3. POST /api/store-molde/create-page (-2 cr · subpage_full_architect)
   if (pathname === '/api/store-molde/create-page') {
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
     const body = await readJson(req, 1024 * 1024);
@@ -1020,12 +1112,14 @@ export async function handleStorefrontMoldeRoutes(req, res, ctx) {
     const pageTitle = String(body?.title || 'Coleção Especial').trim().slice(0, 60);
     const slug = slugifyTitle(body?.slug || pageTitle);
     const pagePrompt = String(body?.prompt || `Subpágina ${pageTitle} para ${profile?.business?.name || 'a loja'}.`).trim();
+    const idempotencyKey = body?.idempotencyKey ? String(body.idempotencyKey).slice(0, 120) : undefined;
 
     const debit = await debitCredits({
       user,
       directory,
       action: 'create_subpage',
-      amount: 15,
+      amount: CREDIT_ACTION_COSTS.create_subpage,
+      idempotencyKey,
       metadata: { pageFilename: `pages/${slug}.html`, pageTitle, phase: 'reserve' },
       readJsonFile,
       atomicWriteJson,
@@ -1035,23 +1129,52 @@ export async function handleStorefrontMoldeRoutes(req, res, ctx) {
     try {
       let heroSubtitle = pagePrompt.slice(0, 180);
       let heroTitle = pageTitle;
+      let seoTitle = `${pageTitle} · ${profile?.business?.name || 'Loja'}`;
+      let seoDescription = pagePrompt.slice(0, 155);
+      let benefitsList = [
+        { icon: 'sparkles', title: 'Seleção Exclusiva', text: 'Itens escolhidos para esta campanha.' },
+        { icon: 'shield', title: 'Atendimento Direto', text: 'Tire dúvidas e finalize pelo WhatsApp.' },
+        { icon: 'truck', title: 'Entrega ou Retirada', text: 'Combinamos a melhor opção para você.' },
+      ];
       if (body?.useGlm !== false) {
         const glm = await callGlm53Json({
-          systemPrompt: 'Responda apenas JSON válido PT-BR para criar cabeçalho de subpágina de loja.',
-          userPrompt: `Loja: ${profile?.business?.name || 'Loja'}. Subpágina: "${pageTitle}". Pedido: "${pagePrompt}". JSON: {"heroTitle":"...","heroSubtitle":"..."}`,
+          systemPrompt: 'Responda apenas JSON válido PT-BR para arquitetar subpágina completa de loja.',
+          userPrompt: `Loja: ${profile?.business?.name || 'Loja'}. Subpágina: "${pageTitle}". Pedido: "${pagePrompt}". JSON: {"heroTitle":"...","heroSubtitle":"...","seoTitle":"...","seoDescription":"...","benefits":[{"title":"...","text":"..."}]}`,
           timeoutMs: 25000,
         });
         if (glm.ok && glm.data) {
           if (glm.data.heroTitle) heroTitle = String(glm.data.heroTitle).slice(0, 90);
           if (glm.data.heroSubtitle) heroSubtitle = String(glm.data.heroSubtitle).slice(0, 180);
+          if (glm.data.seoTitle) seoTitle = String(glm.data.seoTitle).slice(0, 80);
+          if (glm.data.seoDescription) seoDescription = String(glm.data.seoDescription).slice(0, 160);
+          if (Array.isArray(glm.data.benefits) && glm.data.benefits.length >= 2) {
+            benefitsList = glm.data.benefits.slice(0, 3).map((b) => ({
+              icon: 'sparkles',
+              title: String(b?.title || 'Destaque').slice(0, 50),
+              text: String(b?.text || '').slice(0, 120),
+            }));
+          }
         }
       }
+
+      const storeIdentityId =
+        profile?.brand?.storeIdentityId ||
+        computeStoreIdentityId({
+          slug: profile?.publishedStore?.slug || slug,
+          niche: profile?.business?.segment || '',
+          name: profile?.business?.name || '',
+        });
+      const combo = pickExperienceCombo(storeIdentityId);
 
       const newPage = {
         id: `page_${slug}`,
         slug,
         filename: `pages/${slug}.html`,
         title: pageTitle,
+        seoTitle,
+        seoDescription,
+        storeIdentityId,
+        experienceCombo: combo,
         isHome: false,
         sections: [
           {
@@ -1064,6 +1187,11 @@ export async function handleStorefrontMoldeRoutes(req, res, ctx) {
               subtitle: heroSubtitle,
               primaryCta: { label: 'Explorar catálogo', href: '#catalogo' },
             },
+          },
+          {
+            id: `sec_diff_${slug}`,
+            type: 'DifferentialsStrip',
+            config: { items: benefitsList },
           },
           {
             id: `sec_cat_${slug}`,
@@ -1109,7 +1237,7 @@ export async function handleStorefrontMoldeRoutes(req, res, ctx) {
         user,
         directory,
         action: 'create_subpage',
-        amount: 15,
+        amount: debit.debited || CREDIT_ACTION_COSTS.create_subpage,
         metadata: { pageFilename: `pages/${slug}.html`, reason: err instanceof Error ? err.message : 'create_page_failed', referenceId: debit?.entry?.id },
         readJsonFile,
         atomicWriteJson,

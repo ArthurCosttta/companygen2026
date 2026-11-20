@@ -5,6 +5,8 @@ import {
   ChevronDown,
   ChevronRight,
   Coins,
+  Copy,
+  ExternalLink,
   Eye,
   Flag,
   RefreshCw,
@@ -204,6 +206,7 @@ export function AdminUser360Drawer({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: targetUser.id,
+            targetEmail: targetUser.email,
             mode: creditMode,
             amount: numericAmount,
             reasonCode,
@@ -218,12 +221,29 @@ export function AdminUser360Drawer({
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || 'Falha ao ajustar créditos.');
       }
-      showToast({
-        type: 'success',
-        message: json.duplicate
-          ? 'Ajuste já aplicado anteriormente (idempotência garantida).'
-          : `Saldo atualizado para ${Number(json.newBalance || 0).toLocaleString('pt-BR')} créditos.`,
-      });
+      const fmtNewBal = Number(json.newBalance || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+      if (json.duplicate) {
+        showToast({
+          type: 'neutral',
+          message: 'Ajuste já aplicado anteriormente (idempotência garantida).',
+        });
+      } else if (notifyByEmail && Number(json.delta || 0) > 0 && json.emailSent === false) {
+        showToast({
+          type: 'warning',
+          title: `Saldo atualizado para ${fmtNewBal} cr`,
+          message:
+            json.emailError === 'SMTP_NOT_CONFIGURED'
+              ? 'Créditos aplicados, mas o Gmail SMTP ainda não foi configurado no servidor.'
+              : `Créditos aplicados, porém o envio de e-mail falhou (${json.emailError || 'erro SMTP'}).`,
+        });
+      } else {
+        showToast({
+          type: 'success',
+          message: json.emailSent
+            ? `Saldo atualizado para ${fmtNewBal} cr · E-mail enviado para ${targetUser.email || 'o lojista'}.`
+            : `Saldo atualizado para ${fmtNewBal} créditos.`,
+        });
+      }
       setCreditNote('');
       setIdempotencyKey(`ui-${targetUser.id.slice(0, 8)}-${Date.now()}`);
       await onRefreshOverview();
@@ -419,18 +439,54 @@ export function AdminUser360Drawer({
             ) : null}
           </div>
 
-          <ActionButton
-            type="button"
-            variant="primary"
-            size={44}
-            data-testid="admin-360-support-readonly-btn"
-            isLoading={loadingSnapshot}
-            onClick={handleOpenSupportReadonly}
-            className="w-full"
-            leftIcon={<Eye className="size-4" />}
-          >
-            Ver Painel Como Cliente (Modo Suporte Somente Leitura)
-          </ActionButton>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <ActionButton
+              type="button"
+              variant="softBlue"
+              size={44}
+              data-testid="admin-drawer-view-store-btn"
+              onClick={() => {
+                const url = `/?view=store&u=${encodeURIComponent(targetUser.id)}&adminPreview=1`;
+                window.open(url, '_blank', 'noopener,noreferrer');
+              }}
+              className="w-full"
+              leftIcon={<ExternalLink className="size-4" />}
+            >
+              Abrir Loja do Cliente ({targetUser.published ? 'Publicada' : 'Rascunho'})
+            </ActionButton>
+            <ActionButton
+              type="button"
+              variant="secondary"
+              size={44}
+              data-testid="admin-drawer-copy-store-url-btn"
+              onClick={() => {
+                const publicUrl = targetUser.publicSlug
+                  ? `${window.location.origin}/?loja=${encodeURIComponent(targetUser.publicSlug)}`
+                  : `${window.location.origin}/?view=store&u=${encodeURIComponent(targetUser.id)}`;
+                void navigator.clipboard?.writeText(publicUrl).catch(() => {});
+                showToast({ type: 'success', message: `Link da loja copiado: ${publicUrl}` });
+              }}
+              className="w-full"
+              leftIcon={<Copy className="size-4" />}
+            >
+              Copiar Link Público
+            </ActionButton>
+          </div>
+
+          <div className="mt-2">
+            <ActionButton
+              type="button"
+              variant="primary"
+              size={44}
+              data-testid="admin-360-support-readonly-btn"
+              isLoading={loadingSnapshot}
+              onClick={handleOpenSupportReadonly}
+              className="w-full"
+              leftIcon={<Eye className="size-4" />}
+            >
+              Ver Painel Como Cliente (Modo Suporte Somente Leitura)
+            </ActionButton>
+          </div>
         </div>
 
         {/* Acordeão 1: Saldo & Créditos */}

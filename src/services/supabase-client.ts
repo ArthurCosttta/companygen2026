@@ -138,11 +138,6 @@ export async function authenticatedFetch(input: string, init?: RequestInit, expe
   if (!accessToken || (expectedUser && activeUserId !== expectedUser)) {
     throw new Error('Entre na sua conta para continuar.');
   }
-  const headers = new Headers(init?.headers);
-  headers.set('Authorization', 'Bearer ' + accessToken);
-  if (activeSupportReadonlySession && !input.startsWith('/api/admin/')) {
-    headers.set('X-Support-Readonly', '1');
-  }
 
   const timeoutMs = resolveFetchTimeoutMs(input);
   let timeoutSignal: AbortSignal | undefined;
@@ -184,8 +179,31 @@ export async function authenticatedFetch(input: string, init?: RequestInit, expe
   }
 
   let res: Response;
+  const doFetch = async (tokenToUse: string) => {
+    const reqHeaders = new Headers(init?.headers);
+    reqHeaders.set('Authorization', 'Bearer ' + tokenToUse);
+    if (activeSupportReadonlySession && !input.startsWith('/api/admin/')) {
+      reqHeaders.set('X-Support-Readonly', '1');
+    }
+    return fetch(input, { ...init, headers: reqHeaders, signal, cache: 'no-store', redirect: 'error' });
+  };
+
   try {
-    res = await fetch(input, { ...init, headers, signal, cache: 'no-store', redirect: 'error' });
+    res = await doFetch(accessToken);
+    // QA14-05: Renovação silenciosa de JWT no 401 (1 retry) para manter Desktop aberto 24h sem deslogar
+    const isUsingRealSupabaseSession = Boolean(realToken && accessToken === realToken);
+    if (res.status === 401 && isUsingRealSupabaseSession) {
+      try {
+        const refreshed = await supabase.auth.refreshSession();
+        const freshToken = refreshed?.data?.session?.access_token || '';
+        const freshUserId = refreshed?.data?.session?.user?.id || '';
+        if (freshToken && (!expectedUser || freshUserId === expectedUser)) {
+          res = await doFetch(freshToken);
+        }
+      } catch {
+        // Mantém o 401 original se refresh falhar
+      }
+    }
   } catch (err) {
     if (timeoutSignal?.aborted && !init?.signal?.aborted) {
       const timeoutErr = new Error('Tempo limite de resposta excedido. Tente novamente.');
@@ -201,14 +219,32 @@ export async function authenticatedFetch(input: string, init?: RequestInit, expe
   if (typeof window !== 'undefined' && (res.status === 402 || input.startsWith('/api/store-molde/') || input.startsWith('/api/whatsapp/ai/') || input.startsWith('/api/ai/'))) {
     try {
       const cloned = await res.clone().json().catch(() => null);
+      if (cloned && typeof cloned.debited === 'number' && cloned.debited > 0) {
+        window.dispatchEvent(
+          new CustomEvent('companygen:credit-spent', {
+            detail: {
+              debited: Number(cloned.debited),
+              action: String(cloned.action || input),
+              balanceAfter: typeof cloned.balanceAfter === 'number' ? cloned.balanceAfter : undefined,
+              at: new Date().toISOString(),
+            },
+          }),
+        );
+      }
       if (cloned && typeof cloned.balanceAfter === 'number') {
         window.dispatchEvent(
           new CustomEvent('companygen:credit-balance-updated', { detail: { balance: cloned.balanceAfter } }),
+        );
+        window.dispatchEvent(
+          new CustomEvent('companygen:credits-updated', { detail: { balance: cloned.balanceAfter } }),
         );
       } else if (res.status === 402 && cloned) {
         if (typeof cloned.balance === 'number') {
           window.dispatchEvent(
             new CustomEvent('companygen:credit-balance-updated', { detail: { balance: cloned.balance } }),
+          );
+          window.dispatchEvent(
+            new CustomEvent('companygen:credits-updated', { detail: { balance: cloned.balance } }),
           );
         }
         window.dispatchEvent(new CustomEvent('companygen:insufficient-credits', { detail: cloned }));

@@ -1321,7 +1321,7 @@ export const ArchetypeComposerView: React.FC<ArchetypeComposerViewProps> = ({
                 className="min-h-[38px] flex-1 min-w-[220px] rounded-xl border border-[var(--cg-border)] bg-[var(--cg-surface)] px-3 text-xs text-[var(--cg-ink)]"
               />
               <CreditCostPreview
-                cost={15}
+                cost={2}
                 balance={effectiveBalance}
                 label="Nova Página"
                 onOpenRecharge={handleOpenRechargePlans}
@@ -1336,7 +1336,7 @@ export const ArchetypeComposerView: React.FC<ArchetypeComposerViewProps> = ({
                 className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-[#0B4DB8] px-4 text-xs font-extrabold text-white hover:bg-[#083B9A]"
               >
                 <Sparkles className="size-3.5" />
-                <span>{creatingPage ? 'Criando...' : 'Criar Página (-15 cr)'}</span>
+                <span>{creatingPage ? 'Criando...' : 'Criar Página (-2 cr)'}</span>
               </button>
               <button
                 type="button"
@@ -1352,7 +1352,7 @@ export const ArchetypeComposerView: React.FC<ArchetypeComposerViewProps> = ({
         {/* Área Principal 30% / 70% */}
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(310px,30%)_minmax(0,70%)]">
           {/* Coluna Esquerda 30%: Camadas PT-BR + Ajuste Cirúrgico + Editor Manual + Cores */}
-          <aside className="flex flex-col border-b border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] lg:border-r lg:border-b-0">
+          <aside className="flex min-h-0 flex-col overflow-hidden border-b border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] lg:border-r lg:border-b-0">
             <div className="flex gap-1.5 border-b border-[var(--cg-border)] p-2">
               {(
                 [
@@ -1377,7 +1377,7 @@ export const ArchetypeComposerView: React.FC<ArchetypeComposerViewProps> = ({
               ))}
             </div>
 
-            <div className="flex-1 space-y-4 overflow-y-auto p-3.5">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3.5 pb-8">
               {leftTab === 'layers' ? (
                 <>
                   {/* 1. Campo Único de Patch Cirúrgico (-5 cr) */}

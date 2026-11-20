@@ -33,6 +33,9 @@ import {
   fetchCloudPublishedFlag,
   isCloudStorageEnabled,
 } from './supabase-storage-sync.mjs';
+import { loadStorefrontSnapshot } from './public-storefront-loader.mjs';
+import { getWebviewScriptsBundle } from '../shared/whatsapp-webview-script.mjs';
+import { signWebviewScriptsPayload } from '../shared/webview-scripts-signer.mjs';
 import {
   handlePublicQrRedirect,
   handleSupportAndQrClientRoutes,
@@ -1604,6 +1607,8 @@ export function createWorkspaceApi(options = {}) {
         bio: String(parsed.bio || ''),
         category: String(parsed.category || ''),
         logoUrl,
+        logoDataUrl: String(parsed.logoDataUrl || ''),
+        dominantColors: Array.isArray(parsed.dominantColors) ? parsed.dominantColors.map(String).slice(0, 2) : [],
         source: String(parsed.source || ''),
         phone: String(parsed.phone || ''),
         address: String(parsed.address || ''),
@@ -1792,10 +1797,37 @@ export function createWorkspaceApi(options = {}) {
       }
     }
 
+    if (pathname.startsWith('/api/public/store/')) {
+      if (req.method !== 'GET') {
+        send(res, 405, { ok: false, error: 'Método indisponível.' });
+        return;
+      }
+      try {
+        const lookupKey = decodeURIComponent(pathname.slice('/api/public/store/'.length)).trim();
+        const snap = await loadStorefrontSnapshot({
+          lookupKey,
+          allowDraft: false,
+          root,
+          readJsonFile,
+          fetchImpl: request,
+        });
+        if (!snap.ok) {
+          send(res, snap.status || 404, { ok: false, error: snap.error });
+          return;
+        }
+        res.setHeader('Cache-Control', 'public, max-age=30');
+        send(res, 200, snap);
+      } catch (error) {
+        send(res, error.status || 500, { ok: false, error: error.message || 'Erro ao carregar vitrine pública.' });
+      }
+      return;
+    }
+
     if (
       pathname === '/api/access/validate' ||
       pathname === '/api/access/showcase-status' ||
       pathname === '/api/access/local-showcase-login' ||
+      pathname === '/api/access/guest-start' ||
       pathname === '/api/credits/costs' ||
       (pathname === '/api/checkout/plans' && !req.headers.authorization)
     ) {
@@ -1817,6 +1849,18 @@ export function createWorkspaceApi(options = {}) {
         if (!res.headersSent) send(res, error.status || 500, { ok: false, error: error.message || 'Erro de validação.' });
         return;
       }
+    }
+
+    if (pathname === '/api/desktop/webview-scripts') {
+      if (req.method !== 'GET') {
+        send(res, 405, { ok: false, error: 'Método indisponível.' });
+        return;
+      }
+      const bundle = getWebviewScriptsBundle();
+      const signedBundle = signWebviewScriptsPayload(bundle);
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      send(res, 200, { ok: true, ...signedBundle });
+      return;
     }
 
     if (pathname === '/api/desktop/release-policy') {
@@ -1853,6 +1897,8 @@ export function createWorkspaceApi(options = {}) {
       '/api/checkout/plans',
       '/api/credits/balance',
       '/api/credits/costs',
+      '/api/credits/redeem-code',
+      '/api/credits/redemption-quota',
       '/api/checkout/order',
       '/api/checkout/confirm',
       '/api/support/tickets',

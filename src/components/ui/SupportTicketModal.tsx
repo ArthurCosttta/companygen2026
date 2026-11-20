@@ -82,6 +82,26 @@ export function SupportTicketModal({
   const [sending, setSending] = useState(false);
   const [tickets, setTickets] = useState<SupportTicketItem[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
+  const [triageQuery, setTriageQuery] = useState('');
+  const [triageAnswer, setTriageAnswer] = useState('');
+
+  const runQuickTriage = (queryText?: string) => {
+    const q = (queryText ?? triageQuery).trim().toLowerCase();
+    if (!q) return;
+    if (/qr|whatsapp|desconect|conectar|mensagem/.test(q)) {
+      setTriageAnswer('Dica rápida: mantenha o App Desktop aberto (bandeja ativa). Se o QR expirou, clique em Reconectar na aba WhatsApp. A Sofia continua respondendo mesmo quando você muda de aba.');
+      setCategory('whatsapp');
+    } else if (/cr[eé]dito|saldo|plano|pix|recarreg/.test(q)) {
+      setTriageAnswer('Dica rápida: cada resposta no WhatsApp consome 0,1 cr; ajustes manuais no editor custam 0 cr. Você pode acompanhar cada gasto em Planos IA > Telemetria.');
+      setCategory('creditos');
+    } else if (/esgotado|vitrine|foto|cor|scroll|link/.test(q)) {
+      setTriageAnswer('Dica rápida: produtos só ficam Esgotados se você ativar controle de estoque com quantidade 0. Confira o link público no topo da aba Minha Loja.');
+      setCategory('vitrine');
+    } else {
+      setTriageAnswer('Não encontrei uma resposta pronta para esse caso. Preenchi o assunto abaixo para você enviar direto ao administrador!');
+    }
+    if (!subject) setSubject((queryText ?? triageQuery).trim().slice(0, 80));
+  };
 
   const attachImageFile = useCallback(async (file: File) => {
     setAttachmentError('');
@@ -210,6 +230,41 @@ export function SupportTicketModal({
           <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-200">
             Descreva o que aconteceu na sua vitrine, WhatsApp ou saldo de créditos. O administrador acompanha todos os chamados em tempo real.
           </p>
+        </div>
+
+        {/* Triagem Rápida IA antes de abrir chamado */}
+        <div
+          data-testid="support-ai-triage-box"
+          className="rounded-2xl border border-slate-200 bg-slate-50/90 p-3.5 space-y-2"
+        >
+          <p className="text-xs font-bold text-[#0F172A]">Triagem Rápida IA (0 créditos)</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={triageQuery}
+              onChange={(e) => setTriageQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  runQuickTriage();
+                }
+              }}
+              placeholder="Pergunte rápido (ex.: WhatsApp não responde, créditos, produto esgotado)..."
+              className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-[#0F172A]"
+            />
+            <button
+              type="button"
+              onClick={() => runQuickTriage()}
+              className="rounded-xl bg-[#0B4DB8] px-3 py-2 text-xs font-bold text-white hover:bg-[#083B9A]"
+            >
+              Verificar
+            </button>
+          </div>
+          {triageAnswer ? (
+            <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs text-slate-700">
+              {triageAnswer}
+            </p>
+          ) : null}
         </div>
 
         <form onSubmit={handleSubmit} onPaste={handlePaste} className="space-y-3">

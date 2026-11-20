@@ -28,6 +28,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { ActionButton, HumanErrorCard, ModalContainer, SupportTicketModal, useToast } from '@/components/ui';
+import { RedeemCreditCodeCard } from './RedeemCreditCodeCard';
 import { cn } from '@/lib/utils';
 import {
   useConnectionPhaseInfo,
@@ -60,10 +61,13 @@ export interface SettingsViewProps {
   profile: BusinessProfile;
   owner?: string;
   ownerEmail?: string;
+  creditBalance?: number | null;
   runtimeStatus?: WhatsappRuntimeStatus | null;
   isDarkMode?: boolean;
   onToggleDarkMode?: () => void;
   onProfileUpdated: (snap: ProfileSnapshot) => void;
+  onStoreReset?: () => void;
+  onOpenCheckout?: () => void;
   onLogout: () => void;
   onOpenExpressWizard?: (step?: OnboardingWizardStep) => void;
   onOpenWhatsApp?: () => void;
@@ -184,8 +188,11 @@ export function SettingsView({
   profile,
   owner,
   ownerEmail,
+  creditBalance,
   runtimeStatus,
   onProfileUpdated,
+  onStoreReset,
+  onOpenCheckout,
   onLogout,
   onOpenExpressWizard,
   onOpenWhatsApp,
@@ -606,6 +613,12 @@ export function SettingsView({
           draft.brand = fresh.brand;
           draft.catalog = fresh.catalog;
           draft.publishedStore = fresh.publishedStore;
+          if ('storeLayout' in fresh && fresh.storeLayout !== undefined) {
+            draft.storeLayout = fresh.storeLayout;
+          }
+          if ('shipping' in fresh && fresh.shipping !== undefined) {
+            draft.shipping = fresh.shipping;
+          }
         },
         { publish: false },
         owner,
@@ -615,10 +628,11 @@ export function SettingsView({
       setResetStep1Open(false);
       setResetConfirmText('');
       onProfileUpdated(snap);
+      onStoreReset?.();
       showToast({
         type: 'neutral',
         title: 'Loja reiniciada',
-        message: 'Todos os dados da loja foram zerados. Você pode configurar tudo do zero.',
+        message: 'Todos os dados da loja foram zerados. Configure sua nova vitrine agora.',
         durationMs: 3500,
       });
     } catch {
@@ -694,8 +708,54 @@ export function SettingsView({
   return (
     <div
       data-testid="settings-view"
-      className="mx-auto w-full max-w-4xl space-y-6 p-4 pb-24 sm:p-6 min-[769px]:pb-10"
+      className="mx-auto w-full max-w-4xl space-y-5 p-4 pb-24 sm:p-6 min-[769px]:pb-10"
     >
+      {/* FILA 14 — Card de Conta + Sair da Conta no topo (1 clique visível sem rolagem em 1366x768 e 390x844) */}
+      <section
+        aria-label="Conta conectada"
+        data-testid="settings-account-top-bar"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4 shadow-xs"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#EFF6FF] dark:bg-blue-500/20 text-sm font-extrabold text-[#2563EB] dark:text-blue-300">
+            {(ownerEmail || profile.business?.name || 'CG').slice(0, 2).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-[#0F172A] dark:text-[#F8FAFC]">
+              {profile.business?.name?.trim() || 'Sua Conta CompanyGen'}
+            </p>
+            <p className="truncate text-xs text-slate-500 dark:text-[#94A3B8]">
+              {ownerEmail || 'Conta autenticada'}
+              {typeof creditBalance === 'number'
+                ? ` · ${creditBalance.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} cr (${Math.floor(creditBalance * 10).toLocaleString('pt-BR')} msgs)`
+                : ''}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {onOpenCheckout ? (
+            <button
+              type="button"
+              data-testid="settings-top-plans-btn"
+              onClick={onOpenCheckout}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-emerald-200 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/15 px-3 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/25 transition"
+            >
+              <Sparkles className="size-3.5" aria-hidden="true" />
+              <span>Planos & Créditos</span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            data-testid="settings-top-logout-btn"
+            onClick={() => setLogoutModalOpen(true)}
+            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-500/40 bg-red-50 dark:bg-red-500/15 px-3.5 text-xs font-bold text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-500/25 transition"
+          >
+            <LogOut className="size-3.5" aria-hidden="true" />
+            <span>Sair da Conta</span>
+          </button>
+        </div>
+      </section>
+
       {/* Header + 4 Sub-abas limpas */}
       <header className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -717,14 +777,13 @@ export function SettingsView({
         <nav
           role="tablist"
           aria-label="Seções de Ajustes"
-          className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-1.5 sm:grid-cols-4"
+          className="grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-1.5 sm:grid-cols-3"
         >
           {(
             [
               { id: 'store' as const, label: '1. Dados da Loja & Pix', icon: Store },
-              { id: 'desktop' as const, label: '2. Desktop Windows (.exe)', icon: Monitor },
-              { id: 'credits' as const, label: '3. Créditos & Planos', icon: CreditCard },
-              { id: 'backup' as const, label: '4. Segurança & Backup', icon: ArchiveRestore },
+              { id: 'credits' as const, label: '2. Créditos & Telemetria', icon: CreditCard },
+              { id: 'backup' as const, label: '3. Segurança & Backup', icon: ArchiveRestore },
             ] as const
           ).map((tab) => {
             const Icon = tab.icon;
@@ -751,6 +810,11 @@ export function SettingsView({
           })}
         </nav>
       </header>
+
+      {/* Resgate de Códigos Especiais de Créditos (RC10 · máx. 3 por conta) */}
+      <div className="mx-auto max-w-2xl">
+        <RedeemCreditCodeCard userId={owner} compact />
+      </div>
 
       {/* ====================================================================
        * SUB-ABA 1: Dados da Loja, Entrega/Retirada & Chave Pix (max-w-2xl)

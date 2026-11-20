@@ -833,6 +833,71 @@ export function OrdersKanbanView({
               </article>
             </div>
 
+            {(() => {
+              const realOrders = orders.filter((o) => !isSimulationOrder(o));
+              const nonCancelled = realOrders.filter(
+                (o) => normalizeOrderStatus(o.status) !== 'cancelado',
+              );
+              const grossRevenueCents = nonCancelled.reduce(
+                (acc, o) => acc + Math.max(0, Number(o.total_cents || 0)),
+                0,
+              );
+              const cmvCents = nonCancelled.reduce((acc, o) => {
+                const raw = o as unknown as { cmv_cents?: number; unitCost?: number };
+                return acc + Math.max(0, Math.round(Number(raw.cmv_cents ?? (Number(raw.unitCost || 0) * 100))));
+              }, 0);
+              const feesCents = nonCancelled.reduce((acc, o) => {
+                const raw = o as unknown as { fee_cents?: number; feeAmount?: number };
+                return acc + Math.max(0, Math.round(Number(raw.fee_cents ?? (Number(raw.feeAmount || 0) * 100))));
+              }, 0);
+              const lossesCents = realOrders.reduce((acc, o) => {
+                const raw = o as unknown as { loss_cents?: number; lossAmount?: number };
+                return acc + Math.max(0, Math.round(Number(raw.loss_cents ?? (Number(raw.lossAmount || 0) * 100))));
+              }, 0);
+              const netProfitCents = grossRevenueCents - cmvCents - feesCents - lossesCents;
+              const marginPct =
+                grossRevenueCents > 0
+                  ? ((netProfitCents / grossRevenueCents) * 100).toFixed(1)
+                  : '0.0';
+              return (
+                <div
+                  data-testid="orders-dre-panel"
+                  className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4 shadow-xs"
+                >
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                      DRE Financeiro & Contábil (IA)
+                    </span>
+                    <span className="rounded-full bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                      Margem Líquida: {marginPct}%
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-5 text-xs">
+                    <div>
+                      <span className="text-slate-500 dark:text-slate-400">Faturamento Bruto</span>
+                      <div className="cg-tabular font-bold text-[#0F172A] dark:text-white">{formatCurrencyBRL(grossRevenueCents)}</div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 dark:text-slate-400">(-) CMV / Custos</span>
+                      <div className="cg-tabular font-bold text-slate-700 dark:text-slate-200">{formatCurrencyBRL(cmvCents)}</div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 dark:text-slate-400">(-) Taxas</span>
+                      <div className="cg-tabular font-bold text-slate-700 dark:text-slate-200">{formatCurrencyBRL(feesCents)}</div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 dark:text-slate-400">(-) Prejuízos</span>
+                      <div className="cg-tabular font-bold text-rose-600 dark:text-rose-400">{formatCurrencyBRL(lossesCents)}</div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 dark:text-slate-400">(=) Lucro Líquido</span>
+                      <div className="cg-tabular font-extrabold text-emerald-600 dark:text-emerald-400">{formatCurrencyBRL(netProfitCents)}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* Top 5 Produtos (Vitrine vs. Sofia WhatsApp vs. Balcão) */}
               <div className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4 shadow-xs space-y-3">

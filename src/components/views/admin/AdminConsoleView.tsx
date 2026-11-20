@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Copy,
   Download,
+  ExternalLink,
   Flag,
   KeyRound,
   LifeBuoy,
@@ -59,15 +60,22 @@ interface AdminQrCampaignRow {
 }
 
 interface AdminInviteRow {
+  id?: string;
   code: string | null;
   masked: string;
+  codeType?: 'invite_only' | 'user_recharge';
   credits: number;
   maxRedemptions: number;
   redemptionCount: number;
   status: string;
+  statusLabel?: string;
   createdAt: string | null;
+  createdBy?: string | null;
   note: string;
+  lastRedeemedByEmail?: string | null;
+  lastRedeemedAt?: string | null;
   inviteUrl: string | null;
+  redeemUrl?: string | null;
 }
 
 interface AdminIncidentRow {
@@ -222,10 +230,14 @@ export function AdminConsoleView({
   const [drawerUser, setDrawerUser] = useState<AdminUser360Target | null>(null);
 
   // Invites & Support Tickets
-  const [inviteCredits, setInviteCredits] = useState('250');
+  const [inviteCredits, setInviteCredits] = useState('20');
   const [inviteMaxUses, setInviteMaxUses] = useState('1');
+  const [inviteCodeType, setInviteCodeType] = useState<'invite_only' | 'user_recharge'>('invite_only');
   const [inviteNote, setInviteNote] = useState('');
   const [creatingInvite, setCreatingInvite] = useState(false);
+  const [codeFilter, setCodeFilter] = useState<'all' | 'active' | 'used' | 'invite_only' | 'user_recharge'>('all');
+  const [codeSearch, setCodeSearch] = useState('');
+  const [revokingCodeId, setRevokingCodeId] = useState<string | null>(null);
   const [ticketReplyDrafts, setTicketReplyDrafts] = useState<Record<string, string>>({});
 
   // Kiwify DLQ search/replay
@@ -361,25 +373,78 @@ export function AdminConsoleView({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            credits: Number(inviteCredits) || 250,
+            credits: Number(inviteCredits) || 20,
             maxRedemptions: Number(inviteMaxUses) || 1,
+            codeType: inviteCodeType,
             note: inviteNote,
           }),
         },
         userId,
       );
       const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Falha ao criar convite.');
-      if (json.invite?.inviteUrl) void navigator.clipboard?.writeText(json.invite.inviteUrl).catch(() => {});
-      showToast({ type: 'success', message: `Convite criado (${json.invite?.code}) e copiado!` });
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Falha ao criar código.');
+      const toCopy =
+        inviteCodeType === 'user_recharge'
+          ? json.invite?.code || json.invite?.redeemUrl
+          : json.invite?.inviteUrl || json.invite?.code;
+      if (toCopy) void navigator.clipboard?.writeText(toCopy).catch(() => {});
+      showToast({
+        type: 'success',
+        message:
+          inviteCodeType === 'user_recharge'
+            ? `Código de recarga criado (${json.invite?.code}) e copiado!`
+            : `Convite criado (${json.invite?.code}) e link copiado!`,
+      });
       setInviteNote('');
       await loadOverview();
     } catch (err) {
-      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao criar convite.' });
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao criar código.' });
     } finally {
       setCreatingInvite(false);
     }
   };
+
+  const handleRevokeInvite = async (row: AdminInviteRow) => {
+    const key = row.id || row.masked;
+    if (revokingCodeId) return;
+    setRevokingCodeId(key);
+    try {
+      const res = await authenticatedFetch(
+        '/api/admin/invites/revoke',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: row.id, code: row.code, masked: row.masked }),
+        },
+        userId,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Falha ao revogar código.');
+      showToast({ type: 'success', message: `Código ${row.code || row.masked} revogado.` });
+      await loadOverview();
+    } catch (err) {
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao revogar código.' });
+    } finally {
+      setRevokingCodeId(null);
+    }
+  };
+
+  const filteredInvites = useMemo(() => {
+    const list = data?.invites || [];
+    const q = codeSearch.trim().toLowerCase();
+    return list.filter((row) => {
+      const isUsed = row.redemptionCount > 0 || row.status === 'depleted' || row.status === 'used_partial';
+      const isAvail = row.status === 'active' && row.redemptionCount < row.maxRedemptions;
+      if (codeFilter === 'active' && !isAvail) return false;
+      if (codeFilter === 'used' && !isUsed) return false;
+      if (codeFilter === 'invite_only' && (row.codeType || 'invite_only') !== 'invite_only') return false;
+      if (codeFilter === 'user_recharge' && row.codeType !== 'user_recharge') return false;
+      if (!q) return true;
+      return `${row.code || ''} ${row.masked} ${row.note || ''} ${row.lastRedeemedByEmail || ''}`
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [data?.invites, codeFilter, codeSearch]);
 
   const handleResolveTicket = async (ticket: AdminTicketRow) => {
     const note = ticketReplyDrafts[ticket.id] || ticket.admin_note || 'Resolvido pela equipe CompanyGen.';
@@ -850,15 +915,30 @@ export function AdminConsoleView({
                           </div>
                         </td>
                         <td className="py-3 pl-3 text-right">
-                          <ActionButton
-                            type="button"
-                            size={44}
-                            variant="secondary"
-                            data-testid={`admin-open-360-${u.id}`}
-                            onClick={() => setDrawerUser(u)}
-                          >
-                            Abrir 360° →
-                          </ActionButton>
+                          <div className="inline-flex items-center justify-end gap-2">
+                            <ActionButton
+                              type="button"
+                              size={44}
+                              variant="softBlue"
+                              data-testid={`admin-view-store-${u.id}`}
+                              leftIcon={<ExternalLink className="size-3.5" />}
+                              onClick={() => {
+                                const target = `/?view=store&u=${encodeURIComponent(u.id)}&adminPreview=1`;
+                                window.open(target, '_blank', 'noopener,noreferrer');
+                              }}
+                            >
+                              Ver Loja
+                            </ActionButton>
+                            <ActionButton
+                              type="button"
+                              size={44}
+                              variant="secondary"
+                              data-testid={`admin-open-360-${u.id}`}
+                              onClick={() => setDrawerUser(u)}
+                            >
+                              Abrir 360° →
+                            </ActionButton>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -931,28 +1011,50 @@ export function AdminConsoleView({
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3 dark:border-slate-800 dark:bg-[#111726]">
               <h3 className="flex items-center gap-2 text-sm font-bold text-[#0F172A] dark:text-slate-100">
-                <KeyRound className="size-4 text-[#2563EB]" /> Gerador de Convite Rápido (AI10)
+                <KeyRound className="size-4 text-[#2563EB]" /> Gerador de Códigos Especiais (AI10 · RC10)
               </h3>
               <form onSubmit={handleCreateInvite} className="grid grid-cols-2 gap-2.5">
+                <select
+                  value={inviteCodeType}
+                  onChange={(e) =>
+                    setInviteCodeType(e.target.value === 'user_recharge' ? 'user_recharge' : 'invite_only')
+                  }
+                  data-testid="admin-code-type-select"
+                  aria-label="Tipo de código"
+                  className="col-span-2 min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-[#0F172A] dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+                >
+                  <option value="invite_only">Convite — Apenas Nova Conta (AI10)</option>
+                  <option value="user_recharge">Recarga — Usuário Já Cadastrado (RC10 · máx. 3/conta)</option>
+                </select>
                 <input
                   type="number"
+                  step="0.5"
+                  min="0.5"
                   value={inviteCredits}
                   onChange={(e) => setInviteCredits(e.target.value)}
                   placeholder="Créditos"
+                  data-testid="admin-code-credits-input"
                   className="cg-tabular min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
                 />
                 <input
                   type="number"
+                  min="1"
                   value={inviteMaxUses}
                   onChange={(e) => setInviteMaxUses(e.target.value)}
                   placeholder="Usos máx."
+                  data-testid="admin-code-maxuses-input"
                   className="cg-tabular min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
                 />
                 <input
                   type="text"
                   value={inviteNote}
                   onChange={(e) => setInviteNote(e.target.value)}
-                  placeholder="Observação do convite"
+                  placeholder={
+                    inviteCodeType === 'user_recharge'
+                      ? 'Observação da recarga (ex.: Campanha Instagram)'
+                      : 'Observação do convite (ex.: Parceiro Brasília)'
+                  }
+                  data-testid="admin-code-note-input"
                   className="col-span-2 min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
                 />
                 <ActionButton
@@ -960,14 +1062,225 @@ export function AdminConsoleView({
                   size={44}
                   variant="primary"
                   isLoading={creatingInvite}
+                  data-testid="admin-code-create-btn"
                   className="col-span-2"
                   leftIcon={<Plus className="size-4" />}
                 >
-                  Gerar &amp; Copiar Link AI10
+                  {inviteCodeType === 'user_recharge'
+                    ? 'Gerar & Copiar Código de Recarga (RC10)'
+                    : 'Gerar & Copiar Link de Convite (AI10)'}
                 </ActionButton>
               </form>
             </section>
           </div>
+
+          {/* Tabela Completa de Códigos Gerados (Disponíveis, Usados, Convite vs Recarga) */}
+          <section
+            data-testid="admin-codes-table"
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4 dark:border-slate-800 dark:bg-[#111726]"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-bold text-[#0F172A] dark:text-slate-100">
+                  <KeyRound className="size-4 text-[#2563EB]" /> Códigos Gerados ({filteredInvites.length} de{' '}
+                  {(data?.invites || []).length})
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Acompanhe códigos disponíveis e utilizados em tempo real. Ao ser usado, a tag muda automaticamente.
+                </p>
+              </div>
+              <div className="relative w-full sm:w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={codeSearch}
+                  onChange={(e) => setCodeSearch(e.target.value)}
+                  placeholder="Buscar código, e-mail ou nota..."
+                  data-testid="admin-codes-search"
+                  className="min-h-[38px] w-full rounded-xl border border-slate-300 bg-white pl-8 pr-3 text-xs dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  { id: 'all', label: 'Todos' },
+                  { id: 'active', label: '🟢 Disponíveis' },
+                  { id: 'used', label: '⚪ Usados / Esgotados' },
+                  { id: 'invite_only', label: 'Convite (AI10)' },
+                  { id: 'user_recharge', label: 'Recarga (RC10)' },
+                ] as const
+              ).map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  data-testid={`admin-code-filter-${chip.id}`}
+                  onClick={() => setCodeFilter(chip.id)}
+                  className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
+                    codeFilter === chip.id
+                      ? 'bg-[#2563EB] text-white'
+                      : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-300'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <th className="py-2.5 pr-3">Código</th>
+                    <th className="py-2.5 px-3">Tipo</th>
+                    <th className="py-2.5 px-3">Créditos</th>
+                    <th className="py-2.5 px-3">Usos / Status</th>
+                    <th className="py-2.5 px-3">Último Uso</th>
+                    <th className="py-2.5 pl-3 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                  {filteredInvites.slice(0, 60).map((row) => {
+                    const rowKey = row.id || row.masked;
+                    const displayCode = row.code || row.masked;
+                    const isRecharge = row.codeType === 'user_recharge';
+                    const isDepleted = row.status === 'depleted' || row.redemptionCount >= row.maxRedemptions;
+                    const isRevoked = row.status === 'revoked';
+                    const isExpired = row.status === 'expired';
+                    const isPartial = !isDepleted && !isRevoked && !isExpired && row.redemptionCount > 0;
+                    const statusLabel =
+                      row.statusLabel ||
+                      (isRevoked
+                        ? 'Revogado'
+                        : isExpired
+                          ? 'Expirado'
+                          : isDepleted
+                            ? row.maxRedemptions === 1
+                              ? 'Utilizado (1/1)'
+                              : `Esgotado (${row.redemptionCount}/${row.maxRedemptions})`
+                            : isPartial
+                              ? `Usado (${row.redemptionCount}/${row.maxRedemptions})`
+                              : 'Disponível');
+                    const statusBadgeCls = isRevoked || isExpired
+                      ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                      : isDepleted
+                        ? 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                        : isPartial
+                          ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300'
+                          : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300';
+                    return (
+                      <tr key={rowKey} data-testid={`admin-code-row-${rowKey}`}>
+                        <td className="py-2.5 pr-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-[#0F172A] dark:text-slate-100">
+                              {displayCode}
+                            </span>
+                            {row.code ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyText(`code-${rowKey}`, row.code || '')}
+                                title="Copiar código"
+                                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-[#2563EB] dark:hover:bg-slate-800"
+                              >
+                                {copiedCode === `code-${rowKey}` ? (
+                                  <Check className="size-3.5 text-emerald-600" />
+                                ) : (
+                                  <Copy className="size-3.5" />
+                                )}
+                              </button>
+                            ) : null}
+                          </div>
+                          {row.note ? (
+                            <p className="truncate max-w-[200px] text-[11px] text-slate-500">{row.note}</p>
+                          ) : null}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              isRecharge
+                                ? 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
+                                : 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+                            }`}
+                          >
+                            {isRecharge ? 'Recarga (Usuário)' : 'Convite (Novo)'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 cg-tabular font-bold text-[#0F172A] dark:text-slate-100">
+                          {Number(row.credits || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} cr
+                          <span className="block text-[10px] font-normal text-slate-500">
+                            ~{Math.floor((Number(row.credits || 0) + 1e-9) / 0.1).toLocaleString('pt-BR')} msgs
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            data-testid={`admin-code-status-${rowKey}`}
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusBadgeCls}`}
+                          >
+                            {statusLabel}
+                          </span>
+                          <span className="ml-1.5 cg-tabular text-[11px] text-slate-500">
+                            {row.redemptionCount}/{row.maxRedemptions}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-[11px] text-slate-600 dark:text-slate-400">
+                          {row.lastRedeemedByEmail ? (
+                            <div>
+                              <span className="font-medium text-[#0F172A] dark:text-slate-200">
+                                {row.lastRedeemedByEmail}
+                              </span>
+                              {row.lastRedeemedAt ? (
+                                <span className="block text-[10px] text-slate-500">
+                                  {new Date(row.lastRedeemedAt).toLocaleString('pt-BR', {
+                                    timeZone: 'America/Sao_Paulo',
+                                  })}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 pl-3 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            {row.inviteUrl || row.redeemUrl ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleCopyText(`link-${rowKey}`, row.inviteUrl || row.redeemUrl || '')
+                                }
+                                className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                              >
+                                {copiedCode === `link-${rowKey}` ? 'Copiado!' : 'Copiar link'}
+                              </button>
+                            ) : null}
+                            {!isRevoked && !isDepleted && !isExpired ? (
+                              <button
+                                type="button"
+                                disabled={revokingCodeId === rowKey}
+                                onClick={() => void handleRevokeInvite(row)}
+                                data-testid={`admin-code-revoke-${rowKey}`}
+                                className="rounded-lg border border-rose-200 px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900/60 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                              >
+                                Revogar
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredInvites.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-xs text-slate-500">
+                        Nenhum código encontrado para este filtro.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       ) : null}
 

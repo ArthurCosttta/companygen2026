@@ -145,6 +145,7 @@ export type SectionNode =
         primaryCta: { label: string; href: string };
         secondaryCta?: { label: string; action: 'whatsapp.send_summary' | 'scroll' };
         imageUrl?: string;
+        imageFit?: 'contain' | 'cover';
       };
     }
   | {

@@ -124,7 +124,83 @@ function redactContext(meta) {
   return out;
 }
 
+export async function createSupportTicketInternal({
+  root,
+  readJsonFile,
+  atomicWriteJson,
+  serializeCreditOp,
+  fetchImpl = globalThis.fetch,
+  userId,
+  userEmail = '',
+  storeName = 'CompanyGen',
+  category = 'outro',
+  subject,
+  description,
+  contextMeta = {},
+}) {
+  const now = new Date().toISOString();
+  if (isCloudTableMode()) {
+    const { url: sbUrl } = resolveSupabaseAdminConfig();
+    try {
+      const r = await fetchImpl(`${sbUrl}/rest/v1/cg_support_tickets`, {
+        method: 'POST',
+        headers: getSupabaseAdminHeaders({ Prefer: 'return=representation' }),
+        body: JSON.stringify({
+          user_id: userId,
+          user_email: userEmail,
+          store_name: storeName,
+          category,
+          subject,
+          description,
+          context_meta: contextMeta,
+          status: 'open',
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (r.ok) {
+        const rows = await r.json().catch(() => []);
+        if (Array.isArray(rows) && rows[0]) {
+          return { ticket: rows[0], storage: 'supabase' };
+        }
+      }
+    } catch {}
+  }
+
+  const localPath = path.join(root, '_support_tickets.json');
+  const ticket = await serializeCreditOp(localPath, async () => {
+    const raw = await readJsonFile(localPath, []);
+    const list = Array.isArray(raw) ? [...raw] : [];
+    const rec = {
+      id: randomUUID(),
+      user_id: userId,
+      user_email: userEmail,
+      store_name: storeName,
+      category,
+      subject,
+      description,
+      context_meta: contextMeta,
+      status: 'open',
+      admin_note: '',
+      created_at: now,
+      updated_at: now,
+    };
+    list.push(rec);
+    await atomicWriteJson(localPath, list);
+    return rec;
+  });
+  return { ticket, storage: 'local_fallback' };
+}
+
 export async function listAllTickets({ root, readJsonFile, fetchImpl = globalThis.fetch }) {
+  const merged = new Map();
+  const localPath = path.join(root, '_support_tickets.json');
+  const localList = await readJsonFile(localPath, []);
+  if (Array.isArray(localList)) {
+    for (const row of localList) {
+      if (row && row.id) merged.set(row.id, row);
+    }
+  }
+
   if (isCloudTableMode()) {
     const { url } = resolveSupabaseAdminConfig();
     try {
@@ -134,14 +210,29 @@ export async function listAllTickets({ root, readJsonFile, fetchImpl = globalThi
       );
       if (res.ok) {
         const rows = await res.json().catch(() => []);
-        if (Array.isArray(rows)) return rows;
+        if (Array.isArray(rows)) {
+          for (const row of rows) {
+            if (!row?.id) continue;
+            const existing = merged.get(row.id);
+            const rowTs = new Date(row.updated_at || row.created_at || 0).getTime();
+            const existingTs = existing ? new Date(existing.updated_at || existing.created_at || 0).getTime() : -1;
+            if (!existing || rowTs >= existingTs) {
+              merged.set(row.id, row);
+            }
+          }
+        }
+      } else {
+        const errBody = await res.text().catch(() => '');
+        console.error(`[support] supabase list failed status=${res.status} body=${errBody.slice(0, 300)}`);
       }
-    } catch {}
+    } catch (err) {
+      console.error(`[support] supabase list error: ${err?.message || 'unknown'}`);
+    }
   }
 
-  const localPath = path.join(root, '_support_tickets.json');
-  const list = await readJsonFile(localPath, []);
-  return Array.isArray(list) ? [...list].reverse() : [];
+  return Array.from(merged.values()).sort(
+    (a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime(),
+  );
 }
 
 export async function listAllQrCampaigns({ root, readJsonFile, fetchImpl = globalThis.fetch }) {
@@ -532,10 +623,15 @@ export async function handleSupportAndQrClientRoutes(req, res, ctx) {
           if (r.ok) {
             const rows = await r.json().catch(() => []);
             if (Array.isArray(rows) && rows[0]) {
-              return send(res, 200, { ok: true, ticket: rows[0] });
+              return send(res, 200, { ok: true, ticket: rows[0], storage: 'supabase' });
             }
+          } else {
+            const errBody = await r.text().catch(() => '');
+            console.error(`[support] supabase insert failed status=${r.status} body=${errBody.slice(0, 300)}`);
           }
-        } catch {}
+        } catch (err) {
+          console.error(`[support] supabase insert error: ${err?.message || 'unknown'}`);
+        }
       }
 
       const localPath = path.join(root, '_support_tickets.json');

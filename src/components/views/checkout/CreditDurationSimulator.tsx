@@ -15,8 +15,8 @@ interface CreditCostsMap {
 }
 
 const DEFAULT_COSTS: CreditCostsMap = {
-  glm_whatsapp: 2,
-  generate_full_storefront: 30,
+  glm_whatsapp: 0.1,
+  generate_full_storefront: 4,
 };
 
 export function CreditDurationSimulator({
@@ -36,8 +36,8 @@ export function CreditDurationSimulator({
       .then((json) => {
         if (!active || !json?.costs) return;
         setCosts({
-          glm_whatsapp: Math.max(1, Number(json.costs.glm_whatsapp) || 2),
-          generate_full_storefront: Math.max(1, Number(json.costs.generate_full_storefront) || 30),
+          glm_whatsapp: Math.max(0.05, Number(json.costs.glm_whatsapp) || 0.1),
+          generate_full_storefront: Math.max(0.5, Number(json.costs.generate_full_storefront) || 4),
         });
       })
       .catch(() => {

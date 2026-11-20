@@ -45,7 +45,7 @@ export async function transcribeWhatsappAudio({
   mimeType = 'audio/ogg',
   durationSeconds = 0,
   sttEndpointUrl = process.env.WHISPER_ENDPOINT_URL || '',
-  sttApiKey = process.env.WHISPER_API_KEY || process.env.GLM_API_KEY || '',
+  sttApiKey = process.env.WHISPER_API_KEY || '',
   timeoutMs = DEFAULT_STT_TIMEOUT_MS,
   fetchImpl = fetch,
 } = {}) {
