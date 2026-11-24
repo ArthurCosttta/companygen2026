@@ -10,6 +10,7 @@ import {
   Flag,
   KeyRound,
   LifeBuoy,
+  LogIn,
   Monitor,
   Package,
   Plus,
@@ -25,13 +26,19 @@ import {
   Zap,
 } from 'lucide-react';
 import { ActionButton, useToast } from '@/components/ui';
-import { authenticatedFetch } from '@/services/supabase-client';
+import { authenticatedFetch, setSupportReadonlySession } from '@/services/supabase-client';
+import { resolveBrandedAppOrigin } from '@/components/views/storefront/storefront-utils';
 import {
   AdminUser360Drawer,
   type AdminFeatureFlagDef,
   type AdminKiwifyEventRow,
   type AdminUser360Target,
 } from './AdminUser360Drawer';
+import {
+  AdminCrashLogsPanel,
+  type CrashTelemetryLogRow,
+  type CrashTelemetrySummary,
+} from './AdminCrashLogsPanel';
 
 interface AdminTicketRow {
   id: string;
@@ -128,6 +135,9 @@ interface AdminOverviewData {
     openTicketsCount?: number;
     qrCount?: number;
     incidentsCount?: number;
+    openCrashesCount?: number;
+    normalUserOpenCrashes?: number;
+    criticalCrashes24h?: number;
     onboardingFeedbackCount?: number;
     grossRevenueCents?: number;
     kiwifyFeeCents?: number;
@@ -179,9 +189,11 @@ interface AdminOverviewData {
   qrCampaigns?: AdminQrCampaignRow[];
   invites: AdminInviteRow[];
   incidents?: AdminIncidentRow[];
+  crashSummary?: CrashTelemetrySummary;
+  crashLogs?: CrashTelemetryLogRow[];
 }
 
-type AdminSectionTab = 'clients' | 'finance' | 'fleet' | 'qr_batches';
+type AdminSectionTab = 'clients' | 'finance' | 'fleet' | 'qr_batches' | 'logs';
 type ClientFilterChip = 'all' | 'stalled' | 'low_balance' | 'chargeback' | 'risk';
 
 const FUNNEL_STAGE_BADGE: Record<string, { label: string; cls: string }> = {
@@ -228,6 +240,40 @@ export function AdminConsoleView({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterChip, setFilterChip] = useState<ClientFilterChip>('all');
   const [drawerUser, setDrawerUser] = useState<AdminUser360Target | null>(null);
+  const [enteringUserId, setEnteringUserId] = useState<string | null>(null);
+
+  const handleQuickEnterStore = async (targetUser: AdminUser360Target) => {
+    if (enteringUserId) return;
+    setEnteringUserId(targetUser.id);
+    try {
+      const res = await authenticatedFetch(
+        `/api/admin/users/${encodeURIComponent(targetUser.id)}/support-snapshot`,
+        { method: 'GET' },
+        userId,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || 'Falha ao entrar no painel da loja.');
+      }
+      setSupportReadonlySession({
+        userId: targetUser.id,
+        email: targetUser.email,
+        businessName: targetUser.businessName,
+      });
+      onEnterSupportMode?.(json.snapshot || {}, targetUser);
+      showToast({
+        type: 'amber',
+        message: `Modo Suporte Somente Leitura ativo para ${targetUser.businessName}.`,
+      });
+    } catch (err) {
+      showToast({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Erro ao entrar no painel da loja.',
+      });
+    } finally {
+      setEnteringUserId(null);
+    }
+  };
 
   // Invites & Support Tickets
   const [inviteCredits, setInviteCredits] = useState('20');
@@ -253,7 +299,10 @@ export function AdminConsoleView({
 
   // QR Campaigns & Batch A4/ZIP
   const [qrName, setQrName] = useState('');
-  const [qrTargetUrl, setQrTargetUrl] = useState('https://companygen.store/');
+  const [qrTargetUrl, setQrTargetUrl] = useState(() => {
+    const origin = resolveBrandedAppOrigin();
+    return origin ? `${origin}/` : 'https://companygen-app.web.app/';
+  });
   const [qrFilter, setQrFilter] = useState('');
   const [creatingQr, setCreatingQr] = useState(false);
   const [batchName, setBatchName] = useState('Panfleto Lançamento');
@@ -727,13 +776,43 @@ export function AdminConsoleView({
           </div>
         </div>
 
-        {/* 4 Sub-abas Enxutas */}
+        {/* Alerta Proativo de Erros em Usuários Normais */}
+        {(summary?.normalUserOpenCrashes ?? 0) > 0 && activeTab !== 'logs' ? (
+          <div
+            data-testid="admin-normal-user-crash-banner"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs text-rose-900 dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-200"
+          >
+            <div className="flex items-center gap-2 font-semibold">
+              <AlertTriangle className="size-4 shrink-0 text-rose-600 dark:text-rose-400" />
+              <span>
+                {summary?.normalUserOpenCrashes} erro(s) capturado(s) em contas de usuários normais com contexto completo disponível.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('logs')}
+              className="rounded-lg bg-rose-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-800"
+            >
+              Analisar Logs &amp; Contexto -&gt;
+            </button>
+          </div>
+        ) : null}
+
+        {/* 5 Sub-abas Enxutas */}
         <div role="tablist" aria-label="Seções do Console Admin" className="flex flex-wrap gap-2 pt-1">
           {[
             { id: 'clients', label: 'Clientes & Suporte', testId: 'admin-subtab-clients' },
             { id: 'finance', label: 'Financeiro & Kiwify', testId: 'admin-subtab-finance' },
             { id: 'fleet', label: 'Frota .exe & IA', testId: 'admin-subtab-fleet' },
             { id: 'qr_batches', label: 'QR & Lotes', testId: 'admin-subtab-qr' },
+            {
+              id: 'logs',
+              label:
+                (summary?.openCrashesCount ?? 0) > 0
+                  ? `Logs & Crashs (${summary?.openCrashesCount})`
+                  : 'Logs & Crashs',
+              testId: 'admin-subtab-logs',
+            },
           ].map((tab) => {
             const active = activeTab === tab.id;
             return (
@@ -923,11 +1002,24 @@ export function AdminConsoleView({
                               data-testid={`admin-view-store-${u.id}`}
                               leftIcon={<ExternalLink className="size-3.5" />}
                               onClick={() => {
-                                const target = `/?view=store&u=${encodeURIComponent(u.id)}&adminPreview=1`;
+                                const origin = resolveBrandedAppOrigin();
+                                const target = `${origin}/?view=store&u=${encodeURIComponent(u.id)}&adminPreview=1`;
                                 window.open(target, '_blank', 'noopener,noreferrer');
                               }}
                             >
                               Ver Loja
+                            </ActionButton>
+                            <ActionButton
+                              type="button"
+                              size={44}
+                              variant="primary"
+                              data-testid={`admin-enter-store-${u.id}`}
+                              title="Entrar no painel desta loja"
+                              isLoading={enteringUserId === u.id}
+                              leftIcon={<LogIn className="size-3.5" />}
+                              onClick={() => void handleQuickEnterStore(u)}
+                            >
+                              Entrar
                             </ActionButton>
                             <ActionButton
                               type="button"
@@ -1750,7 +1842,7 @@ export function AdminConsoleView({
                 type="url"
                 value={qrTargetUrl}
                 onChange={(e) => setQrTargetUrl(e.target.value)}
-                placeholder="https://companygen.store/..."
+                placeholder="https://companygen-app.web.app/..."
                 className="min-h-[38px] rounded-xl border border-slate-300 bg-white px-3 text-xs dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
               />
               <ActionButton type="submit" size={44} variant="secondary" isLoading={creatingQr}>
@@ -1797,6 +1889,20 @@ export function AdminConsoleView({
             </div>
           </section>
         </div>
+      ) : null}
+
+      {/* SUB-ABA 5: LOGS & CRASHS (TELEMETRIA CONTEXTUAL) */}
+      {activeTab === 'logs' ? (
+        <AdminCrashLogsPanel
+          userId={userId}
+          initialSummary={data?.crashSummary}
+          initialLogs={data?.crashLogs}
+          onStatusChanged={() => void loadOverview()}
+          onInspectUser={(targetUid) => {
+            const match = (data?.users || []).find((u) => u.id === targetUid);
+            if (match) setDrawerUser(match);
+          }}
+        />
       ) : null}
 
       <AdminUser360Drawer

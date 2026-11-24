@@ -76,20 +76,23 @@ export async function tryConvertBufferToWebp(buffer, currentExt) {
 }
 
 export function applyArtDirectionBibleToPrompt(prompt, artDirectionBible) {
-  const basePrompt = String(prompt || 'Clean minimalist studio photograph, natural lighting').trim();
+  const basePrompt = String(
+    prompt ||
+      'Stylized modern editorial gouache and graphic illustration representing the brand universe, bold clean geometry, tactile paper grain, zero photorealism',
+  ).trim();
+  const styleDirective =
+    'stylized editorial illustration, flat gouache and risograph graphic design art representation, clean negative space, zero photorealism, zero uncanny human faces, zero messy stock photo clutter, no text or watermarks';
   if (!artDirectionBible || typeof artDirectionBible !== 'object') {
-    return basePrompt.slice(0, 600);
+    return `${basePrompt}, ${styleDirective}`.slice(0, 1200);
   }
   const parts = [
+    artDirectionBible.visualStyle ? `Style: ${String(artDirectionBible.visualStyle).trim()}` : 'Style: stylized_editorial_illustration',
     artDirectionBible.lighting ? `Lighting: ${String(artDirectionBible.lighting).trim()}` : '',
-    artDirectionBible.surfaceMaterial
-      ? `Surface: ${String(artDirectionBible.surfaceMaterial).trim()}`
-      : '',
+    artDirectionBible.surfaceMaterial ? `Surface: ${String(artDirectionBible.surfaceMaterial).trim()}` : '',
     artDirectionBible.backdropTone ? `Backdrop: ${String(artDirectionBible.backdropTone).trim()}` : '',
-    artDirectionBible.cameraFraming ? `Camera: ${String(artDirectionBible.cameraFraming).trim()}` : '',
+    artDirectionBible.cameraFraming ? `Composition: ${String(artDirectionBible.cameraFraming).trim()}` : '',
   ].filter(Boolean);
-  if (parts.length === 0) return basePrompt.slice(0, 600);
-  return `[Art Direction Bible — ${parts.join(' | ')}] ${basePrompt}`.slice(0, 600);
+  return `[Art Direction Bible — ${parts.join(' | ')}] ${basePrompt}, ${styleDirective}`.slice(0, 1200);
 }
 
 export async function generateRunPodImage({

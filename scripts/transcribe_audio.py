@@ -22,11 +22,14 @@ from pathlib import Path
 from typing import Optional
 
 MAX_AUDIO_BYTES = 4 * 1024 * 1024  # 4 MB
-DEFAULT_MODEL = os.environ.get("STT_MODEL", "small")
+MAX_IMAGE_BYTES = 6 * 1024 * 1024  # 6 MB
+DEFAULT_MODEL = os.environ.get("STT_MODEL", "base")
 DEFAULT_COMPUTE = os.environ.get("STT_COMPUTE_TYPE", "int8")
 DEFAULT_DEVICE = os.environ.get("STT_DEVICE", "cpu")
+DEFAULT_VISION_MODEL = os.environ.get("LOCAL_VISION_MODEL", "Salesforce/blip-image-captioning-base")
 
 _MODEL_CACHE = None
+_VISION_CACHE = None
 
 
 def detect_magic_ext(data: bytes) -> Optional[str]:
@@ -75,19 +78,66 @@ def transcribe_file(file_path: str, model_name: str = DEFAULT_MODEL, language: s
     }
 
 
+def get_vision_model(vision_name: str = DEFAULT_VISION_MODEL):
+    global _VISION_CACHE
+    if _VISION_CACHE is None:
+        from transformers import BlipForConditionalGeneration, BlipProcessor  # type: ignore
+
+        try:
+            processor = BlipProcessor.from_pretrained(vision_name, local_files_only=True)
+            model = BlipForConditionalGeneration.from_pretrained(vision_name, local_files_only=True)
+        except Exception:
+            processor = BlipProcessor.from_pretrained(vision_name)
+            model = BlipForConditionalGeneration.from_pretrained(vision_name)
+        model.eval()
+        _VISION_CACHE = (processor, model)
+    return _VISION_CACHE
+
+
+def describe_image_bytes(raw_bytes: bytes, question: str = "") -> dict:
+    import io
+    import torch  # type: ignore
+    from PIL import Image  # type: ignore
+
+    img = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+    processor, model = get_vision_model()
+    inputs = processor(img, return_tensors="pt")
+    with torch.no_grad():
+        out = model.generate(**inputs, max_new_tokens=55, repetition_penalty=1.35)
+    caption = processor.decode(out[0], skip_special_tokens=True).strip()
+    return {"description": caption, "model": DEFAULT_VISION_MODEL}
+
+
 def run_server(host: str, port: int, model_name: str):
     from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile  # type: ignore
     import uvicorn  # type: ignore
 
-    app = FastAPI(title="CompanyGen Whisper STT", version="1.0.0")
+    app = FastAPI(title="CompanyGen Whisper STT & Local Vision", version="1.1.0")
     expected_token = os.environ.get("STT_TOKEN", "").strip()
 
-    # Pré-carrega o modelo no startup para eliminar cold start por requisição
+    # Pré-carrega o modelo STT no startup para eliminar cold start por requisição
     get_model(model_name)
 
     @app.get("/health")
     def health():
-        return {"ok": True, "model": model_name, "device": DEFAULT_DEVICE, "compute_type": DEFAULT_COMPUTE}
+        return {"ok": True, "service": "companygen_stt", "vision": True, "model": model_name, "device": DEFAULT_DEVICE, "compute_type": DEFAULT_COMPUTE}
+
+    @app.post("/v1/vision/describe")
+    async def vision_describe(
+        file: UploadFile = File(...),
+        question: Optional[str] = Form(default=""),
+        authorization: Optional[str] = Header(default=None),
+    ):
+        if expected_token:
+            supplied = (authorization or "").replace("Bearer ", "").strip()
+            if supplied != expected_token:
+                raise HTTPException(status_code=401, detail="Unauthorized")
+        raw = await file.read(MAX_IMAGE_BYTES + 1)
+        if not raw:
+            raise HTTPException(status_code=400, detail="Empty image file")
+        if len(raw) > MAX_IMAGE_BYTES:
+            raise HTTPException(status_code=413, detail="Image exceeds 6MB limit")
+        return describe_image_bytes(raw, question=question or "")
 
     @app.post("/v1/audio/transcriptions")
     async def transcriptions(

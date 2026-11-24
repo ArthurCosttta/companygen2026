@@ -220,12 +220,13 @@ export function OrderDetailsModal({
                 ) : null}
               </div>
 
-              <div className="no-print flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="no-print flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 <ActionButton
                   variant="secondary"
                   size={44}
                   leftIcon={<Printer className="size-4" />}
                   onClick={() => window.print()}
+                  className="whitespace-nowrap"
                   data-testid="order-details-print-btn"
                 >
                   Imprimir Comanda
@@ -236,7 +237,7 @@ export function OrderDetailsModal({
                   leftIcon={<MessageSquare className="size-4" />}
                   disabled={!customerPhone}
                   onClick={handleWhatsAppContact}
-                  className="sm:w-[210px]"
+                  className="whitespace-nowrap"
                   data-testid="order-details-whatsapp-btn"
                 >
                   Chamar no WhatsApp

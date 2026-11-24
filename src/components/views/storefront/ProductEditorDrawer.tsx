@@ -32,6 +32,7 @@ import {
   generateInternalProductCodes,
   parseBRLInputToCents,
   resolveProductImageUrl,
+  uploadStorefrontMediaDataUrl,
 } from './storefront-utils';
 
 export interface ProductEditorDrawerProps {
@@ -172,8 +173,7 @@ export function ProductEditorDrawer({
   );
 
   const isNameValid = cleanName.length >= 2;
-  const isPriceValid = parsedPriceCents > 0;
-  const canSubmit = isNameValid && isPriceValid && !isSubmitting;
+  const isPriceValid = Number.isFinite(parsedPriceCents) && parsedPriceCents >= 0;
 
   const priceChangedInEdit =
     isEdit &&
@@ -288,7 +288,12 @@ export function ProductEditorDrawer({
     event.preventDefault();
     setTouchedName(true);
     setTouchedPrice(true);
-    if (!canSubmit) return;
+    if (isSubmitting) return;
+    if (!isNameValid) {
+      setSubmitError('Informe o nome do produto (mínimo 2 letras) para salvar.');
+      showToast({ type: 'error', message: 'Preencha o nome do item antes de salvar.' });
+      return;
+    }
 
     setIsSubmitting(true);
     setSubmitError('');
@@ -297,12 +302,20 @@ export function ProductEditorDrawer({
     const finalVariation = form.variation.trim() || 'Padrão';
     const finalDescription = form.description.trim();
     const trimmedImg = form.imageUrl.trim();
-    const finalImageUrl =
-      trimmedImg || buildProductPlaceholderDataUri(cleanName, finalCategory, brandPrimaryColor);
-
     const internalCodes = product
       ? { id: product.id, sku: product.sku }
       : generateInternalProductCodes(cleanName);
+
+    let persistedImageUrl = trimmedImg;
+    if (trimmedImg.startsWith('data:image/') && !trimmedImg.startsWith('data:image/svg+xml')) {
+      persistedImageUrl = await uploadStorefrontMediaDataUrl({
+        ownerId: owner,
+        dataUrl: trimmedImg,
+        slotId: `prod_${internalCodes.id}`,
+      });
+    }
+    const finalImageUrl =
+      persistedImageUrl || buildProductPlaceholderDataUri(cleanName, finalCategory, brandPrimaryColor);
 
     const resolvedMolde =
       form.mensagemMolde.trim() ||
@@ -412,7 +425,7 @@ export function ProductEditorDrawer({
               size={46}
               isLoading={isSubmitting}
               loadingText="Salvando..."
-              disabled={!canSubmit}
+              disabled={isSubmitting}
               leftIcon={<Check className="size-4" />}
             >
               {isEdit ? 'Salvar Alterações' : 'Salvar e Publicar no Catálogo'}
@@ -645,13 +658,17 @@ export function ProductEditorDrawer({
               />
               {touchedPrice && !isPriceValid ? (
                 <p className="text-xs font-medium text-[#EF4444]">
-                  Informe um valor de venda maior que zero.
+                  Informe um preço válido (0 para Sob consulta).
                 </p>
-              ) : isPriceValid ? (
+              ) : parsedPriceCents > 0 ? (
                 <p className="text-xs text-slate-500">
                   Será exibido como {formatCurrencyBRL(parsedPriceCents)}
                 </p>
-              ) : null}
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Será exibido como &quot;Sob consulta&quot; (ou informe um preço).
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">

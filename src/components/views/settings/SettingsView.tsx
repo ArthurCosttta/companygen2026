@@ -46,6 +46,11 @@ import {
 } from '@/services/profile-service';
 import { authenticatedFetch, supabase } from '@/services/supabase-client';
 import {
+  getMobileNotificationPermission,
+  requestMobileNotificationPermission,
+} from '@/utils/audio-alerts';
+import { playNotificationSound } from '@/hooks/useHighSaturationNotifications';
+import {
   clearExpressFichaDraft,
   formatBrazilPhoneDisplay,
   formatCentsToInputBrl,
@@ -56,6 +61,12 @@ import {
   type OnboardingWizardStep,
 } from '@/components/views/onboarding';
 import { copyTextToClipboard } from '@/components/views/storefront/storefront-utils';
+import {
+  detectHardwareLowSpec,
+  readLowSpecPreference,
+  setLowSpecPreference,
+  type LowSpecPreference,
+} from '@/utils/performance-mode';
 
 export interface SettingsViewProps {
   profile: BusinessProfile;
@@ -228,6 +239,8 @@ export function SettingsView({
   const [lastBackupInfo, setLastBackupInfo] = React.useState<{ sha256: string; sizeBytes: number } | null>(null);
   const backupFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [creditBalanceSnapshot, setCreditBalanceSnapshot] = React.useState<number | null>(null);
+  const [lowSpecPref, setLowSpecPref] = React.useState<LowSpecPreference>(() => readLowSpecPreference());
+  const isHardwareLowSpec = React.useMemo(() => detectHardwareLowSpec(), []);
 
   // TELA 30: Dados da Loja & Pix
   const [businessName, setBusinessName] = React.useState(profile.business?.name ?? '');
@@ -1094,9 +1107,7 @@ export function SettingsView({
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
             <div className="flex items-center gap-2.5">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-50 text-[#16A34A]">
-                <CreditCard className="size-5" aria-hidden="true" />
-              </div>
+              <CreditCard className="size-5 shrink-0 text-[#09090B]" aria-hidden="true" />
               <div>
                 <h2 className="text-base font-bold text-[#0F172A]">Chave Pix para Recebimento</h2>
                 <p className="text-xs text-slate-500">
@@ -1227,9 +1238,7 @@ export function SettingsView({
           className="mx-auto max-w-2xl rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface)] p-6 shadow-xs space-y-5"
         >
           <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-[#1E293B] pb-4">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-500/15 text-[#2563EB]">
-              <Monitor className="size-5" aria-hidden="true" />
-            </div>
+            <Monitor className="size-5 shrink-0 text-[#09090B] dark:text-[#F8FAFC]" aria-hidden="true" />
             <div>
               <h2 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">Preferências do App Windows (.exe)</h2>
               <p className="text-xs text-slate-500 dark:text-[#94A3B8]">
@@ -1331,9 +1340,7 @@ export function SettingsView({
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-500/15 text-[#10B981]">
-                <CreditCard className="size-5" aria-hidden="true" />
-              </div>
+              <CreditCard className="size-5 shrink-0 text-[#09090B] dark:text-[#F8FAFC]" aria-hidden="true" />
               <div>
                 <h2 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">Saldo de Créditos & Recarga</h2>
                 <p className="text-xs text-slate-500 dark:text-[#94A3B8]">
@@ -1376,13 +1383,11 @@ export function SettingsView({
           className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface)] p-6 shadow-xs space-y-4"
         >
           <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-[#1E293B] pb-4">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-500/15 text-[#2563EB]">
-              <ArchiveRestore className="size-5" aria-hidden="true" />
-            </div>
+            <ArchiveRestore className="size-5 shrink-0 text-[#09090B] dark:text-[#F8FAFC]" aria-hidden="true" />
             <div>
-              <h2 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">Backup Completo (.zip) & Restauração</h2>
+              <h2 className="text-base font-bold text-[#0F172A] dark:text-[#F8FAFC]">Backup Completo dos Dados (.zip SHA-256) &amp; Restauração</h2>
               <p className="text-xs text-slate-500 dark:text-[#94A3B8]">
-                Exporte catálogo, respostas rápidas e Formula-IR com verificação SHA-256 (sem tokens de sessão).
+                Cópia de segurança interna (catálogo, respostas rápidas e configurações). Para baixar o site HTML estático pronto para hospedar, use &ldquo;Baixar Loja (.ZIP)&rdquo; em Minha Loja.
               </p>
             </div>
           </div>
@@ -1439,6 +1444,145 @@ export function SettingsView({
             </div>
           )}
         </section>
+
+      {/* Modo Desempenho (PC Leve / Baixa RAM / Windows 32-bit) */}
+      <section
+        data-testid="settings-low-spec-section"
+        className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface)] p-5 shadow-xs sm:p-6 space-y-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-slate-100 text-[#0F172A]">
+              <Monitor className="size-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-[#0F172A]">Modo Desempenho (PC Leve)</h2>
+              <p className="text-xs text-slate-500">
+                Desativa efeitos pesados de desfoque e animações para computadores com pouca memória RAM ou Windows 32-bit.
+              </p>
+            </div>
+          </div>
+          {isHardwareLowSpec ? (
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
+              Hardware compacto detectado
+            </span>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {(
+            [
+              {
+                id: 'auto' as const,
+                title: 'Automático',
+                desc: isHardwareLowSpec ? 'Ativo no seu PC' : 'Normal no seu PC',
+              },
+              {
+                id: 'on' as const,
+                title: 'Sempre Leve',
+                desc: 'Máxima fluidez e menos RAM',
+              },
+              {
+                id: 'off' as const,
+                title: 'Padrão Visual',
+                desc: 'Efeitos e transições completas',
+              },
+            ] as const
+          ).map((opt) => {
+            const active = lowSpecPref === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                data-testid={`settings-low-spec-${opt.id}`}
+                onClick={() => {
+                  setLowSpecPref(opt.id);
+                  const activeNow = setLowSpecPreference(opt.id);
+                  showToast({
+                    type: 'success',
+                    message: activeNow
+                      ? 'Modo PC Leve ativado! Interface otimizada para máxima velocidade.'
+                      : 'Modo visual padrão restaurado.',
+                    durationMs: 2600,
+                  });
+                }}
+                className={cn(
+                  'flex flex-col items-start rounded-xl border p-3 text-left transition',
+                  active
+                    ? 'border-[#0F172A] bg-slate-900 text-white'
+                    : 'border-slate-200 bg-white text-[#0F172A] hover:bg-slate-50',
+                )}
+              >
+                <span className="text-xs font-bold">{opt.title}</span>
+                <span className={cn('mt-0.5 text-[11px]', active ? 'text-slate-300' : 'text-slate-500')}>
+                  {opt.desc}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Notificações no Celular & Alarme Persistente (sem depender do WhatsApp) */}
+      <section
+        data-testid="settings-mobile-alerts-card"
+        className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface)] p-5 shadow-xs sm:p-6 space-y-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
+          <div>
+            <h2 className="text-base font-bold text-[#0F172A] dark:text-slate-100">
+              Alertas no Celular &amp; Alarme de Pedidos (Funciona sem WhatsApp logado)
+            </h2>
+            <p className="text-xs text-slate-500">
+              Dispara sirene a cada 4s, vibração e notificação na barra do celular quando chegar pedido da vitrine mesmo sem conectar o WhatsApp.
+            </p>
+          </div>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-bold text-slate-700">
+            Status: {getMobileNotificationPermission() === 'granted' ? 'Ativo no aparelho ✓' : 'Aguardando permissão'}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <ActionButton
+            variant="secondary"
+            size={44}
+            onClick={async () => {
+              const perm = await requestMobileNotificationPermission();
+              showToast({
+                type: perm === 'granted' ? 'success' : 'amber',
+                message:
+                  perm === 'granted'
+                    ? 'Notificações no celular ativadas! Agora pedidos tocam e vibram mesmo em segundo plano.'
+                    : 'Permissão bloqueada pelo navegador. Libere notificações nas configurações do site no celular.',
+              });
+            }}
+          >
+            Ativar Notificações no Celular
+          </ActionButton>
+          <ActionButton
+            variant="primary"
+            size={44}
+            data-testid="settings-test-mobile-alarm-btn"
+            onClick={async () => {
+              await requestMobileNotificationPermission();
+              void playNotificationSound('PURCHASE_MESSAGE_ARRIVED');
+              const res = await authenticatedFetch('/api/whatsapp/events/test-alarm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ level: 'PURCHASE_MESSAGE_ARRIVED' }),
+              }).catch(() => null);
+              showToast({
+                type: res?.ok ? 'success' : 'amber',
+                message: res?.ok
+                  ? 'Alarme disparado! Se o alerta apareceu e tocou, já funciona no seu aparelho.'
+                  : 'Teste sonoro local executado.',
+              });
+            }}
+          >
+            Testar Alarme Agora (Sem WPP)
+          </ActionButton>
+        </div>
+      </section>
 
       {/* Segurança da Conta (Alterar Senha & Logout Seguro) */}
       <section className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-[var(--cg-surface)] p-5 shadow-xs sm:p-6 space-y-4">

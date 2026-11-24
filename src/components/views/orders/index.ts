@@ -3,12 +3,5 @@ export {
   type OrdersKanbanViewProps,
 } from './OrdersKanbanView';
 
-export {
-  ManualSaleModal,
-  type ManualSaleModalProps,
-} from './ManualSaleModal';
-
-export {
-  OrderDetailsModal,
-  type OrderDetailsModalProps,
-} from './OrderDetailsModal';
+export type { ManualSaleModalProps } from './ManualSaleModal';
+export type { OrderDetailsModalProps } from './OrderDetailsModal';

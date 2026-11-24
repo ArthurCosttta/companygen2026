@@ -32,9 +32,14 @@ export function isValidProductionPhone(phoneE164: string): boolean {
   return true;
 }
 
+const BRL_CURRENCY_FORMATTER = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+});
+
 export function formatCurrencyBRL(cents: number): string {
   const safe = Number.isFinite(cents) ? cents : 0;
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safe / 100);
+  return BRL_CURRENCY_FORMATTER.format(safe / 100);
 }
 
 export const ProductFocalPointSchema = z.object({
@@ -314,6 +319,23 @@ export const BusinessProfileSchema = z.object({
     soundHumanAlert: z.boolean().default(true),
     lowCreditEmailAlert: z.boolean().default(true),
     offlineEmailAlert: z.boolean().default(true),
+  }).optional(),
+  marketingConcept: z.object({
+    brandVoice: z.enum(['editorial_minimal', 'warm_artisan', 'bold_modern', 'consultive_prestige']).default('editorial_minimal'),
+    coreProductSku: z.string().default(''),
+    buyerPersona: z.string().default(''),
+    mainObjection: z.string().default(''),
+    buyingTrigger: z.string().default(''),
+    growthGoal: z.enum(['raise_ticket', 'fast_pix_turnover', 'lead_booking']).default('fast_pix_turnover'),
+    heroLayout: z.enum(['hero_stage', 'hero_centered', 'hero_split']).default('hero_stage'),
+    showcaseLayout: z.enum(['bento_spotlight', 'coupled_media_grid', 'sticky_lookbook']).default('bento_spotlight'),
+    gridDensity: z.enum(['2', '3', '4']).default('3'),
+    monthlyHooks: z.array(z.object({
+      week: z.number().int().min(1).max(4),
+      theme: z.string(),
+      hook: z.string(),
+      ctaAction: z.string(),
+    })).default([]),
   }).optional(),
 });
 

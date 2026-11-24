@@ -19,7 +19,13 @@ import {
   computeDigest,
 } from './sync-engine.mjs';
 import { handleSpreadsheetRoutes } from './ai-spreadsheet-engine.mjs';
-import { handleWhatsappAiRoutes, computeD1FunnelMetrics, notifyOrderStageToWhatsapp } from './ai-sofia-local.mjs';
+import {
+  handleWhatsappAiRoutes,
+  computeD1FunnelMetrics,
+  notifyOrderStageToWhatsapp,
+  pushStoreNotificationEvent,
+} from './ai-sofia-local.mjs';
+import { handleGlobalAiRoutes } from './ai-global-agent.mjs';
 import { handleAccessAndCheckoutRoutes, verifyLocalShowcaseToken } from './access-and-checkout.mjs';
 import {
   handleAdminRoutes,
@@ -28,6 +34,9 @@ import {
   recordUserTouchAndCheckBan,
 } from './admin-console.mjs';
 import { checkUserAiTierLimit } from './middleware/ai-budget.mjs';
+import { BoundedTtlMap } from './middleware/bounded-map.mjs';
+import { resolveClientIp } from './middleware/client-ip.mjs';
+import { recordCrashTelemetry } from './crash-telemetry.mjs';
 import {
   downloadStorefrontFileFromStorage,
   fetchCloudPublishedFlag,
@@ -47,6 +56,8 @@ import {
   syncStorefrontMoldeFromProfile,
   writeStorefrontMoldeToDisk,
 } from './storefront-molde-fs.mjs';
+import { sanitizeImageUrl } from './media-sanitize.mjs';
+import { uploadStorefrontFileToStorage } from './supabase-storage-sync.mjs';
 
 const execFileAsync = promisify(execFile);
 const app = fileURLToPath(new URL('../', import.meta.url));
@@ -221,6 +232,7 @@ export function createWorkspaceApi(options = {}) {
   }
   const recentOrderDedupe = new Map();
   const inflightIdentify = new Map();
+  const telemetryRateByIp = new BoundedTtlMap({ maxEntries: 600, defaultTtlMs: 60_000 });
   let activeSearches = 0;
 
   async function cloudFetch(route, token, init) {
@@ -263,20 +275,24 @@ export function createWorkspaceApi(options = {}) {
     const now = Date.now();
     for (const [id, session] of sessions) if (session.until <= now) sessions.delete(id);
     const cached = sessions.get(digest);
-    if (cached) return { id: cached.id, bearer };
+    if (cached) return { id: cached.id, email: cached.email || '', bearer };
     if (inflightIdentify.has(digest)) return inflightIdentify.get(digest);
     const job = (async () => {
       const res = await cloudFetch('/auth/v1/user', bearer).catch(() => null);
       if (!res || res.status >= 500 || res.status === 429) throw new ApiError(503, 'Validação da conta indisponível.');
       if (!res.ok) throw new ApiError(401, 'Sessão expirada. Entre de novo.');
-      const { id } = await res.json();
+      const authPayload = await res.json();
+      const id = authPayload?.id;
+      const verifiedEmail = String(authPayload?.email || '').trim().toLowerCase();
       if (typeof id !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
         throw new ApiError(401, 'Conta inválida.');
       }
       const exp = JSON.parse(Buffer.from(bearer.split('.')[1] || '', 'base64url').toString('utf8')).exp;
       if (typeof exp !== 'number' || exp * 1000 <= now) throw new ApiError(401, 'Sessão expirada.');
-      if (sessions.size < 500) sessions.set(digest, { id, until: Math.min(exp * 1000, now + 15000) });
-      return { id, bearer };
+      if (sessions.size < 500) {
+        sessions.set(digest, { id, email: verifiedEmail, until: Math.min(exp * 1000, now + 15000) });
+      }
+      return { id, email: verifiedEmail, bearer };
     })().finally(() => {
       if (inflightIdentify.get(digest) === job) inflightIdentify.delete(digest);
     });
@@ -352,7 +368,8 @@ export function createWorkspaceApi(options = {}) {
 
   async function readJsonFile(filePath, fallback) {
     try {
-      return JSON.parse(await readFile(filePath, 'utf8'));
+      const raw = (await readFile(filePath, 'utf8')).replace(/^\uFEFF/, '');
+      return JSON.parse(raw);
     } catch (error) {
       if (error.code === 'ENOENT') return fallback;
       throw error;
@@ -793,16 +810,25 @@ export function createWorkspaceApi(options = {}) {
 
   async function loadProfileState(user, directory) {
     const remote = user?.isLocalShowcase ? null : await cloudProfile(user.id, user.bearer);
-    const provider = remote ? 'supabase' : 'servidor';
-    let current = remote || await readJsonFile(path.join(directory, 'profile.json'), { revision: 0, data: {} });
-    if (remote?.revision === 0) {
-      const local = await readJsonFile(path.join(directory, 'profile.json'), { revision: 0, data: {} });
-      if (local.revision > 0) {
-        try {
-          const rev = await cloudSaveProfile(user.bearer, 0, local.data);
-          current = { revision: rev, data: local.data };
-        } catch (error) {
-          if (error.status !== 409) throw error;
+    const local = await readJsonFile(path.join(directory, 'profile.json'), { revision: 0, data: {} });
+    const remoteRev = Number(remote?.revision || 0);
+    const localRev = Number(local?.revision || 0);
+    const remoteReady = Boolean(remote?.data?.onboarding?.storeGenerated || remote?.data?.publishedStore?.published);
+    const localReady = Boolean(local?.data?.onboarding?.storeGenerated || local?.data?.publishedStore?.published);
+    const preferLocal =
+      !remote ||
+      localRev > remoteRev ||
+      (!remoteReady && localReady);
+
+    const provider = preferLocal && !remote ? 'servidor' : remote ? 'supabase' : 'servidor';
+    let current = preferLocal ? local : remote;
+
+    if (remote && preferLocal && localRev > 0) {
+      try {
+        const rev = await cloudSaveProfile(user.bearer, remoteRev, local.data);
+        current = { revision: rev, data: local.data };
+      } catch (error) {
+        if (error?.status === 409) {
           current = await cloudProfile(user.id, user.bearer);
         }
       }
@@ -810,10 +836,58 @@ export function createWorkspaceApi(options = {}) {
     return { current: current || { revision: 0, data: {} }, remote, provider };
   }
 
+  async function extractInlineMediaAssets(userId, directory, profileObj) {
+    if (!profileObj || typeof profileObj !== 'object') return profileObj;
+    const cloned = structuredClone(profileObj);
+    const moldeDir = getStorefrontMoldeDir(directory);
+    const genDir = path.join(moldeDir, 'assets', 'generated');
+    let dirEnsured = false;
+
+    const persistDataUrl = async (rawValue, slotHint) => {
+      const safe = sanitizeImageUrl(rawValue, { allowDataUrl: true });
+      if (!safe) return '';
+      const m = /^data:image\/(png|jpe?g|webp|gif);base64,([A-Za-z0-9+/=\s]+)$/i.exec(safe);
+      if (!m || safe.length < 4096) return safe;
+      const ext = m[1].toLowerCase().replace('jpeg', 'jpg');
+      const buf = Buffer.from(m[2].replace(/\s+/g, ''), 'base64');
+      if (buf.length === 0 || buf.length > 10 * 1024 * 1024) return '';
+      if (!dirEnsured) {
+        await mkdir(genDir, { recursive: true });
+        dirEnsured = true;
+      }
+      const hash = createHash('sha1').update(buf).digest('hex').slice(0, 10);
+      const safeSlot = String(slotHint || 'media').replace(/[^a-z0-9_-]+/gi, '_').slice(0, 32);
+      const relPath = `assets/generated/${safeSlot}_${hash}.${ext}`;
+      await writeFile(path.join(moldeDir, relPath), buf);
+      if (isCloudStorageEnabled()) {
+        void uploadStorefrontFileToStorage({ userId, relativePath: relPath, bytes: buf });
+      }
+      return `/api/store-molde/${encodeURIComponent(userId)}/${relPath}`;
+    };
+
+    if (cloned.brand && typeof cloned.brand === 'object') {
+      for (const field of ['logoUrl', 'storefrontPhotoUrl', 'heroImageUrl', 'heroBackgroundUrl', 'pageBackgroundUrl']) {
+        if (typeof cloned.brand[field] === 'string' && cloned.brand[field]) {
+          cloned.brand[field] = await persistDataUrl(cloned.brand[field], `brand_${field}`);
+        }
+      }
+    }
+    if (cloned.catalog && Array.isArray(cloned.catalog.products)) {
+      for (let i = 0; i < cloned.catalog.products.length; i += 1) {
+        const p = cloned.catalog.products[i];
+        if (p && typeof p.imageUrl === 'string' && p.imageUrl) {
+          p.imageUrl = await persistDataUrl(p.imageUrl, `prod_${p.id || i}`);
+        }
+      }
+    }
+    return cloned;
+  }
+
   async function saveProfileState(user, directory, expectedRevision, rawProfile, { preserveRevision = false } = {}) {
     return queue(user.id + ':profile', async () => {
       const { current, remote } = await loadProfileState(user, directory);
-      const nextProfile = normalizeProfile(rawProfile);
+      const cleanedMedia = await extractInlineMediaAssets(user.id, directory, rawProfile);
+      const nextProfile = normalizeProfile(cleanedMedia);
       const baseRevision = Number.isSafeInteger(expectedRevision) ? expectedRevision : Number(current?.revision || 0);
       let nextRevision = current.revision;
       if (remote && !user?.isLocalShowcase) {
@@ -875,7 +949,8 @@ export function createWorkspaceApi(options = {}) {
       }
       if (body.revision !== current.revision) throw new ApiError(409, 'A ficha foi atualizada em outra aba.');
 
-      const nextProfile = normalizeProfile(body.profile);
+      const cleanedProfilePayload = await extractInlineMediaAssets(user.id, directory, body.profile);
+      const nextProfile = normalizeProfile(cleanedProfilePayload);
       const wantsPublish = Boolean(body.publish) || (!currentProfile.publishedStore.published && nextProfile.publishedStore.published);
       if (wantsPublish) {
         if (!isValidProductionPhone(nextProfile.whatsapp.phoneE164)) {
@@ -1270,6 +1345,28 @@ export function createWorkspaceApi(options = {}) {
         const filtered = localOrders.filter(o => o.order_ref !== order.order_ref);
         await atomicWriteJson(path.join(directory, 'orders.json'), [order, ...filtered]);
         await cloudUpsertOrder(user.bearer, order);
+        if (!isManual && !isSimulationOrder) {
+          const itemsLabel = (Array.isArray(verifiedItems) ? verifiedItems : [])
+            .slice(0, 3)
+            .map((it) => `${it.quantity || 1}x ${it.name}`)
+            .join(', ');
+          const brlTotal = `R$ ${(Number(totalCents || 0) / 100).toFixed(2).replace('.', ',')}`;
+          void pushStoreNotificationEvent({
+            directory,
+            readJsonFile,
+            atomicWriteJson,
+            level: 'PURCHASE_MESSAGE_ARRIVED',
+            intent: 'PURCHASE_ORDER',
+            title: 'NOVO PEDIDO NA VITRINE!',
+            message: `${order.customer_name} enviou pedido #${order.order_ref} (${itemsLabel || 'itens'}) — ${brlTotal}`,
+            customerName: order.customer_name,
+            customerPhone: order.customer_jid || '',
+            customerJid: order.customer_jid || '',
+            orderRef: order.order_ref,
+            totalCents,
+            sourceComponent: 'Vitrine Online (Sem depender do WPP)',
+          }).catch(() => {});
+        }
         recentOrderDedupe.set(dedupeSignature, { expiresAt: nowMs + 10000, order });
         return send(res, 201, { order, unmatchedItems });
       });
@@ -1302,7 +1399,167 @@ export function createWorkspaceApi(options = {}) {
         return send(res, 200, { order: target });
       });
     }
+    if (req.method === 'DELETE') {
+      const body = await readJson(req);
+      const rawRefs = Array.isArray(body?.orderRefs) ? body.orderRefs : [body?.orderRef];
+      const refsToRemove = new Set(
+        rawRefs.map(r => String(r || '').trim()).filter(Boolean),
+      );
+      if (refsToRemove.size === 0) throw new ApiError(400, 'orderRefs obrigatório.');
+      return await queue(user.id + ':orders', async () => {
+        const localOrders = await readJsonFile(path.join(directory, 'orders.json'), []);
+        const remaining = localOrders.filter(
+          o => !refsToRemove.has(String(o?.order_ref || '')) && !refsToRemove.has(String(o?.id || '')),
+        );
+        await atomicWriteJson(path.join(directory, 'orders.json'), remaining);
+        return send(res, 200, {
+          ok: true,
+          removedCount: Math.max(0, localOrders.length - remaining.length),
+          orders: remaining,
+        });
+      });
+    }
     throw new ApiError(405, 'Método indisponível.');
+  }
+
+  async function ordersBatchImportHandler(req, res, user, directory) {
+    if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
+    const body = await readJson(req, 5 * 1024 * 1024);
+    const rows = Array.isArray(body?.rows) ? body.rows.slice(0, 1000) : [];
+    if (rows.length === 0) {
+      throw new ApiError(400, 'Envie ao menos 1 pedido válido no lote.');
+    }
+    const allowedStatuses = new Set(['aguardando_dados', 'aguardando_pagamento', 'confirmado', 'em_preparo', 'enviado', 'entregue', 'cancelado', 'concluido']);
+    return await queue(user.id + ':orders', async () => {
+      const ordersPath = path.join(directory, 'orders.json');
+      const existing = await readJsonFile(ordersPath, []);
+      const { current } = await loadProfileState(user, directory);
+      const profile = normalizeProfile(current?.data || {});
+      const nowIso = new Date().toISOString();
+      const createdOrders = [];
+
+      for (let i = 0; i < rows.length; i += 1) {
+        const r = rows[i] || {};
+        const customerName = String(r.customerName || r.customer_name || 'Cliente Planilha').trim().slice(0, 90);
+        const rawTotal = Math.max(0, Math.round(Number(r.totalCents ?? r.total_cents ?? 0)));
+        if (!customerName || rawTotal <= 0) continue;
+        const rawStatus = String(r.status || 'confirmado').trim();
+        const status = allowedStatuses.has(rawStatus) ? rawStatus : 'confirmado';
+        const phone = String(r.customerPhone || r.customer_phone || '').replace(/\D+/g, '').slice(0, 16);
+        const itemSummary = String(r.customItemName || r.itemsSummary || 'Pedido Planilha').trim().slice(0, 140);
+        const orderRef = String(r.orderRef || `IMP-${Date.now().toString(36).toUpperCase().slice(-4)}-${String(i + 1).padStart(3, '0')}`).slice(0, 32);
+        const ord = {
+          id: randomUUID(),
+          order_ref: orderRef,
+          customer_name: customerName,
+          customer_phone: phone,
+          customer_jid: phone ? `${phone}@s.whatsapp.net` : undefined,
+          items: [{ sku: `PLAN-${i + 1}`, name: itemSummary, quantity: 1, unitPriceCents: rawTotal, lineTotalCents: rawTotal }],
+          items_summary: itemSummary,
+          subtotal_cents: rawTotal,
+          shipping_cents: 0,
+          total_cents: rawTotal,
+          payment_method: String(r.paymentMethod || (status === 'confirmado' || status === 'concluido' ? 'Pix' : 'A combinar')),
+          status,
+          source_channel: 'spreadsheet_batch_import',
+          created_at: nowIso,
+          updated_at: nowIso,
+        };
+        createdOrders.push(ord);
+      }
+
+      if (createdOrders.length === 0) {
+        throw new ApiError(400, 'Nenhum pedido com cliente e valor maior que zero foi encontrado.');
+      }
+
+      const merged = [...createdOrders, ...(Array.isArray(existing) ? existing : [])];
+      await atomicWriteJson(ordersPath, merged);
+      if (!user?.isLocalShowcase && profile) {
+        // Sync asynchronously in background without blocking batch response (>300 orders < 500ms)
+        void Promise.allSettled(createdOrders.slice(0, 50).map((ord) => cloudUpsertOrder(user.bearer, ord)));
+      }
+      return send(res, 200, {
+        ok: true,
+        importedCount: createdOrders.length,
+        orders: createdOrders,
+      });
+    });
+  }
+
+  async function ordersAiModifyHandler(req, res, user, directory) {
+    if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
+    const body = await readJson(req, 512 * 1024);
+    const instruction = String(body?.instruction || '').trim().slice(0, 500);
+    if (!instruction) throw new ApiError(400, 'Descreva a alteração desejada nos pedidos.');
+
+    return await queue(user.id + ':orders', async () => {
+      const ordersPath = path.join(directory, 'orders.json');
+      const existing = await readJsonFile(ordersPath, []);
+      const ordersList = Array.isArray(existing) ? [...existing] : [];
+      const lower = instruction.toLowerCase();
+
+      if (/(excluir|apagar|remover|limpar).*(todos|tudo|geral)/.test(lower)) {
+        const removed = ordersList.length;
+        await atomicWriteJson(ordersPath, []);
+        return send(res, 200, {
+          ok: true,
+          summary: `${removed} pedido(s) removidos do painel.`,
+          orders: [],
+          affectedCount: removed,
+        });
+      }
+      if (/(excluir|apagar|remover|limpar).*(simula|teste)/.test(lower)) {
+        const kept = ordersList.filter((o) => !o?.isSimulation && !String(o?.order_ref || '').startsWith('SIM-'));
+        const removed = ordersList.length - kept.length;
+        await atomicWriteJson(ordersPath, kept);
+        return send(res, 200, {
+          ok: true,
+          summary: `${removed} pedido(s) de simulação removidos.`,
+          orders: kept,
+          affectedCount: removed,
+        });
+      }
+
+      const { current } = await loadProfileState(user, directory);
+      const targetMatch = /(entregue|conclu[ií]do)/.test(lower)
+        ? 'concluido'
+        : /(pago|confirmado|preparo)/.test(lower)
+          ? 'confirmado'
+          : /(aguardando pag|pix)/.test(lower)
+            ? 'aguardando_pagamento'
+            : null;
+      if (targetMatch && ordersList.length > 0) {
+        let updated = 0;
+        const nowIso = new Date().toISOString();
+        const nextList = ordersList.map((o) => {
+          if (targetMatch === 'concluido' && o.status === 'confirmado') {
+            updated += 1;
+            return { ...o, status: 'concluido', updated_at: nowIso };
+          }
+          if (targetMatch === 'confirmado' && (o.status === 'aguardando_pagamento' || o.status === 'aguardando_dados')) {
+            updated += 1;
+            return { ...o, status: 'confirmado', updated_at: nowIso };
+          }
+          return o;
+        });
+        if (updated > 0) {
+          await atomicWriteJson(ordersPath, nextList);
+          return send(res, 200, {
+            ok: true,
+            summary: `${updated} pedido(s) movido(s) para ${targetMatch}.`,
+            orders: nextList,
+            affectedCount: updated,
+          });
+        }
+      }
+
+      const sampleNames = ordersList.slice(0, 6).map((o) => `${o.order_ref}:${o.customer_name}:${o.status}`).join(', ');
+      throw new ApiError(
+        422,
+        `Comando não aplicado automaticamente. Exemplos válidos: "limpar simulações", "excluir todos os pedidos" ou "marcar aguardando pagamento como confirmados". (Atuais: ${ordersList.length} · ${sampleNames || 'nenhum'})`,
+      );
+      void current;
+    });
   }
 
   async function dashboardHandler(req, res, user, directory) {
@@ -1779,11 +2036,15 @@ export function createWorkspaceApi(options = {}) {
       !pathname.startsWith('/api/store-molde/job/') &&
       ![
         '/api/store-molde/state',
+        '/api/store-molde/analyze-brief',
+        '/api/store-molde/onboarding-assist',
+        '/api/store-molde/recommended-pages',
         '/api/store-molde/generate-full',
         '/api/store-molde/create-page',
         '/api/store-molde/edit-block',
         '/api/store-molde/patch-section',
         '/api/store-molde/generate-image',
+        '/api/store-molde/generate-product-images',
         '/api/store-molde/upload-asset',
         '/api/store-molde/save-ir',
       ].includes(pathname)
@@ -1828,6 +2089,7 @@ export function createWorkspaceApi(options = {}) {
       pathname === '/api/access/showcase-status' ||
       pathname === '/api/access/local-showcase-login' ||
       pathname === '/api/access/guest-start' ||
+      pathname === '/api/kiwify/lookup-code' ||
       pathname === '/api/credits/costs' ||
       (pathname === '/api/checkout/plans' && !req.headers.authorization)
     ) {
@@ -1863,7 +2125,7 @@ export function createWorkspaceApi(options = {}) {
       return;
     }
 
-    if (pathname === '/api/desktop/release-policy') {
+    if (pathname === '/api/desktop/release-policy' || pathname === '/api/desktop/download') {
       try {
         const publicFleetCtx = {
           user: { id: 'public-visitor' },
@@ -1881,6 +2143,89 @@ export function createWorkspaceApi(options = {}) {
       }
     }
 
+    if (pathname === '/api/telemetry/crash') {
+      if (req.method !== 'POST') {
+        send(res, 405, { ok: false, error: 'Método indisponível.' });
+        return;
+      }
+      const clientIp = resolveClientIp(req);
+      const count = Number(telemetryRateByIp.get(clientIp) || 0);
+      if (count >= 25) {
+        return send(res, 429, { ok: false, error: 'Limite temporário de envio de telemetria atingido.' });
+      }
+      telemetryRateByIp.set(clientIp, count + 1);
+      try {
+        const body = await readJson(req, 32 * 1024);
+        const authedUser = await identify(req).catch(() => null);
+        const uid = authedUser?.id || 'public-visitor';
+        const isAdm = authedUser
+          ? await isAdminRequest({ root, user: authedUser, readJsonFile }).catch(() => false)
+          : false;
+        let inferredStore = String(body?.appContext?.storeName || '').trim();
+        if (!inferredStore && uid !== 'public-visitor') {
+          const prof = await readJsonFile(path.join(root, uid, 'profile.json'), null);
+          inferredStore = String(prof?.data?.business?.name || '').trim();
+        }
+        const saved = await recordCrashTelemetry({
+          root,
+          source: body?.source || 'client_react',
+          severity: body?.severity || 'error',
+          category: body?.category || 'CLIENT_CRASH',
+          title: body?.title || '',
+          message: body?.message || '',
+          stack: body?.stack || '',
+          componentStack: body?.componentStack || '',
+          endpoint: body?.endpoint || '',
+          method: body?.method || '',
+          statusCode: body?.statusCode || 0,
+          userId: uid,
+          userRole: isAdm ? 'admin' : 'normal_user',
+          storeName: inferredStore,
+          appContext: body?.appContext || {},
+          breadcrumbs: body?.breadcrumbs || [],
+          extra: body?.extra || {},
+          readJsonFile,
+          atomicWriteJson,
+        });
+        return send(res, 201, {
+          ok: true,
+          id: saved?.id || null,
+          fingerprint: saved?.fingerprint || null,
+          suspectedFiles: saved?.suspectedFiles || [],
+        });
+      } catch (error) {
+        return send(res, error?.status || 400, { ok: false, error: error?.message || 'Payload de telemetria inválido.' });
+      }
+    }
+
+    if (pathname === '/api/health' || pathname === '/health') {
+      return send(res, 200, {
+        ok: true,
+        status: 'healthy',
+        uptimeSec: Math.round(process.uptime()),
+        persistence: process.env.CG_PERSISTENCE === 'local' ? 'local' : 'cloud',
+      });
+    }
+
+    if (pathname === '/api/ready' || pathname === '/ready') {
+      const checks = {
+        storageDir: false,
+        glmConfigured: Boolean(String(process.env.GLM_API_KEY || '').trim()),
+        supabaseConfigured: Boolean(String(process.env.SUPABASE_URL || '').trim()),
+      };
+      try {
+        await stat(root);
+        checks.storageDir = true;
+      } catch {}
+      const isLocal = process.env.CG_PERSISTENCE === 'local';
+      const ready = checks.storageDir && (isLocal || checks.supabaseConfigured);
+      return send(res, ready ? 200 : 503, {
+        ok: ready,
+        status: ready ? 'ready' : 'not_ready',
+        checks,
+      });
+    }
+
     const owned = [
       '/api/workspace',
       '/api/workspace/backup-export',
@@ -1889,11 +2234,14 @@ export function createWorkspaceApi(options = {}) {
       '/api/store/public',
       '/api/store/visit',
       '/api/orders',
+      '/api/orders/import-batch',
+      '/api/orders/ai-modify',
       '/api/dashboard',
       '/api/hunt',
       '/api/instagram/analyze',
       '/api/images/status',
       '/api/access/redeem',
+      '/api/access/claim-email',
       '/api/checkout/plans',
       '/api/credits/balance',
       '/api/credits/costs',
@@ -1913,8 +2261,11 @@ export function createWorkspaceApi(options = {}) {
       pathname.startsWith('/api/onboarding/') ||
       pathname.startsWith('/api/admin/');
     if (!owned) return next();
+    let currentReqUser = null;
+    let currentReqIsAdmin = false;
     try {
       const user = await identify(req);
+      currentReqUser = user;
       const directory = path.join(root, user.id);
       const touchState = await recordUserTouchAndCheckBan({
         root,
@@ -1922,6 +2273,7 @@ export function createWorkspaceApi(options = {}) {
         readJsonFile,
         atomicWriteJson,
       });
+      currentReqIsAdmin = Boolean(touchState.isAdmin);
       if (touchState.banned && pathname !== '/api/admin/status') {
         return send(res, 403, {
           ok: false,
@@ -1986,6 +2338,8 @@ export function createWorkspaceApi(options = {}) {
       if (pathname === '/api/store/public') return await storePublicHandler(req, res, user, directory);
       if (pathname === '/api/store/visit') return await storeVisitHandler(req, res, user, directory);
       if (pathname === '/api/orders') return await ordersHandler(req, res, user, directory);
+      if (pathname === '/api/orders/import-batch') return await ordersBatchImportHandler(req, res, user, directory);
+      if (pathname === '/api/orders/ai-modify') return await ordersAiModifyHandler(req, res, user, directory);
       if (pathname === '/api/dashboard') return await dashboardHandler(req, res, user, directory);
       if (pathname === '/api/hunt') return await hunt(req, res);
       if (pathname === '/api/instagram/analyze') return await analyzeInstagram(req, res, user, directory);
@@ -2008,12 +2362,37 @@ export function createWorkspaceApi(options = {}) {
         return;
       }
       if (await handleSpreadsheetRoutes(req, res, aiCtx)) return;
+      if (await handleGlobalAiRoutes(req, res, aiCtx)) return;
       if (await handleWhatsappAiRoutes(req, res, aiCtx)) return;
       if ((await handleAccessAndCheckoutRoutes(req, res, aiCtx)) || res.headersSent) return;
       if (pathname.startsWith('/api/ai/')) throw new ApiError(404, 'Endpoint não encontrado.');
       return await whatsapp(req, res, user, directory, pathname);
     } catch (error) {
+      const errStatus = Number(error?.status || 503);
       console.error('[CompanyGen API]', req.method, pathname, error instanceof Error ? error.message : error);
+      if (errStatus >= 500 || errStatus === 422 || !error?.status) {
+        void recordCrashTelemetry({
+          root,
+          source: 'server_api',
+          severity: errStatus >= 500 || !error?.status ? 'critical' : 'error',
+          category: error?.status ? `API_HTTP_${errStatus}` : 'API_UNHANDLED_EXCEPTION',
+          title: `Erro ${errStatus} em ${req.method} ${pathname}`,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack || '' : '',
+          endpoint: pathname,
+          method: req.method || 'GET',
+          statusCode: errStatus,
+          userId: currentReqUser?.id || 'unauthenticated',
+          userRole: currentReqIsAdmin ? 'admin' : 'normal_user',
+          extra: {
+            memoryRssMb: Math.round(process.memoryUsage().rss / 1048576),
+            uptimeSec: Math.round(process.uptime()),
+            activeWorkers: workers.size,
+          },
+          readJsonFile,
+          atomicWriteJson,
+        }).catch(() => {});
+      }
       if (!res.headersSent) send(res, error.status || 503, { ok: false, error: error.status ? error.message : 'Serviço indisponível. Tente novamente.' });
       else if (!res.writableEnded) res.destroy();
     }

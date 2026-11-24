@@ -1,0 +1,15 @@
+{
+  "version": "3.0",
+  "routes": [
+    { "id": "ONB-01", "path": "/onboarding#identity", "component": "ExpressFichaWizardModal", "step": 1, "label": "Identidade & Instagram" },
+    { "id": "ONB-02", "path": "/onboarding#catalog", "component": "ExpressFichaWizardModal", "step": 7, "label": "Catálogo & Planilha" },
+    { "id": "ONB-03", "path": "/onboarding#gate", "component": "ExpressFichaWizardModal", "step": 8, "label": "Resumo & Créditos" },
+    { "id": "ONB-04", "path": "/onboarding#director", "component": "ExpressFichaWizardModal", "step": 8, "label": "Construção Progressiva" },
+    { "id": "STUDIO_HOME", "path": "/", "component": "AppShell", "label": "Início do Estúdio" },
+    { "id": "STORE_PREVIEW", "path": "/?tab=store", "component": "StorefrontStudioView", "label": "Vitrine da Loja" },
+    { "id": "WHATSAPP_TAB", "path": "/?tab=whatsapp", "component": "WhatsappTab", "label": "Atendimento WhatsApp" },
+    { "id": "ORDERS_TAB", "path": "/?tab=orders", "component": "OrdersTab", "label": "Pedidos" },
+    { "id": "SETTINGS_TAB", "path": "/?tab=settings", "component": "SettingsTab", "label": "Configurações" },
+    { "id": "ADMIN_TAB", "path": "/?tab=admin", "component": "AdminConsole", "label": "Console Admin" }
+  ]
+}

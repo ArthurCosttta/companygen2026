@@ -173,6 +173,15 @@ export function WhatsAppConnectionView({
   const [simResult, setSimResult] = React.useState<{
     replyText: string;
     replyParts: string[];
+    mediaItems: Array<{
+      url: string;
+      productName?: string;
+      variation?: string;
+      priceLabel?: string;
+      pixPriceLabel?: string;
+      stockLabel?: string;
+      caption?: string;
+    }>;
     modelUsed: string;
     intent: string;
     suppressed: boolean;
@@ -288,15 +297,53 @@ export function WhatsAppConnectionView({
       );
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) {
-        showToast({ type: 'error', message: json?.error || 'Falha ao testar Sofia local.' });
+        showToast({ type: 'error', message: json?.error || 'Falha ao testar Atendente IA local.' });
         return;
       }
       const replyText = String(json.replyText || json.suggestedReplyText || '(Sem resposta — thread em pausa humana)');
       const rawParts = Array.isArray(json.replyParts) && json.replyParts.length > 0 ? json.replyParts : [replyText];
       const delayMs = Math.max(1200, Math.min(4800, Number(json.readDelayMs || 2400)));
+      const parsedMedia: Array<{
+        url: string;
+        productName?: string;
+        variation?: string;
+        priceLabel?: string;
+        pixPriceLabel?: string;
+        stockLabel?: string;
+        caption?: string;
+      }> = [];
+      if (Array.isArray(json.mediaItems) && json.mediaItems.length > 0) {
+        for (const item of json.mediaItems) {
+          if (item && typeof item === 'object' && item.url) {
+            parsedMedia.push({
+              url: String(item.url),
+              productName: item.productName ? String(item.productName) : undefined,
+              variation: item.variation ? String(item.variation) : undefined,
+              priceLabel: item.priceLabel ? String(item.priceLabel) : undefined,
+              pixPriceLabel: item.pixPriceLabel ? String(item.pixPriceLabel) : undefined,
+              stockLabel: item.stockLabel ? String(item.stockLabel) : undefined,
+              caption: item.caption ? String(item.caption) : undefined,
+            });
+          }
+        }
+      } else {
+        const singleProduct = json.matchedProduct || json.productMatch;
+        const singleUrl = json.mediaUrl || singleProduct?.imageUrl || singleProduct?.approvedAsset;
+        if (singleUrl) {
+          parsedMedia.push({
+            url: String(singleUrl),
+            productName: singleProduct?.name ? String(singleProduct.name) : undefined,
+            priceLabel: singleProduct?.priceLabel ? String(singleProduct.priceLabel) : undefined,
+            pixPriceLabel: singleProduct?.pixPriceLabel ? String(singleProduct.pixPriceLabel) : undefined,
+            stockLabel: singleProduct?.stockLabel ? String(singleProduct.stockLabel) : undefined,
+            caption: singleProduct?.caption ? String(singleProduct.caption) : undefined,
+          });
+        }
+      }
       setSimResult({
         replyText,
         replyParts: rawParts.slice(0, 2).map((p: unknown) => String(p)),
+        mediaItems: parsedMedia.slice(0, 3),
         modelUsed: String(json.modelUsed || 'desconhecido'),
         intent: String(json.intent || 'GENERAL_QUESTION'),
         suppressed: Boolean(json.autoReplySuppressed),
@@ -309,7 +356,7 @@ export function WhatsAppConnectionView({
     } catch (err) {
       showToast({
         type: 'error',
-        message: err instanceof Error ? err.message : 'Erro ao testar resposta da Sofia.',
+        message: err instanceof Error ? err.message : 'Erro ao testar resposta do Atendente IA.',
         durationMs: 4000,
       });
     } finally {
@@ -716,7 +763,7 @@ export function WhatsAppConnectionView({
         },
         effectiveUserId,
       ).catch(() => null);
-      await persistAiState(aiPrompt, aiEnabled, [...aiFiles, docItem], 'Trecho salvo na Biblioteca da Sofia!');
+      await persistAiState(aiPrompt, aiEnabled, [...aiFiles, docItem], 'Trecho salvo na Biblioteca da Loja!');
     }
   };
 
@@ -891,7 +938,7 @@ export function WhatsAppConnectionView({
           <span className="flex items-center gap-2 min-w-0">
             <ShieldCheck className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
             <span className="truncate">
-              Modo Teste Seguro ativo: a Sofia responde somente você neste aparelho
+              Modo Teste Seguro ativo: o Atendente IA responde somente você neste aparelho
             </span>
           </span>
           <button
@@ -928,18 +975,18 @@ export function WhatsAppConnectionView({
                 ? formattedPhone
                   ? `${phaseInfo.labelPT || 'WhatsApp conectado e respondendo'}: ${formattedPhone}`
                   : phaseInfo.labelPT || 'WhatsApp conectado e respondendo'
-                : 'WhatsApp Web Oficial — Aguardando Conexão'}
+                : 'WhatsApp Web Oficial · Aguardando Conexão'}
             </p>
             <p className="truncate text-xs text-slate-500 dark:text-[#94A3B8]">
               {cloudAiAvailable || ollamaOnline
                 ? responderStatus.pauseReason === 'credit_exhausted'
-                  ? 'Atendimento pausado por falta de créditos — recarregue na Kiwify para retomar.'
+                  ? 'Atendimento pausado por falta de créditos · recarregue na Kiwify para retomar.'
                   : responderStatus.active
-                    ? `Sofia Nuvem Ativa — respondendo ao vivo no WhatsApp Web${responderStatus.repliedCount > 0 ? ` (${responderStatus.repliedCount} enviada${responderStatus.repliedCount > 1 ? 's' : ''})` : ''}.`
+                    ? `Atendente IA Ativo · respondendo ao vivo no WhatsApp Web${responderStatus.repliedCount > 0 ? ` (${responderStatus.repliedCount} enviada${responderStatus.repliedCount > 1 ? 's' : ''})` : ''}.`
                     : desktopBridge?.isDesktop && !embeddedIdentity?.connected
-                      ? 'Sofia Nuvem pronta — escaneie o QR oficial ao lado para ativar respostas automáticas.'
-                      : 'Sofia Nuvem pronta — atende catálogo, gera Pix e chama você apenas quando precisar.'
-                : 'Sofia offline — clique em Verificar Conexão.'}
+                      ? 'Atendente IA pronto · escaneie o QR oficial ao lado para ativar respostas automáticas.'
+                      : 'Atendente IA pronto · atende catálogo, gera Pix e chama você apenas quando precisar.'
+                : 'Atendente IA offline · clique em Verificar Conexão.'}
             </p>
           </div>
         </div>
@@ -950,7 +997,7 @@ export function WhatsAppConnectionView({
             const hasAnyAi = hasCloudCredits || Boolean(ollamaOnline);
             const msgsLeft = creditBalance !== null ? Math.max(0, Math.floor((creditBalance + 1e-9) / 0.1)) : null;
             const label = !aiEnabled
-              ? 'Sofia Pausada'
+              ? 'IA Pausada'
               : responderStatus.pauseReason === 'credit_exhausted' || (cloudAiAvailable && creditBalance !== null && creditBalance < 0.1 && !ollamaOnline)
                 ? 'Sem Créditos (0 msgs)'
                 : hasCloudCredits
@@ -1014,7 +1061,7 @@ export function WhatsAppConnectionView({
       <div className="grid flex-1 min-h-0 gap-4 overflow-y-auto p-3 sm:p-5 lg:grid-cols-[minmax(360px,0.8fr)_minmax(640px,1.6fr)]">
         {/* COLUNA ESQUERDA (~33%) — Cérebro, Fila & Conhecimento */}
         <section
-          aria-label="Cérebro, Fila Humana e Conhecimento da Sofia"
+          aria-label="Cérebro, Fila Humana e Conhecimento do Atendente IA"
           className="flex min-w-0 flex-col gap-3.5 rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4 shadow-sm"
         >
           {/* 3 Toolbar Pills Mutuamente Exclusivos */}
@@ -1107,7 +1154,7 @@ export function WhatsAppConnectionView({
               {humanQueueEntries.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 dark:border-[#334155] bg-white dark:bg-[#090D16] p-4 text-center text-xs text-slate-500 dark:text-[#94A3B8]">
                   <CheckCircle2 className="size-5 mx-auto mb-1 text-emerald-500" />
-                  Nenhum cliente na Fila Humana agora. A Sofia está respondendo 100% dos atendimentos.
+                  Nenhum cliente na Fila Humana agora. O Atendente IA está respondendo 100% dos atendimentos.
                 </div>
               ) : (
                 <div className="space-y-2.5 max-h-[380px] overflow-y-auto">
@@ -1152,7 +1199,7 @@ export function WhatsAppConnectionView({
                           <span className="rounded-md bg-[#FF2E54]/10 px-2 py-0.5 text-[#FF2E54]">
                             {entry.pausedBy === 'manual_human_reply'
                               ? 'Pausa Automática (.message-out · humano respondeu)'
-                              : 'Sofia pausada neste chat'}
+                              : 'IA pausada neste chat'}
                           </span>
                         </div>
 
@@ -1342,7 +1389,7 @@ export function WhatsAppConnectionView({
             </div>
           )}
 
-          {/* Instruções da Sofia + Controles Sempre Visíveis */}
+          {/* Instruções do Atendente IA + Controles Sempre Visíveis */}
           <div className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-slate-50/70 dark:bg-[#090D16] p-3.5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <button
@@ -1356,7 +1403,7 @@ export function WhatsAppConnectionView({
                   className={`size-4 shrink-0 text-slate-500 transition-transform ${aiBrainExpanded ? 'rotate-180' : ''}`}
                 />
                 <div className="min-w-0">
-                  <h2 className="text-sm font-bold text-[#0F172A] dark:text-[#F8FAFC]">Instruções da Sofia</h2>
+                  <h2 className="text-sm font-bold text-[#0F172A] dark:text-[#F8FAFC]">Instruções do Atendente IA</h2>
                   <p className="truncate text-[11px] text-slate-500 dark:text-[#94A3B8]">
                     Regras diretas combinadas com seu catálogo real.
                   </p>
@@ -1410,7 +1457,7 @@ export function WhatsAppConnectionView({
                 <div className="space-y-3 border-t border-slate-200/70 dark:border-[#1E293B] pt-3">
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="wpp-ai-single-prompt" className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Como você quer que a Sofia atenda seus clientes no WhatsApp?
+                      Como você quer que o Atendente IA responda seus clientes no WhatsApp?
                     </label>
                     <textarea
                       id="wpp-ai-single-prompt"
@@ -1472,7 +1519,7 @@ export function WhatsAppConnectionView({
               className="flex min-h-[44px] w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-xs font-semibold text-[#0F172A] dark:text-[#F8FAFC]"
             >
               <span className="truncate">
-                {autonomyAccordionOpen ? '▾' : '▸'} Sofia: Modo {autonomyModeLabel} · {concisenessStatus}
+                {autonomyAccordionOpen ? '▾' : '▸'} Atendimento: Modo {autonomyModeLabel} · {concisenessStatus}
               </span>
               <span className="cg-tabular shrink-0 text-[11px] font-medium text-slate-500 dark:text-[#94A3B8]">
                 {promptLen}/900 chars
@@ -1544,7 +1591,7 @@ export function WhatsAppConnectionView({
 
         {/* COLUNA DIREITA (~68%) — Canal & Sandbox (Simulador Seguro ↔ WhatsApp Real com Tela Cheia sem desmontar <webview>) */}
         <section
-          aria-label="Canal e Sandbox da Sofia"
+          aria-label="Canal e Sandbox do Atendente IA"
           data-testid="wpp-channel-section"
           data-fullscreen={whatsappFullscreen ? 'true' : 'false'}
           className={
@@ -1616,7 +1663,7 @@ export function WhatsAppConnectionView({
               )}
               {channelTab === 'simulator' && (
                 <span className="text-[11px] font-medium text-slate-500 dark:text-[#94A3B8]">
-                  Teste grátis sem tocar em clientes reais
+                  Simulador seguro (0,1 cr · sem tocar em clientes reais)
                 </span>
               )}
             </div>
@@ -1654,6 +1701,24 @@ export function WhatsAppConnectionView({
                       Testar pedido de catálogo
                     </button>
                   )}
+                  <button
+                    type="button"
+                    data-testid="wpp-sim-scenario-pix"
+                    disabled={simSending}
+                    onClick={() => void handleRunLiveSofiaTest('Quero pagar no Pix com desconto, manda a chave?', 'simulator')}
+                    className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/15 px-2.5 text-[11px] font-semibold text-blue-800 dark:text-blue-200 hover:bg-blue-100 transition"
+                  >
+                    Simular Pix
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="wpp-sim-scenario-address"
+                    disabled={simSending}
+                    onClick={() => void handleRunLiveSofiaTest('Qual o endereço e horário de atendimento?', 'simulator')}
+                    className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition"
+                  >
+                    Endereço/Horário
+                  </button>
                   <button
                     type="button"
                     data-testid="wpp-sim-audio-btn"
@@ -1763,23 +1828,87 @@ export function WhatsAppConnectionView({
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
+                    {simLastQuery && (
+                      <div className="flex justify-end">
+                        <div className="max-w-[85%] rounded-xl border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/15 px-3 py-2 text-xs leading-relaxed text-[#0F172A] dark:text-[#F8FAFC] shadow-2xs">
+                          <span className="block text-[10px] font-bold uppercase tracking-wide text-[#2563EB] dark:text-blue-300 mb-0.5">
+                            Cliente
+                          </span>
+                          {simLastQuery}
+                        </div>
+                      </div>
+                    )}
                     {simResult.replyParts.map((bubble, bIdx) => (
                       <div
                         key={`bubble-${bIdx}`}
-                        className="rounded-xl border border-emerald-100 dark:border-[#334155] bg-white dark:bg-[#111726] px-3 py-2 text-xs leading-relaxed text-[#0F172A] dark:text-[#F8FAFC] shadow-2xs"
+                        className="max-w-[92%] rounded-xl border border-emerald-100 dark:border-[#334155] bg-white dark:bg-[#111726] px-3 py-2 text-xs leading-relaxed text-[#0F172A] dark:text-[#F8FAFC] shadow-2xs"
                       >
+                        {bIdx === 0 && (
+                          <span className="block text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mb-0.5">
+                            Sofia · Catálogo Real
+                          </span>
+                        )}
                         {bubble}
                       </div>
                     ))}
+                    {simResult.mediaItems.length > 0 && (
+                      <div className="grid gap-2 pt-0.5">
+                        {simResult.mediaItems.map((media, mIdx) => (
+                          <div
+                            key={`media-${mIdx}`}
+                            data-testid="wpp-sim-media-card"
+                            className="flex flex-col sm:flex-row items-start sm:items-center gap-3 max-w-[92%] rounded-xl border border-emerald-200 dark:border-[#334155] bg-white dark:bg-[#111726] p-2.5 shadow-2xs"
+                          >
+                            <img
+                              src={media.url}
+                              alt={media.productName || 'Foto do produto'}
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                              className="h-28 w-28 sm:h-32 sm:w-32 shrink-0 rounded-lg border border-slate-200 dark:border-[#334155] object-cover bg-slate-50"
+                            />
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              {media.productName && (
+                                <p className="text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC]">
+                                  {media.productName}
+                                </p>
+                              )}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {media.priceLabel && (
+                                  <span className="cg-tabular inline-flex items-center rounded-md bg-slate-100 dark:bg-[#1E293B] px-2 py-0.5 text-[11px] font-bold text-[#0F172A] dark:text-[#F8FAFC]">
+                                    {media.priceLabel}
+                                  </span>
+                                )}
+                                {media.pixPriceLabel && (
+                                  <span className="cg-tabular inline-flex items-center rounded-md bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+                                    {media.pixPriceLabel}
+                                  </span>
+                                )}
+                                {media.stockLabel && (
+                                  <span className="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-500/15 px-2 py-0.5 text-[11px] font-semibold text-[#2563EB] dark:text-blue-300">
+                                    {media.stockLabel}
+                                  </span>
+                                )}
+                              </div>
+                              {media.caption && (
+                                <p className="text-[11px] leading-snug text-slate-600 dark:text-slate-300">
+                                  {media.caption}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-[#334155] bg-slate-50/50 dark:bg-[#090D16] p-6 text-center text-xs text-slate-500 dark:text-[#94A3B8]">
                   <Bot className="size-7 mb-2 text-[#2563EB]" />
-                  <p className="font-semibold text-[#0F172A] dark:text-[#F8FAFC]">Simulador Seguro da Sofia</p>
+                  <p className="font-semibold text-[#0F172A] dark:text-[#F8FAFC]">Simulador Seguro do Atendente IA</p>
                   <p className="mt-1 max-w-sm">
-                    Clique em qualquer produto acima ou envie uma pergunta para ver exatamente como a Sofia responde no seu tom de voz, sem cobrar nenhum cliente real.
+                    Clique em qualquer produto acima ou envie uma pergunta para ver exatamente como o Atendente IA responde no seu tom de voz, sem cobrar nenhum cliente real.
                   </p>
                 </div>
               )}

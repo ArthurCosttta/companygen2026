@@ -6,6 +6,7 @@ import {
   HelpCircle,
   Keyboard,
   LifeBuoy,
+  Mail,
   Moon,
   Search,
   Sparkles,
@@ -17,7 +18,7 @@ import type { SidebarTab } from './Sidebar';
 
 const TAB_BREADCRUMB_MAP: Record<SidebarTab, { root: string; section: string }> = {
   store: { root: 'Minha Loja', section: 'Vitrine & Estúdio' },
-  whatsapp: { root: 'WhatsApp', section: 'Atendimento Sofia' },
+  whatsapp: { root: 'WhatsApp', section: 'Atendimento Automático' },
   dashboard: { root: 'Pedidos', section: 'Visão Geral' },
   settings: { root: 'Ajustes', section: 'Conta & Integrações' },
   admin: { root: 'Admin', section: 'Operação & Suporte' },
@@ -29,6 +30,8 @@ export interface TopbarProps {
   creditBalance: number;
   isCatalogEmpty: boolean;
   isDarkMode: boolean;
+  isGuestSession?: boolean;
+  onClaimGuestEmail?: () => void;
   onToggleDarkMode: () => void;
   onOpenCheckout: () => void;
   onOpenPreview: () => void;
@@ -43,6 +46,8 @@ export function Topbar({
   creditBalance,
   isCatalogEmpty,
   isDarkMode,
+  isGuestSession,
+  onClaimGuestEmail,
   onToggleDarkMode,
   onOpenCheckout,
   onOpenPreview,
@@ -248,8 +253,22 @@ export function Topbar({
         </button>
       </div>
 
-      {/* Zona 3 (Direita): Saldo Tabular, Ver Vitrine, Tema e Menu Ajuda (?) */}
+      {/* Zona 3 (Direita): Vincular E-mail (convidado), Saldo Tabular, Ver Vitrine, Tema e Menu Ajuda (?) */}
       <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        {isGuestSession && onClaimGuestEmail ? (
+          <button
+            type="button"
+            data-testid="topbar-claim-email-btn"
+            onClick={onClaimGuestEmail}
+            className="flex min-h-[40px] shrink-0 whitespace-nowrap items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-50 px-2.5 sm:px-3.5 py-1 text-xs font-extrabold text-amber-800 transition hover:bg-amber-100 dark:border-amber-400/40 dark:bg-amber-500/15 dark:text-amber-200 dark:hover:bg-amber-500/25 shadow-xs"
+            title="Vincular seu e-mail e senha para salvar esta loja e este código na sua conta"
+          >
+            <Mail className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="hidden sm:inline">Vincular meu e-mail</span>
+            <span className="sm:hidden">Vincular e-mail</span>
+          </button>
+        ) : null}
+
         <button
           type="button"
           data-testid="topbar-open-checkout-btn"

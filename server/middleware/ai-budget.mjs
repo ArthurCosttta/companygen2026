@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { BoundedTtlMap } from './bounded-map.mjs';
 
 export const DEFAULT_OLLAMA_ENDPOINT =
   process.env.CG_OLLAMA_ENDPOINT || 'http://127.0.0.1:11434';
@@ -22,8 +23,8 @@ const CACHE_TTL_MS = 15 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 64;
 const CPU_FALLBACK_COOLDOWN_MS = 10 * 60 * 1000;
 
-/** @type {Map<string, { expiresAt: number; payload: any }>} */
-const synthesisCache = new Map();
+/** @type {BoundedTtlMap} */
+const synthesisCache = new BoundedTtlMap({ maxEntries: MAX_CACHE_ENTRIES, defaultTtlMs: CACHE_TTL_MS });
 
 let preferCpuUntil = 0;
 
@@ -66,24 +67,11 @@ export function buildSynthesisCacheKey(parts) {
 }
 
 export function getCachedSynthesis(cacheKey) {
-  const entry = synthesisCache.get(cacheKey);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) {
-    synthesisCache.delete(cacheKey);
-    return null;
-  }
-  return entry.payload;
+  return synthesisCache.get(cacheKey) ?? null;
 }
 
 export function setCachedSynthesis(cacheKey, payload, ttlMs = CACHE_TTL_MS) {
-  if (synthesisCache.size >= MAX_CACHE_ENTRIES) {
-    const oldestKey = synthesisCache.keys().next().value;
-    if (oldestKey) synthesisCache.delete(oldestKey);
-  }
-  synthesisCache.set(cacheKey, {
-    expiresAt: Date.now() + Math.max(1000, ttlMs),
-    payload,
-  });
+  synthesisCache.set(cacheKey, payload, Math.max(1000, ttlMs));
 }
 
 export const TIER_LIMITS = Object.freeze({
@@ -92,7 +80,7 @@ export const TIER_LIMITS = Object.freeze({
   restricted: { maxPerHour: 15, maxPerMinute: 5, label: 'Restrito' },
 });
 
-const tierUsageBuckets = new Map();
+const tierUsageBuckets = new BoundedTtlMap({ maxEntries: 2000, defaultTtlMs: 3600_000 });
 
 /**
  * Checks per-user hourly/minute AI call quota based on configured account tier.

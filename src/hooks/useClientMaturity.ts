@@ -81,15 +81,21 @@ export function deriveClientMaturity(
   const businessName = (profile.business?.name ?? '').trim();
   const phoneE164 = profile.whatsapp?.phoneE164 || '';
   const hasValidPhone = isValidProductionPhone(phoneE164);
-  const fichaOk =
-    Boolean(profile.onboarding?.fichaCompleted) &&
-    businessName.length >= 2 &&
-    hasValidPhone;
-
   const activeProducts = (profile.catalog?.products ?? []).filter(p => p.active !== false);
   const activeProductsCount = activeProducts.length;
+  const hasGeneratedStoreEvidence =
+    Boolean(profile.onboarding?.storeGenerated) ||
+    Boolean(profile.publishedStore?.published) ||
+    Boolean(profile.storeLayout?.formulasIr);
+  // Nunca derruba uma loja já criada/publicada de volta para o Onboarding se faltar apenas um campo secundário ou flag transiente
+  const fichaOk =
+    businessName.length >= 2 &&
+    (hasGeneratedStoreEvidence
+      ? activeProductsCount > 0 || Boolean(profile.onboarding?.fichaCompleted)
+      : Boolean(profile.onboarding?.fichaCompleted) && hasValidPhone);
+
   const isCatalogEmpty = activeProductsCount === 0;
-  const canPublishStore = fichaOk && !isCatalogEmpty && hasValidPhone;
+  const canPublishStore = fichaOk && !isCatalogEmpty && (hasValidPhone || hasGeneratedStoreEvidence);
   const connectionPhase =
     options?.connectionPhase ?? deriveConnectionPhase(profile, options?.runtimeStatus);
 

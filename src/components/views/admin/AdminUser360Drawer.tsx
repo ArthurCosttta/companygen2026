@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ActionButton, DrawerContainer, useToast } from '@/components/ui';
 import { authenticatedFetch, setSupportReadonlySession } from '@/services/supabase-client';
+import { resolveBrandedAppOrigin } from '@/components/views/storefront/storefront-utils';
 
 export interface AdminUser360Target {
   id: string;
@@ -446,7 +447,8 @@ export function AdminUser360Drawer({
               size={44}
               data-testid="admin-drawer-view-store-btn"
               onClick={() => {
-                const url = `/?view=store&u=${encodeURIComponent(targetUser.id)}&adminPreview=1`;
+                const origin = resolveBrandedAppOrigin();
+                const url = `${origin}/?view=store&u=${encodeURIComponent(targetUser.id)}&adminPreview=1`;
                 window.open(url, '_blank', 'noopener,noreferrer');
               }}
               className="w-full"
@@ -460,9 +462,10 @@ export function AdminUser360Drawer({
               size={44}
               data-testid="admin-drawer-copy-store-url-btn"
               onClick={() => {
+                const origin = resolveBrandedAppOrigin() || window.location.origin;
                 const publicUrl = targetUser.publicSlug
-                  ? `${window.location.origin}/?loja=${encodeURIComponent(targetUser.publicSlug)}`
-                  : `${window.location.origin}/?view=store&u=${encodeURIComponent(targetUser.id)}`;
+                  ? `${origin}/?loja=${encodeURIComponent(targetUser.publicSlug)}`
+                  : `${origin}/?view=store&u=${encodeURIComponent(targetUser.id)}`;
                 void navigator.clipboard?.writeText(publicUrl).catch(() => {});
                 showToast({ type: 'success', message: `Link da loja copiado: ${publicUrl}` });
               }}

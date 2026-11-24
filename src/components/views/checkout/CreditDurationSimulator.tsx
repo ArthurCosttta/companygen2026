@@ -16,7 +16,7 @@ interface CreditCostsMap {
 
 const DEFAULT_COSTS: CreditCostsMap = {
   glm_whatsapp: 0.1,
-  generate_full_storefront: 4,
+  generate_full_storefront: 10,
 };
 
 export function CreditDurationSimulator({
@@ -37,7 +37,7 @@ export function CreditDurationSimulator({
         if (!active || !json?.costs) return;
         setCosts({
           glm_whatsapp: Math.max(0.05, Number(json.costs.glm_whatsapp) || 0.1),
-          generate_full_storefront: Math.max(0.5, Number(json.costs.generate_full_storefront) || 4),
+          generate_full_storefront: Math.max(0.5, Number(json.costs.generate_full_storefront) || 10),
         });
       })
       .catch(() => {
@@ -183,7 +183,7 @@ export function CreditDurationSimulator({
             <Sparkles className="size-3.5" aria-hidden="true" />
             {simulation.estimatedDays !== null
               ? `Dura ~${simulation.estimatedDays} dias no pacote selecionado`
-              : 'Consumo mínimo — pacote inicial cobre com folga'}
+              : 'Consumo mínimo · pacote inicial cobre com folga'}
           </span>
         </div>
       )}

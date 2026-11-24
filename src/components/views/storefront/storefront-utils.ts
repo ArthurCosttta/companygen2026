@@ -4,6 +4,7 @@ import {
   type BusinessProfile,
   type CatalogProduct,
 } from '@/schemas/profile.schema';
+import { authenticatedFetch } from '@/services/supabase-client';
 
 export interface PublishBlocker {
   id: 'whatsapp' | 'empty_catalog' | 'invalid_price' | 'missing_photo';
@@ -207,6 +208,23 @@ export function getPublishBlockers(profile: BusinessProfile): PublishBlocker[] {
   return blockers;
 }
 
+export function resolveBrandedAppOrigin(): string {
+  const envOrigin = String(import.meta.env.VITE_PUBLIC_ORIGIN || '')
+    .trim()
+    .replace(/\/+$/, '');
+  if (envOrigin) return envOrigin;
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const hostname = String(window.location.hostname || '').toLowerCase();
+    if (hostname.endsWith('.run.app')) {
+      return 'https://companygen-app.web.app';
+    }
+    return window.location.origin;
+  }
+
+  return '';
+}
+
 export function buildStorePublicUrl(profile: BusinessProfile, ownerId?: string): string {
   const slug =
     profile.publishedStore?.publicSlug ||
@@ -219,8 +237,9 @@ export function buildStorePublicUrl(profile: BusinessProfile, ownerId?: string):
     'minha-loja';
 
   const param = ownerId ? encodeURIComponent(ownerId) : encodeURIComponent(slug);
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return `${window.location.origin}/?view=store&u=${param}`;
+  const origin = resolveBrandedAppOrigin();
+  if (origin) {
+    return `${origin}/?view=store&u=${param}`;
   }
   return `/?view=store&u=${param}`;
 }
@@ -277,18 +296,31 @@ export function generateInternalProductCodes(name: string): { id: string; sku: s
 export function buildWhatsappDirectUrl(phoneE164: string, message: string): string {
   const digits = sanitizePhoneE164(phoneE164);
   if (!digits) return '';
-  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+  const base = `https://wa.me/${digits}?text=`;
+  let safeMsg = String(message || '').trim();
+  let encoded = encodeURIComponent(safeMsg);
+  if (base.length + encoded.length > 1950) {
+    const suffix = '\n...(resumo completo copiado)';
+    while (safeMsg.length > 80 && base.length + encodeURIComponent(safeMsg + suffix).length > 1950) {
+      safeMsg = safeMsg.slice(0, Math.floor(safeMsg.length * 0.8));
+    }
+    encoded = encodeURIComponent(`${safeMsg.trim()}${suffix}`);
+  }
+  return `${base}${encoded}`;
 }
 
-export async function readImageFileAsDataUrl(file: File): Promise<string> {
-  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
-  if (!allowed.includes(file.type)) {
-    throw new Error('Escolha uma imagem JPG, PNG, WebP, GIF ou SVG.');
-  }
-  if (file.size > 2 * 1024 * 1024) {
-    throw new Error('A imagem deve ter no máximo 2 MB.');
-  }
-  return await new Promise<string>((resolve, reject) => {
+const MAX_RAW_UPLOAD_BYTES = 15 * 1024 * 1024;
+const TARGET_MAX_DIMENSION = 1400;
+
+function isLikelyImageFile(file: File): boolean {
+  const t = String(file.type || '').toLowerCase();
+  if (t.startsWith('image/')) return true;
+  const name = String(file.name || '').toLowerCase();
+  return /\.(png|jpe?g|webp|gif|jfif|bmp|avif|heic|heif)$/i.test(name);
+}
+
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : '';
@@ -296,8 +328,100 @@ export async function readImageFileAsDataUrl(file: File): Promise<string> {
       else resolve(result);
     };
     reader.onerror = () => reject(new Error('Não foi possível ler o arquivo selecionado.'));
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
   });
+}
+
+export async function readImageFileAsDataUrl(file: File): Promise<string> {
+  if (!file || file.size <= 0) {
+    throw new Error('Arquivo de imagem vazio ou inválido.');
+  }
+  if (file.size > MAX_RAW_UPLOAD_BYTES) {
+    throw new Error('A imagem deve ter no máximo 15 MB.');
+  }
+  const lowerType = String(file.type || '').toLowerCase();
+  const lowerName = String(file.name || '').toLowerCase();
+  if (lowerType.includes('svg') || /\.svg$/i.test(lowerName)) {
+    throw new Error('SVG não é aceito neste campo. Envie JPG, PNG ou WebP.');
+  }
+  if (!isLikelyImageFile(file)) {
+    throw new Error('Escolha uma imagem JPG, PNG, WebP ou GIF válida.');
+  }
+  if (lowerType === 'image/gif' && file.size <= 1.5 * 1024 * 1024) {
+    return readBlobAsDataUrl(file);
+  }
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    return readBlobAsDataUrl(file);
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Não foi possível decodificar esta imagem. Use JPG, PNG ou WebP.'));
+      el.src = objectUrl;
+    });
+    const w = img.naturalWidth || img.width || 0;
+    const h = img.naturalHeight || img.height || 0;
+    if (w <= 0 || h <= 0) {
+      throw new Error('Imagem sem dimensões válidas.');
+    }
+    const maxSide = Math.max(w, h);
+    const scale = maxSide > TARGET_MAX_DIMENSION ? TARGET_MAX_DIMENSION / maxSide : 1;
+    const targetW = Math.max(1, Math.round(w * scale));
+    const targetH = Math.max(1, Math.round(h * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return readBlobAsDataUrl(file);
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+
+    let dataUrl = canvas.toDataURL('image/webp', 0.85);
+    if (!dataUrl.startsWith('data:image/webp')) {
+      dataUrl = canvas.toDataURL(lowerType === 'image/png' ? 'image/png' : 'image/jpeg', 0.86);
+    }
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+export async function uploadStorefrontMediaDataUrl(options: {
+  ownerId?: string;
+  dataUrl: string;
+  slotId?: string;
+  sectionId?: string;
+}): Promise<string> {
+  const cleanDataUrl = String(options.dataUrl || '').trim();
+  if (!cleanDataUrl.startsWith('data:image/')) {
+    return cleanDataUrl;
+  }
+  try {
+    const res = await authenticatedFetch(
+      '/api/store-molde/media/upload',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slotId: options.slotId || `media_${Date.now()}`,
+          sectionId: options.sectionId || '',
+          dataUrl: cleanDataUrl,
+        }),
+      },
+      options.ownerId,
+    );
+    if (!res.ok) return cleanDataUrl;
+    const json = (await res.json().catch(() => null)) as { assetUrl?: string } | null;
+    if (json?.assetUrl && typeof json.assetUrl === 'string') {
+      return json.assetUrl;
+    }
+    return cleanDataUrl;
+  } catch {
+    return cleanDataUrl;
+  }
 }
 
 export function safeHref(raw: unknown, fallback = '#'): string {

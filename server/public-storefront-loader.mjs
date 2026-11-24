@@ -98,6 +98,15 @@ export function sanitizePublicStoreProfile(rawProfile) {
       published: Boolean(publishedStore.published),
       publicSlug: String(publishedStore.publicSlug || ''),
     },
+    ...(src.storeLayout && typeof src.storeLayout === 'object'
+      ? {
+          storeLayout: {
+            activePageSlug: String(src.storeLayout.activePageSlug || 'home'),
+            ...(src.storeLayout.formulasIr ? { formulasIr: src.storeLayout.formulasIr } : {}),
+            ...(Array.isArray(src.storeLayout.pages) ? { pages: src.storeLayout.pages.slice(0, 24) } : {}),
+          },
+        }
+      : {}),
   };
 }
 

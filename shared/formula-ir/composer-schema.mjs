@@ -144,10 +144,10 @@ export const ActionBindingSchema = z.object({
 export const ImagePlanItemSchema = z.object({
   slotId: z.string().min(1).max(48).regex(/^[a-z0-9_-]+$/i),
   targetSectionId: z.string().min(1).max(48),
-  role: z.enum(['hero', 'section_illustration', 'lifestyle_banner', 'detail_card', 'brand_logo']),
+  role: z.enum(['hero', 'section_illustration', 'section_visual', 'lifestyle_banner', 'detail_card', 'brand_logo']),
   tier: z.enum(['flux-dev', 'flux-schnell']).default('flux-schnell'),
-  aspect: z.enum(['16:9', '4:3', '1:1']).default('4:3'),
-  promptEn: z.string().min(10).max(480),
+  aspect: z.enum(['16:9', '16:10', '4:3', '4:5', '1:1']).default('4:3'),
+  promptEn: z.string().min(10).max(1000),
   assetUrl: SafeAssetUrlSchema.optional(),
   relativePath: z.string().optional(),
   filename: z.string().optional(),
@@ -338,6 +338,7 @@ export const SectionNodeSchema = z.discriminatedUnion('type', [
       subtitle: z.string().max(200).default(''),
       itemActionLabel: z.string().max(36).default('Adicionar'),
       emptyImageMode: z.literal('neutral_gray').default('neutral_gray'),
+      selectedSkuIds: z.array(z.string().max(64)).max(24).optional(),
     }),
   }),
   z.object({
@@ -345,10 +346,10 @@ export const SectionNodeSchema = z.discriminatedUnion('type', [
     type: z.literal('ClosingScheduleSplit'),
     imageSlotId: z.string().optional(),
     config: z.object({
-      eyebrow: z.string().max(60).default('Atendimento'),
+      eyebrow: z.string().max(60).default(''),
       title: z.string().min(1).max(100),
       subtitle: z.string().max(200).default(''),
-      slots: z.array(z.string().max(24)).max(6).default([]),
+      slots: z.array(z.string().max(80)).max(7).default([]),
       whatsappHeading: z.string().min(1).max(90),
       whatsappSubtext: z.string().max(200).default(''),
       ctaLabel: z.string().max(44).default('Chamar no WhatsApp'),
@@ -387,7 +388,11 @@ export const FormulaV9PageSchema = z.object({
       { message: 'Filename de página inválido.' },
     ),
   title: z.string().min(1),
+  campaignTheme: z.string().optional(),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
   isHome: z.boolean().default(false),
+  atomicBlueprint: z.any().optional(),
   sections: z.array(SectionNodeSchema).min(1).max(9),
 });
 
@@ -425,6 +430,7 @@ export const FormulaV9DocumentSchema = z.object({
   pages: z.array(FormulaV9PageSchema).optional(),
   storeInfo: z.record(z.string(), z.unknown()).optional(),
   catalog: z.array(SafeCatalogRecordSchema).optional(),
+  atomicBlueprint: z.unknown().optional(),
 });
 
 function hexToRgb(hex) {
@@ -668,6 +674,47 @@ export function evaluateInteractiveExperience({ controls = [], state = {}, calcR
 }
 
 /**
+ * Remove sequencias '--' e travessoes artificiais (' — ') típicas de IA em textos exibidos na vitrine.
+ * Preserva URLs, tokens de estilo CSS/atômicos e atributos técnicos.
+ */
+export function stripAiDashFlags(text) {
+  const s = String(text ?? '');
+  if (!s) return '';
+  if (/^(?:https?:|data:|\/api\/|ui:|#|bg=)/i.test(s.trim())) return s;
+  return s
+    .replace(/\s+--+\s+/g, ', ')
+    .replace(/--+/g, ' - ')
+    .replace(/\s+—\s+/g, ', ')
+    .replace(/—/g, ', ')
+    .replace(/\s+,/g, ',')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function deepStripAiDashes(node, keyHint = '') {
+  if (typeof node === 'string') {
+    if (
+      ['id', 'sku', 'slug', 'filename', 'href', 'url', 'imageUrl', 'assetUrl', 'accent', 'surface', 'layout', 'groundMode', 'primaryColor', 'accentColor'].includes(keyHint) ||
+      /^(?:https?:|data:|\/api\/|#|ui:|sec_|page_|img_|sku_)/i.test(node.trim())
+    ) {
+      return node;
+    }
+    return stripAiDashFlags(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map((item) => deepStripAiDashes(item, keyHint));
+  }
+  if (node && typeof node === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(node)) {
+      out[k] = deepStripAiDashes(v, k);
+    }
+    return out;
+  }
+  return node;
+}
+
+/**
  * Deterministic sanitizer enforcing constraints, real catalog prices/Pix, and <=7 sections / <=5 imagePlan items.
  */
 export function sanitizeFormulaV9Document(rawDoc, profile = {}) {
@@ -864,8 +911,23 @@ export function sanitizeFormulaV9Document(rawDoc, profile = {}) {
       cloned.config.imageUrl = sanitizeSafeAssetUrl(cloned.config.imageUrl, '');
     }
 
+    const preservedNodeStyles = cloned?.config?.nodeStyles;
+    const preservedGroupDisplayMode = cloned?.config?.groupDisplayMode;
+    const preservedSelectedSkuIds = cloned?.config?.selectedSkuIds;
+
     const check = SectionNodeSchema.safeParse(cloned);
-    if (check.success) parsedSections.push(check.data);
+    if (check.success) {
+      if (preservedNodeStyles && typeof preservedNodeStyles === 'object') {
+        check.data.config.nodeStyles = preservedNodeStyles;
+      }
+      if (preservedGroupDisplayMode === 'only_selected' || preservedGroupDisplayMode === 'prioritize') {
+        check.data.config.groupDisplayMode = preservedGroupDisplayMode;
+      }
+      if (Array.isArray(preservedSelectedSkuIds) && check.data.type !== 'CatalogGrid') {
+        check.data.config.selectedSkuIds = preservedSelectedSkuIds;
+      }
+      parsedSections.push(check.data);
+    }
   }
 
   const rawImagePlan = Array.isArray(rawDoc?.imagePlan) ? rawDoc.imagePlan : [];
@@ -952,11 +1014,22 @@ export function sanitizeFormulaV9Document(rawDoc, profile = {}) {
     ...(allowedGrids.has(rawDoc?.layoutGrid) ? { layoutGrid: rawDoc.layoutGrid } : {}),
     ...(safeBible.success ? { artDirectionBible: safeBible.data } : {}),
     analysis: safeAnalysis.success
-      ? safeAnalysis.data
+      ? deepStripAiDashes(safeAnalysis.data)
       : { factsConfirmed: [], dependencies: [], mainExperienceSummary: '' },
     designTokens,
     imagePlan,
-    sections: parsedSections,
+    sections: deepStripAiDashes(parsedSections),
+    ...(Array.isArray(rawDoc?.pages) && rawDoc.pages.length > 0
+      ? {
+          pages: rawDoc.pages
+            .filter((p) => p && typeof p === 'object' && p.slug && p.title)
+            .slice(0, 24)
+            .map((p) => deepStripAiDashes(p)),
+        }
+      : {}),
     ...(sanitizedCatalog !== undefined ? { catalog: sanitizedCatalog } : {}),
+    ...(rawDoc?.atomicBlueprint && typeof rawDoc.atomicBlueprint === 'object'
+      ? { atomicBlueprint: deepStripAiDashes(rawDoc.atomicBlueprint) }
+      : {}),
   };
 }

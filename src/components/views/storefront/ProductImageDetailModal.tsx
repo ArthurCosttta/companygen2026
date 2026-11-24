@@ -96,7 +96,7 @@ export function ProductImageDetailModal({
       data-testid="product-image-detail-modal"
       aria-modal="true"
       aria-label="Inspeção detalhada de imagem do produto"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85"
       onMouseUp={handleMouseUp}
     >
       <div className="relative w-full max-w-4xl max-h-[90vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-white">
@@ -166,7 +166,7 @@ export function ProductImageDetailModal({
           />
 
           {/* Barra Flutuante de Controles de Zoom */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1.5 bg-slate-900/90 border border-slate-700/80 rounded-full shadow-lg backdrop-blur-md">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1.5 bg-slate-900/95 border border-slate-700/80 rounded-full shadow-lg">
             <button
               onClick={handleZoomOut}
               className="p-1.5 text-slate-300 hover:text-white rounded-full hover:bg-slate-800 transition"

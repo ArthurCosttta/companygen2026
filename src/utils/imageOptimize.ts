@@ -106,12 +106,12 @@ export async function validateAndOptimizeImageFile(
     maxFileSizeBytes?: number;
   } = {},
 ): Promise<OptimizedImageResult> {
-  const maxFileSizeBytes = options.maxFileSizeBytes ?? 8 * 1024 * 1024;
+  const maxFileSizeBytes = options.maxFileSizeBytes ?? 15 * 1024 * 1024;
   if (!file || file.size <= 0) {
     throw new Error(INVALID_IMAGE_MSG);
   }
   if (file.size > maxFileSizeBytes) {
-    throw new Error('A imagem deve ter no máximo 8 MB.');
+    throw new Error('A imagem deve ter no máximo 15 MB.');
   }
 
   const headerSlice = await file.slice(0, 128).arrayBuffer();

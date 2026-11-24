@@ -307,7 +307,7 @@ export function BatchImageSearchModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="batch-image-title"
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65"
       >
         <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-3xl border border-slate-200 bg-white shadow-2xl">
           {/* Cabeçalho */}
@@ -403,7 +403,7 @@ export function BatchImageSearchModal({
                           </div>
                         )}
                         {item.status === 'searching' && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40 backdrop-blur-2xs">
+                          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/55">
                             <RefreshCw className="size-5 animate-spin text-white" />
                           </div>
                         )}

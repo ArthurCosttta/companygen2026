@@ -241,6 +241,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
     baselineBalanceRef.current = currentBalance;
     let ticks = 0;
     pollingIntervalRef.current = window.setInterval(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       ticks += 1;
       if (ticks > 36) {
         if (pollingIntervalRef.current !== null) {
@@ -341,11 +342,11 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
       <div className="mx-auto max-w-6xl">
         {/* Barra Superior */}
         <div
-          className={`flex flex-wrap items-center justify-between gap-4 pb-6 border-b ${
+          className={`flex flex-col gap-4 pb-6 border-b md:flex-row md:items-center md:justify-between ${
             isDark ? 'border-slate-800' : 'border-[var(--cg-border)]'
           }`}
         >
-          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
             <button
               onClick={() => {
                 if (onBackToApp) {
@@ -394,7 +395,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
 
           {/* Saldo Atual */}
           <div
-            className={`flex items-center gap-3 rounded-2xl border px-4 py-2.5 ${
+            className={`flex shrink-0 items-center gap-3 self-start rounded-2xl border px-4 py-2.5 md:self-auto ${
               isDark
                 ? 'border-blue-500/30 bg-blue-500/10'
                 : 'border-blue-200 bg-blue-50/90'

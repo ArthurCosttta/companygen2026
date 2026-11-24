@@ -44,6 +44,15 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/lucide-react/')) {
               return 'vendor-icons';
             }
+            if (id.includes('node_modules/motion/') || id.includes('node_modules/framer-motion/')) {
+              return 'vendor-motion';
+            }
+            if (id.includes('node_modules/@supabase/')) {
+              return 'vendor-supabase';
+            }
+            if (id.includes('node_modules/jszip/')) {
+              return 'vendor-zip';
+            }
           },
         },
       },

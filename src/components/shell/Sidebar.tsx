@@ -417,10 +417,10 @@ export function Sidebar({
       <nav
         aria-label="Navegação inferior"
         className={cn(
-          'fixed inset-x-0 bottom-0 z-40 grid h-16 items-center gap-1 border-t px-2 backdrop-blur-md min-[769px]:hidden',
+          'fixed inset-x-0 bottom-0 z-40 grid h-16 items-center gap-1 border-t px-2 min-[769px]:hidden',
           isDark
-            ? 'border-slate-800 bg-[#111726]/95'
-            : 'border-[var(--cg-border)] bg-white/95',
+            ? 'border-slate-800 bg-[#111726]'
+            : 'border-[var(--cg-border)] bg-white',
           isAdmin ? 'grid-cols-5' : 'grid-cols-4',
         )}
       >

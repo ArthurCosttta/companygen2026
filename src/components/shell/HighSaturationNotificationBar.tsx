@@ -27,7 +27,13 @@ export interface HighSaturationNotificationBarProps {
   muteRemainingMinutes?: number;
   onMute15Min?: () => void;
   onUnmute?: () => void;
-  onAckEvent?: (eventId: string, action?: 'ack' | 'assume_human' | 'resolve' | 'resume_ai') => void;
+  notificationPermission?: NotificationPermission | 'unsupported';
+  onRequestMobilePermission?: () => void;
+  onAckEvent?: (
+    eventId: string,
+    action?: 'ack' | 'assume_human' | 'resolve' | 'resume_ai',
+    item?: WhatsappNotificationEvent,
+  ) => void;
   onOpenQueueDrawer?: () => void;
   onOpenBrainModal?: () => void;
   fixed?: boolean;
@@ -61,6 +67,10 @@ const SEVERITY_CARD_STYLE: Record<
 
 export function HighSaturationNotificationBar({
   notifications,
+  isMuted = false,
+  onMute15Min,
+  notificationPermission,
+  onRequestMobilePermission,
   onAckEvent,
   onOpenQueueDrawer,
   fixed = true,
@@ -99,20 +109,36 @@ export function HighSaturationNotificationBar({
       aria-live={isUrgent ? 'assertive' : 'polite'}
       aria-label="Notificações da Loja"
       className={cn(
-        fixed ? 'fixed right-3 bottom-20 md:bottom-5 md:right-5 z-50 w-[min(390px,calc(100vw-24px))]' : 'relative z-30 w-full max-w-[440px]',
+        fixed ? 'fixed right-3 bottom-20 md:bottom-5 md:right-5 z-[160] w-[min(430px,calc(100vw-24px))]' : 'relative z-30 w-full max-w-[440px]',
         'pointer-events-auto flex flex-col gap-2 transform-gpu',
         className,
       )}
     >
-      {/* 1. Notificação ativa estilo celular */}
+      {/* 1. Alerta persistente/agressivo estilo celular */}
       <div
         data-testid="phone-notification-primary"
         className={cn(
-          'rounded-2xl border bg-[#0F172A]/95 p-3.5 text-white backdrop-blur-md transition-all duration-200',
+          'rounded-2xl border-2 bg-[#0F172A] p-4 text-white shadow-2xl transition-all duration-200',
           style.borderClass,
-          isUrgent && 'animate-pulse ring-2 ring-[#FF2E54]/70',
+          isUrgent ? 'ring-4 ring-[#FF2E54]/85' : 'ring-2 ring-[#10B981]/60',
         )}
       >
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-white/10 px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-wider">
+          <span className="inline-flex items-center gap-1.5 text-amber-300 animate-pulse">
+            <span className={cn('size-2 rounded-full', isUrgent ? 'bg-[#FF2E54]' : 'bg-[#10B981]')} />
+            {isMuted ? 'Alarme silenciado temporariamente' : 'Sirene & vibração ativas a cada 4s'}
+          </span>
+          {notificationPermission === 'default' && onRequestMobilePermission ? (
+            <button
+              type="button"
+              data-testid="notification-enable-mobile-btn"
+              onClick={onRequestMobilePermission}
+              className="rounded bg-[#2563EB] px-2 py-0.5 text-[10px] font-bold text-white hover:bg-blue-500"
+            >
+              Ativar no Celular
+            </button>
+          ) : null}
+        </div>
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex min-w-0 flex-1 items-start gap-2.5">
             <span
@@ -146,7 +172,7 @@ export function HighSaturationNotificationBar({
 
           <button
             type="button"
-            onClick={() => onAckEvent?.(head.eventId || head.id, 'ack')}
+            onClick={() => onAckEvent?.(head.eventId || head.id, 'ack', head)}
             aria-label="Dispensar notificação"
             className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-transform hover:bg-white/10 hover:text-white active:scale-[0.98]"
           >
@@ -154,11 +180,11 @@ export function HighSaturationNotificationBar({
           </button>
         </div>
 
-        <div className="mt-2.5 flex items-center justify-between gap-2">
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => {
-              onAckEvent?.(head.eventId || head.id, isUrgent ? 'assume_human' : 'resolve');
+              onAckEvent?.(head.eventId || head.id, isUrgent ? 'assume_human' : 'resolve', head);
               onOpenQueueDrawer?.();
             }}
             className={cn(
@@ -168,14 +194,25 @@ export function HighSaturationNotificationBar({
                 : 'bg-[#10B981] text-[#052E16] hover:bg-[#059669]',
             )}
           >
-            {isUrgent ? 'Assumir no WhatsApp' : 'Marcar como visto'}
+            {isUrgent ? 'Assumir no WhatsApp' : 'Confirmar & Parar Alarme'}
           </button>
+          {onMute15Min && !isMuted ? (
+            <button
+              type="button"
+              data-testid="silence-alarm-btn"
+              onClick={onMute15Min}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-[11px] font-bold text-white hover:bg-white/20"
+            >
+              Silenciar Alarme
+            </button>
+          ) : null}
 
           {isUrgent && (
             <button
               type="button"
+              data-testid="notification-bar-resume-ai-btn"
               onClick={() => {
-                onAckEvent?.(head.eventId || head.id, 'resume_ai');
+                onAckEvent?.(head.eventId || head.id, 'resume_ai', head);
               }}
               className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-xl border border-emerald-400/50 bg-emerald-500/20 px-3 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30"
             >
@@ -202,7 +239,7 @@ export function HighSaturationNotificationBar({
       {queueExpanded && queuedRest.length > 0 ? (
         <div
           data-testid="phone-notification-queue-list"
-          className="flex max-h-[300px] flex-col gap-1.5 overflow-y-auto rounded-2xl border border-white/15 bg-[#0F172A]/95 p-2.5 shadow-2xl backdrop-blur-md"
+          className="flex max-h-[300px] flex-col gap-1.5 overflow-y-auto rounded-2xl border border-white/15 bg-[#0F172A] p-2.5 shadow-2xl"
         >
           {queuedRest.map((item) => {
             const itemTheme = SEVERITY_CARD_STYLE[item.level] || SEVERITY_CARD_STYLE.NEW_MESSAGE_WAITING;
@@ -227,7 +264,7 @@ export function HighSaturationNotificationBar({
                 </div>
                 <button
                   type="button"
-                  onClick={() => onAckEvent?.(item.eventId || item.id, 'resolve')}
+                  onClick={() => onAckEvent?.(item.eventId || item.id, 'resolve', item)}
                   className="inline-flex min-h-[36px] shrink-0 items-center rounded-lg bg-white/10 px-2.5 text-[11px] font-semibold text-white hover:bg-white/20"
                 >
                   Resolver

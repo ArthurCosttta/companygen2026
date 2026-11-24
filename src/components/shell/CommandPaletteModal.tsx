@@ -116,9 +116,9 @@ export function CommandPaletteModal({
       {
         id: 'nav-whatsapp',
         group: 'Navegação',
-        label: 'WhatsApp · Atendimento Sofia IA',
+        label: 'WhatsApp · Atendimento Automático',
         hint: 'Conexão & QR',
-        keywords: 'whatsapp sofia atendimento qr code conversas',
+        keywords: 'whatsapp atendimento automatico qr code conversas',
         icon: MessageSquare,
         run: () => onSelectTab('whatsapp'),
       },

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { deriveOklchPaletteSystem, pickContrastInk, tuneHexForMinContrast } from './visual-math-engine.mjs';
 
 /**
  * Parser determinístico para expressões paramétricas `ui: ... | fx: ... | ux: ... <tags>`
@@ -67,35 +68,81 @@ export function pickAccessibleInk(bgHex) {
   return lightContrast >= darkContrast ? '#FFFFFF' : '#0F172A';
 }
 
-export function resolveSectionSurfaceTokens({ primaryHex = '#111827', accentHex = '#0B4DB8', surfaceStr = '', sectionIndex = 0, prevIsDark = null }) {
+function mixHexColor(hexA, hexB, weightB) {
+  const parse = (hx) => {
+    const clean = String(hx || '').replace('#', '').trim().padEnd(6, '0').slice(0, 6);
+    const num = parseInt(clean, 16);
+    if (!Number.isFinite(num)) return [15, 23, 42];
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+  };
+  const [r1, g1, b1] = parse(hexA);
+  const [r2, g2, b2] = parse(hexB);
+  const clamp = (n) => Math.max(0, Math.min(255, Math.round(n)));
+  const r = clamp(r1 + (r2 - r1) * weightB);
+  const g = clamp(g1 + (g2 - g1) * weightB);
+  const b = clamp(b1 + (b2 - b1) * weightB);
+  return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+export function ensureAccessibleAccent(accentHex, bgHex, isDark, primaryHex = '#111827') {
+  const base = /^#[0-9a-f]{6}$/i.test(String(accentHex || '')) ? String(accentHex) : '#D8A848';
+  if (contrastRatio(base, bgHex) >= 4.5) return base;
+  if (/^#[0-9a-f]{6}$/i.test(String(primaryHex || '')) && contrastRatio(primaryHex, bgHex) >= 4.5) {
+    return primaryHex;
+  }
+  const target = isDark ? '#FDE68A' : '#1D1D1F';
+  for (let step = 0.25; step <= 1.0; step += 0.15) {
+    const mixed = mixHexColor(base, target, step);
+    if (contrastRatio(mixed, bgHex) >= 4.6) return mixed;
+  }
+  return isDark ? '#F5C451' : '#1D1D1F';
+}
+
+export function resolveSectionSurfaceTokens({
+  primaryHex = '#111827',
+  accentHex = '#D8A848',
+  surfaceStr = '',
+  sectionIndex = 0,
+  prevIsDark = null,
+  groundMode = 'warm_linen',
+}) {
   const parsed = parseAtomSpec(surfaceStr);
   const lumParam = parsed.params.lum !== undefined ? clampNum(parsed.params.lum, 0, 1, 0.98) : null;
   const bgParam = parsed.params.bg || '';
+  const isWash = parsed.directives.some((d) => d.includes('soft_wash'));
   const hasAltTemp = parsed.directives.some((d) => d.startsWith('alt_temp'));
 
+  const sys = deriveOklchPaletteSystem({
+    brandHex: primaryHex,
+    accentHex,
+    groundMode,
+  });
+
   let isDark = lumParam !== null ? lumParam < 0.45 : sectionIndex === 0;
+  if (bgParam === 'anchor_dark' || bgParam === 'logo[0]') isDark = lumParam !== null ? lumParam < 0.45 : true;
+  if (bgParam === 'ground' || bgParam === 'warm_linen') isDark = false;
   if (hasAltTemp && prevIsDark !== null && sectionIndex > 0 && isDark === prevIsDark) {
     isDark = !prevIsDark;
   }
 
-  let bgHex = '#FFFFFF';
-  if (bgParam === 'logo[0]' && isDark) {
-    bgHex = relativeLuminance(primaryHex) < 0.4 ? primaryHex : '#090D16';
-  } else if (bgParam === 'logo[1]') {
-    bgHex = accentHex;
-  } else if (/^#[0-9a-f]{6}$/i.test(bgParam)) {
+  let bgHex = sys.groundBg;
+  if (isDark) {
+    bgHex = bgParam && /^#[0-9a-f]{6}$/i.test(bgParam) ? bgParam : sys.anchorDarkBg;
+  } else if (isWash) {
+    bgHex = sys.softWashBg;
+  } else if (bgParam && /^#[0-9a-f]{6}$/i.test(bgParam)) {
     bgHex = bgParam;
     isDark = relativeLuminance(bgHex) < 0.45;
-  } else if (isDark) {
-    bgHex = '#090D16';
   } else if (sectionIndex % 2 === 1) {
-    bgHex = '#F8FAFC';
+    bgHex = sys.groundAltBg;
   }
 
-  const inkHex = pickAccessibleInk(bgHex);
-  const mutedHex = inkHex === '#FFFFFF' ? '#CBD5E1' : '#475569';
-  const cardBg = isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF';
-  const borderColor = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.09)';
+  const inkHex = isDark ? sys.inkOnDark : sys.inkOnLight;
+  const mutedHex = isDark ? sys.mutedOnDark : sys.mutedOnLight;
+  const safeAccentHex = tuneHexForMinContrast(isDark ? sys.accentOnDark : sys.accentOnLight, bgHex, 4.6);
+  const accentInkHex = pickContrastInk(safeAccentHex);
+  const cardBg = isDark ? 'rgba(255,255,255,0.06)' : sys.cardBg;
+  const borderColor = isDark ? sys.hairlineDark : sys.hairlineLight;
 
   return {
     bgHex,
@@ -103,16 +150,21 @@ export function resolveSectionSurfaceTokens({ primaryHex = '#111827', accentHex 
     mutedHex,
     cardBg,
     borderColor,
-    accentHex,
+    accentHex: safeAccentHex,
+    accentInkHex,
+    anchorDarkBg: sys.anchorDarkBg,
+    groundBg: sys.groundBg,
+    softWashBg: sys.softWashBg,
     isDark,
-    blurPx: clampNum(parsed.params.blur, 0, 24, isDark ? 16 : 0),
+    blurPx: clampNum(parsed.params.blur, 0, 24, isDark ? 18 : 0),
   };
 }
 
 export const ImageRequestSchema = z.object({
   slotId: z.string().min(1).max(60),
   targetSectionId: z.string().min(1).max(60).optional(),
-  aspectRatio: z.enum(['16:9', '4:3', '1:1', '4:5']).default('16:9'),
+  moldeId: z.string().max(64).optional(),
+  aspectRatio: z.enum(['16:9', '16:10', '4:3', '1:1', '4:5', '3:4']).default('16:9'),
   width: z.number().int().min(512).max(1536).default(1344),
   height: z.number().int().min(512).max(1536).default(768),
   source: z.enum(['ai_generate', 'catalog_sku']).default('ai_generate'),
@@ -150,7 +202,13 @@ export const TextMicroTupleSchema = z.object({
     z.enum(['eyebrow', 'display', 'heading', 'body', 'stat_callout', 'caption']),
     z.string().min(1).max(240),
     z.string().default('ui:sz=15 lh=1.5 wt=500 | ux:clamp=2'),
-    z.string().default('icon:none'),
+    z.string().default('icon:none').refine(
+      (val) => {
+        const clean = String(val || '').replace(/^icon:/, '').trim();
+        return !clean || CURATED_ICON_CHOICES.includes(clean);
+      },
+      { message: 'Icon must be one of CURATED_ICON_CHOICES' },
+    ),
   ]),
   mediaPick: z.string().default('none'),
 });
@@ -159,8 +217,14 @@ export const AtomicSectionTupleSchema = z.object({
   tuple: z.tuple([
     z.string().min(1), // sectionId
     z.enum([
+      'hero_stage',
       'hero_centered',
       'hero_split',
+      'domain_workbench',
+      'coupled_media_grid',
+      'embedded_banner',
+      'split_story',
+      'open_columns_strip',
       'kinetic_ribbon',
       'scratch_reward',
       'dark_glass_vault',
@@ -169,6 +233,19 @@ export const AtomicSectionTupleSchema = z.object({
       'bento_spotlight',
       'catalog_full_grid',
       'anchor_footer',
+      'campaign_christmas_hero',
+      'campaign_christmas_checkpoints',
+      'campaign_blackfriday_hero',
+      'campaign_blackfriday_drop',
+      'campaign_blackfriday_terms',
+      'clinic_editorial_hero',
+      'clinic_symptom_map',
+      'clinic_specialists_deck',
+      'clinic_pricing_tiers',
+      'clinic_case_scoreboard',
+      'interactive_image_text_stage',
+      'bundle_builder_calculator',
+      'calendar_delivery_slots',
     ]),
     z.enum(['ESTADO_0', 'ESTADO_1', 'ESTADO_2', 'ESTADO_3', 'ESTADO_4']).default('ESTADO_1'),
   ]),
@@ -188,16 +265,63 @@ export const AtomicSectionTupleSchema = z.object({
   cardAnatomy: z.string().optional(),
   photoTreatment: z.string().optional(),
   ornaments: z.string().optional(),
+  workbench: z.string().optional(),
   onboardingLink: z.string().optional(),
   productNaming: z.string().optional(),
   storeContextRules: z.string().optional(),
   textStyle: z.string().optional(),
+  direction: z
+    .object({
+      focalPoint: z.object({ xPct: z.number().min(0).max(100), yPct: z.number().min(0).max(100) }).optional(),
+      textAnchor: z.enum(['left', 'right', 'center', 'bottom_left']).optional(),
+      typoScale: z.enum(['refined_lg', 'editorial_xxl', 'poster_mega']).optional(),
+      interactionMode: z
+        .enum(['static', 'hotspot_zoom_sync', 'hover_parallax_copy', 'scroll_reveal_couple'])
+        .optional(),
+      scrimAutoLock: z.boolean().optional(),
+      hotspots: z
+        .array(
+          z.object({
+            id: z.string(),
+            xPct: z.number().min(0).max(100),
+            yPct: z.number().min(0).max(100),
+            pinLabel: z.string().max(24),
+            headline: z.string().max(100),
+            description: z.string().max(260),
+            linkedSkuId: z.string().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
   textSlots: z.array(TextMicroTupleSchema).default([]),
   content: z.record(z.string(), z.unknown()).default({}),
   contract: z.string().default('guard:persona=visitante_publico h>=44 wcag>=4.5 <emit_confirmed>'),
 });
 
 export const AtomicBlueprintSchema = z.object({
+  engineSeed: z.object({
+    groundMode: z.enum(['warm_linen', 'soft_tint', 'cool_mist', 'pure_gallery']).default('warm_linen'),
+    displayVoice: z
+      .enum([
+        'archivo',
+        'big_shoulders',
+        'fraunces',
+        'instrument_serif',
+        'bricolage',
+        'plus_jakarta',
+        'playfair',
+        'space_grotesk',
+        'cormorant',
+        'syne',
+      ])
+      .default('archivo'),
+    bodyVoice: z.enum(['manrope', 'plus_jakarta', 'inter', 'dm_sans']).default('manrope'),
+    scaleRatio: z.number().min(1.125).max(1.5).default(1.333),
+    signatureOrnament: z.enum(['flanked_lines', 'trailing_line', 'slanted_bar', 'corner_sparks']).default('trailing_line'),
+    headerMode: z.enum(['anchor_dark_center_nav', 'light_divided_bar']).default('anchor_dark_center_nav'),
+    footerMode: z.enum(['anchor_dark_4col_watermark', 'anchor_dark_compact']).default('anchor_dark_4col_watermark'),
+  }).optional(),
   brandTokens: z.object({
     archetype: z.string().default('multi_category_retail'),
     paletteSource: z.string().default('logo_extracted'),

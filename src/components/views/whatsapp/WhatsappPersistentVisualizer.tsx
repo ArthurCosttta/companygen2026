@@ -148,7 +148,7 @@ export function WhatsappPersistentVisualizer({
   const label = isTyping
     ? `Digitando (${runtime.typedChars}/${runtime.totalChars}) · ${runtime.chatTitle || 'Cliente'}`
     : isThinking
-      ? `Pensando GLM · ${runtime.chatTitle || 'Cliente'}`
+      ? `Preparando resposta · ${runtime.chatTitle || 'Cliente'}`
       : isPausedHuman
         ? `Humano pendente · ${runtime.chatTitle || 'Cliente'}`
         : runtime.active || connected

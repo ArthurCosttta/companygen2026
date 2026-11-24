@@ -8,6 +8,14 @@ import type {
   WhatsappQueueItem,
 } from '@/schemas/ai-whatsapp-intent.schema';
 import { authenticatedFetch } from '@/services/supabase-client';
+import {
+  dispatchMobileSystemNotification,
+  getMobileNotificationPermission,
+  getSharedAudioContext,
+  playSharedToneSequence,
+  requestMobileNotificationPermission,
+  triggerMobileVibrate,
+} from '@/utils/audio-alerts';
 
 const DEFAULT_FUNNEL: D1FunnelMetrics = {
   visits: 0,
@@ -21,54 +29,28 @@ const DEFAULT_FUNNEL: D1FunnelMetrics = {
 const MUTE_STORAGE_PREFIX = 'companygen_wpp_notify_mute_until:';
 const MUTE_DURATION_MS = 15 * 60 * 1000;
 
-let sharedAudioCtx: AudioContext | null = null;
-function getAudioContext(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!Ctor) return null;
-  if (!sharedAudioCtx) {
-    try {
-      sharedAudioCtx = new Ctor();
-    } catch {
-      return null;
-    }
-  }
-  return sharedAudioCtx;
-}
-
 export async function playNotificationSound(level: NotificationSeverityLevel = 'HUMAN_ESCALATION'): Promise<boolean> {
   if (typeof window === 'undefined') return false;
-  try {
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(level === 'HUMAN_ESCALATION' ? [140, 60, 140] : [80]);
-    }
-  } catch {}
-  const ctx = getAudioContext();
-  if (!ctx) return false;
-  try {
-    if (ctx.state === 'suspended') {
-      await ctx.resume().catch(() => {});
-    }
-    const now = ctx.currentTime;
-    const freqs = level === 'HUMAN_ESCALATION' ? [880, 1174.66, 880, 1174.66] : [659.25, 880];
-    freqs.forEach((freq, idx) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = level === 'HUMAN_ESCALATION' ? 'triangle' : 'sine';
-      osc.frequency.setValueAtTime(freq, now + idx * 0.13);
-      gain.gain.setValueAtTime(0.0001, now + idx * 0.13);
-      gain.gain.exponentialRampToValueAtTime(0.22, now + idx * 0.13 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.13 + 0.12);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now + idx * 0.13);
-      osc.stop(now + idx * 0.13 + 0.125);
-    });
+  triggerMobileVibrate(level === 'HUMAN_ESCALATION' || level === 'PURCHASE_MESSAGE_ARRIVED');
+  const freqs =
+    level === 'HUMAN_ESCALATION'
+      ? [987.77, 1318.51, 987.77, 1567.98, 987.77, 1567.98]
+      : level === 'PURCHASE_MESSAGE_ARRIVED'
+        ? [880, 1174.66, 1318.51, 1760]
+        : [783.99, 1046.5];
+  const played = await playSharedToneSequence(
+    freqs.map((freq, idx) => ({
+      freq,
+      durationMs: 135,
+      delayMs: idx * 115,
+      type: level === 'HUMAN_ESCALATION' ? 'sawtooth' : 'triangle',
+      gain: level === 'HUMAN_ESCALATION' ? 0.42 : 0.34,
+    })),
+  );
+  if (played) {
     (window as unknown as Record<string, unknown>).__companygenLastNotificationAudioAt = Date.now();
-    return true;
-  } catch {
-    return false;
   }
+  return played;
 }
 
 export function formatBrlCents(cents: number): string {
@@ -209,6 +191,11 @@ export function useHighSaturationNotifications({
   const initialHydratedRef = useRef(false);
   const lastPayloadSignatureRef = useRef<string>('');
   const [lastSoundAt, setLastSoundAt] = useState<number>(0);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() =>
+    getMobileNotificationPermission(),
+  );
+  const lastHiddenPollAtRef = useRef<number>(0);
+  const lastSystemNotifAtRef = useRef<number>(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -224,7 +211,7 @@ export function useHighSaturationNotifications({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const unlock = () => {
-      const ctx = getAudioContext();
+      const ctx = getSharedAudioContext();
       if (ctx && ctx.state === 'suspended') {
         void ctx.resume().catch(() => {});
       }
@@ -239,16 +226,30 @@ export function useHighSaturationNotifications({
 
   const applyEventsPayload = useCallback((data: Record<string, unknown>) => {
     if (!mountedRef.current) return;
-    const signature = JSON.stringify({
-      notifications: data.notifications ?? null,
-      queueItems: data.queueItems ?? null,
-      simulatorMessages: data.simulatorMessages ?? null,
-      d1Funnel: data.d1Funnel ?? null,
-      liveResponderActive: data.liveResponderActive ?? null,
-      botConnected: data.botConnected ?? null,
-      pausedThreads: data.pausedThreads ?? null,
-      pausedThreadItems: data.pausedThreadItems ?? null,
-    });
+    const notifArr = Array.isArray(data.notifications)
+      ? (data.notifications as Array<Record<string, unknown>>)
+      : [];
+    const firstNotif = notifArr[0];
+    const funnel = (data.d1Funnel && typeof data.d1Funnel === 'object'
+      ? data.d1Funnel
+      : {}) as Record<string, unknown>;
+    const signature = [
+      notifArr.length,
+      String(firstNotif?.eventId || firstNotif?.id || ''),
+      String(firstNotif?.acknowledged || ''),
+      String(firstNotif?.resolved || ''),
+      Array.isArray(data.queueItems) ? data.queueItems.length : -1,
+      Array.isArray(data.simulatorMessages) ? data.simulatorMessages.length : -1,
+      Array.isArray(data.pausedThreads) ? data.pausedThreads.length : -1,
+      Array.isArray(data.pausedThreadItems) ? data.pausedThreadItems.length : -1,
+      Boolean(data.liveResponderActive),
+      Boolean(data.botConnected),
+      Number(funnel.visits || 0),
+      Number(funnel.productClicks || 0),
+      Number(funnel.whatsappPurchaseMessages || 0),
+      Number(funnel.d1ConfirmedOrders || 0),
+      Number(funnel.d1RevenueCents || 0),
+    ].join('|');
     if (signature === lastPayloadSignatureRef.current) {
       return;
     }
@@ -268,6 +269,13 @@ export function useHighSaturationNotifications({
             const top = fresh.find((f) => f.level === 'HUMAN_ESCALATION') || fresh[0];
             void playNotificationSound(top.level).then((played) => {
               if (played && mountedRef.current) setLastSoundAt(Date.now());
+            });
+            lastSystemNotifAtRef.current = Date.now();
+            void dispatchMobileSystemNotification({
+              title: top.title || (top.level === 'HUMAN_ESCALATION' ? 'ATENDENTE NECESSÁRIO!' : 'NOVO PEDIDO RECEBIDO!'),
+              body: `${top.customerName || 'Cliente'}: ${top.message || 'Toque para abrir o painel'}`,
+              tag: `cg-alert-${top.eventId || top.id}`,
+              urgent: top.level === 'HUMAN_ESCALATION' || top.level === 'PURCHASE_MESSAGE_ARRIVED',
             });
           }
         }
@@ -338,7 +346,9 @@ export function useHighSaturationNotifications({
     const intervalMs = Math.max(2500, pollIntervalMs);
     const timer = window.setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        return;
+        const now = Date.now();
+        if (now - lastHiddenPollAtRef.current < 12000) return;
+        lastHiddenPollAtRef.current = now;
       }
       void refresh(true);
     }, intervalMs);
@@ -378,6 +388,20 @@ export function useHighSaturationNotifications({
         if (!res.ok || !payload?.ok) {
           return { ok: false, error: payload?.error || 'Não foi possível atualizar o item.' };
         }
+        if (input.action === 'resume_ai' || input.action === 'resolve') {
+          try {
+            window.dispatchEvent(
+              new CustomEvent('companygen:wa-resume-ai', {
+                detail: {
+                  eventId: input.eventId || '',
+                  customerPhone: input.customerPhone || '',
+                  customerJid: input.customerJid || '',
+                },
+              }),
+            );
+          } catch {}
+        }
+        lastPayloadSignatureRef.current = '';
         await refresh(true);
         return { ok: true, ...(payload as Record<string, unknown>) };
       } catch (err) {
@@ -473,10 +497,90 @@ export function useHighSaturationNotifications({
     } catch {}
   }, []);
 
-  const activeNotifications = useMemo(
-    () => allNotifications.filter((item) => !item.resolved && !item.acknowledged),
-    [allNotifications],
+  const activeNotifications = useMemo(() => {
+    const visible = allNotifications.filter((item) => !item.resolved && !item.acknowledged);
+    // Garante que escalacoes humanas ativas não desaparecam ate o atendente humano visualizar/assumir
+    const existingKeys = new Set(
+      visible.map((v) => String(v.customerPhone || v.customerJid || v.eventId || v.id || '')),
+    );
+    const synthesizedHumanAlerts: WhatsappNotificationEvent[] = [];
+    for (const thread of pausedThreadItems) {
+      if (thread.assumedByHuman) continue;
+      const key = String(thread.customerPhone || thread.customerJid || thread.chatKey || '');
+      if (key && existingKeys.has(key)) continue;
+      synthesizedHumanAlerts.push({
+        id: `paused-${thread.chatKey}`,
+        eventId: `paused-${thread.chatKey}`,
+        level: 'HUMAN_ESCALATION',
+        intent: 'HUMAN_ESCALATION',
+        colorHex: '#FF2E54',
+        title: 'ATENDENTE HUMANO SOLICITADO',
+        message: thread.lastMessage || thread.reason || 'Cliente aguardando resposta humana no WhatsApp.',
+        customerName: thread.customerName || 'Cliente WhatsApp',
+        customerPhone: thread.customerPhone || '',
+        customerJid: thread.customerJid || '',
+        totalCents: 0,
+        sourceComponent: 'WhatsApp',
+        mode: 'live_whatsapp',
+        acknowledged: false,
+        resolved: false,
+        createdAt: thread.pausedAt || new Date().toISOString(),
+        acknowledgedAt: null,
+      });
+    }
+    return [...synthesizedHumanAlerts, ...visible];
+  }, [allNotifications, pausedThreadItems]);
+
+  const hasUrgentHumanCall = useMemo(
+    () => activeNotifications.some((n) => n.level === 'HUMAN_ESCALATION'),
+    [activeNotifications],
   );
+
+  const hasAnyActiveAlarm = useMemo(
+    () => activeNotifications.some((n) => n.level === 'HUMAN_ESCALATION' || n.level === 'PURCHASE_MESSAGE_ARRIVED'),
+    [activeNotifications],
+  );
+
+  // Alarme persistente/agressivo em loop (Pix/Venda/Humano) a cada 4s + notificação push no celular até confirmar/silenciar
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const baseTitle = 'CompanyGen Studio';
+    if (!hasUrgentHumanCall && !hasAnyActiveAlarm) {
+      if (document.title.includes('Atendente Necessário') || document.title.includes('Nova Venda') || document.title.includes('ALERTA')) {
+        document.title = baseTitle;
+      }
+      return;
+    }
+    const urgentCount = activeNotifications.filter((n) => n.level === 'HUMAN_ESCALATION').length;
+    const purchaseCount = activeNotifications.filter((n) => n.level === 'PURCHASE_MESSAGE_ARRIVED').length;
+    const topAlert = activeNotifications[0];
+    document.title = urgentCount > 0
+      ? `(${urgentCount}) ALERTA ATENDENTE · ${baseTitle}`
+      : `(${purchaseCount}) NOVO PEDIDO · ${baseTitle}`;
+    const timer = window.setInterval(() => {
+      if (readMuteUntil(ownerRef.current) <= Date.now()) {
+        const level: NotificationSeverityLevel = urgentCount > 0 ? 'HUMAN_ESCALATION' : 'PURCHASE_MESSAGE_ARRIVED';
+        void playNotificationSound(level).then((played) => {
+          if (played && mountedRef.current) setLastSoundAt(Date.now());
+        });
+        if (topAlert && Date.now() - lastSystemNotifAtRef.current >= 24000) {
+          lastSystemNotifAtRef.current = Date.now();
+          void dispatchMobileSystemNotification({
+            title: topAlert.title || 'ALERTA PENDENTE NA LOJA!',
+            body: `${topAlert.customerName || 'Cliente'}: ${topAlert.message || 'Toque para confirmar pedido/atendimento'}`,
+            tag: `cg-alarm-loop-${topAlert.eventId || topAlert.id}`,
+            urgent: true,
+          });
+        }
+      }
+    }, 4000);
+    return () => {
+      window.clearInterval(timer);
+      if (document.title.includes('Atendente Necessário') || document.title.includes('Nova Venda') || document.title.includes('ALERTA')) {
+        document.title = baseTitle;
+      }
+    };
+  }, [activeNotifications, hasAnyActiveAlarm, hasUrgentHumanCall]);
 
   const waitingHumanCount = useMemo(() => {
     const unassumedThreads = pausedThreadItems.filter((item) => !item.assumedByHuman).length;
@@ -518,6 +622,39 @@ export function useHighSaturationNotifications({
     return ok;
   }, []);
 
+  const requestMobilePermission = useCallback(async () => {
+    const status = await requestMobileNotificationPermission();
+    if (mountedRef.current) setNotificationPermission(status);
+    return status;
+  }, []);
+
+  const triggerTestMobileAlarm = useCallback(async () => {
+    const targetOwner = ownerRef.current.trim();
+    await requestMobilePermission();
+    void playNotificationSound('PURCHASE_MESSAGE_ARRIVED');
+    void dispatchMobileSystemNotification({
+      title: 'TESTE: NOVO PEDIDO NA VITRINE',
+      body: 'Alerta no celular funcionando normalmente (mesmo com WhatsApp desconectado).',
+      tag: 'cg-test-alarm',
+      urgent: true,
+    });
+    if (!targetOwner) return false;
+    const res = await authenticatedFetch(
+      '/api/whatsapp/events/test-alarm',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: 'PURCHASE_MESSAGE_ARRIVED' }),
+      },
+      targetOwner,
+    ).catch(() => null);
+    if (res?.ok) {
+      await refresh(true);
+      return true;
+    }
+    return false;
+  }, [refresh, requestMobilePermission]);
+
   return {
     notifications: activeNotifications,
     allNotifications,
@@ -539,6 +676,9 @@ export function useHighSaturationNotifications({
     isMuted,
     muteRemainingMinutes,
     lastSoundAt,
+    notificationPermission,
+    requestMobilePermission,
+    triggerTestMobileAlarm,
     playTestSound,
     muteFor15Min,
     unmute,

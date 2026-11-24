@@ -1,33 +1,36 @@
-export {
-  WelcomeModal,
-  type WelcomeModalProps,
-  type OnboardingPreferredTrack,
-} from './WelcomeModal';
+export type {
+  IgnitionExtraPageItem,
+  IgnitionSubmissionPayload,
+  OnboardingIgnitionViewProps,
+} from './OnboardingIgnitionView';
+
+export type {
+  GenerateFullImageJobResult,
+  GenerateFullStorefrontResponse,
+  OnboardingSynthesisStageProps,
+  StoreMoldeJobStage,
+} from './OnboardingSynthesisStage';
+
+export type {
+  PreBuildCartSummaryProps,
+  PreBuildRecommendedPage,
+} from './PreBuildPagesCartStep';
 
 export {
-  OnboardingSplitStudio,
-  type OnboardingSplitStudioProps,
-} from './OnboardingSplitStudio';
+  IGNITION_NICHE_PRESETS,
+  buildCatalogProductsFromNiche,
+  buildDefaultSeedProductsForStore,
+  detectPixKeyType,
+  extractInstagramHandle,
+  normalizeBrazilWhatsAppE164,
+  type IgnitionNichePreset,
+  type IgnitionPresetProductSeed,
+  type PixKeyType,
+} from './onboarding-niche-presets';
 
 export {
-  GuidedChecklistCard,
-  type GuidedChecklistCardProps,
-} from './GuidedChecklistCard';
-
-export {
-  ExpressFichaWizardModal,
-  type ExpressFichaWizardModalProps,
-} from './ExpressFichaWizardModal';
-
-export {
-  SaveDraftModal,
-  ConfirmExitModal,
   ContextualHelpModal,
-  StoreCreatedSuccessModal,
-  type SaveDraftModalProps,
-  type ConfirmExitModalProps,
   type ContextualHelpModalProps,
-  type StoreCreatedSuccessModalProps,
 } from './OnboardingModals';
 
 export {

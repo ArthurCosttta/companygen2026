@@ -1,5 +1,6 @@
 import { createClient, type User } from '@supabase/supabase-js';
 import config from '@/config/supabase-public.json';
+import { captureAndReportCrash } from '@/utils/crash-telemetry';
 
 export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL || config.url,
@@ -31,11 +32,21 @@ export function getSupportReadonlySession(): SupportReadonlySession | null {
 
 export interface LocalShowcaseSession {
   token: string;
-  user: { id: string; email: string };
+  user: { id: string; email: string; isGuest?: boolean };
   code: string;
   credits: number;
   balance: number;
   savedAt: string;
+}
+
+export function isGuestAccountUser(
+  user: { email?: string | null; isGuest?: boolean; user_metadata?: Record<string, unknown> } | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (user.isGuest === true) return true;
+  if (user.user_metadata?.guest === true) return true;
+  const email = String(user.email || '').trim().toLowerCase();
+  return email.endsWith('@guest.companygen.store');
 }
 
 export function saveLocalShowcaseSession(session: LocalShowcaseSession): void {
@@ -81,28 +92,40 @@ export function clearLocalShowcaseSession(): void {
 }
 
 export function toSupabaseUserFromShowcase(session: LocalShowcaseSession): User {
+  const email = String(session.user.email || '');
+  const isGuest = Boolean(session.user.isGuest) || email.toLowerCase().endsWith('@guest.companygen.store');
   return {
     id: session.user.id,
-    email: session.user.email,
+    email,
     app_metadata: { provider: 'local_showcase', code: session.code },
-    user_metadata: { showcase: true },
+    user_metadata: { showcase: true, guest: isGuest },
     aud: 'authenticated',
     created_at: session.savedAt || new Date().toISOString(),
   } as User;
 }
 
 const DEFAULT_FETCH_TIMEOUT_MS = 15000;
-const AI_FETCH_TIMEOUT_MS = 60000;
+const AI_FETCH_TIMEOUT_MS = 75000;
 const LONG_FETCH_TIMEOUT_MS = 120000;
 
 function resolveFetchTimeoutMs(input: string): number {
-  if (input.includes('generate-full') || input.includes('hunt') || input.includes('generate-image')) {
+  if (
+    input.includes('generate-full') ||
+    input.includes('create-page') ||
+    input.includes('hunt') ||
+    input.includes('generate-image') ||
+    input.includes('generate-product-images')
+  ) {
     return LONG_FETCH_TIMEOUT_MS;
   }
   if (
     input.includes('/api/whatsapp/ai/') ||
     input.includes('/api/ai/') ||
     input.includes('edit-block') ||
+    input.includes('patch-section') ||
+    input.includes('analyze-brief') ||
+    input.includes('onboarding-assist') ||
+    input.includes('ai-autofill') ||
     input.includes('instagram/analyze')
   ) {
     return AI_FETCH_TIMEOUT_MS;
@@ -179,6 +202,9 @@ export async function authenticatedFetch(input: string, init?: RequestInit, expe
   }
 
   let res: Response;
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const methodUpper = String(init?.method || 'GET').toUpperCase();
+  const cleanRoute = input.split('?')[0];
   const doFetch = async (tokenToUse: string) => {
     const reqHeaders = new Headers(init?.headers);
     reqHeaders.set('Authorization', 'Bearer ' + tokenToUse);
@@ -205,16 +231,62 @@ export async function authenticatedFetch(input: string, init?: RequestInit, expe
       }
     }
   } catch (err) {
+    const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt;
     if (timeoutSignal?.aborted && !init?.signal?.aborted) {
       const timeoutErr = new Error('Tempo limite de resposta excedido. Tente novamente.');
       timeoutErr.name = 'TimeoutError';
+      void captureAndReportCrash({
+        severity: 'error',
+        source: 'client_api',
+        category: 'API_TIMEOUT',
+        title: `Timeout ${methodUpper} ${cleanRoute}`,
+        message: `Requisição ${methodUpper} ${cleanRoute} excedeu ${timeoutMs}ms`,
+        endpoint: cleanRoute,
+        method: methodUpper,
+        statusCode: 408,
+        extra: { durationMs: Math.round(elapsed) },
+      });
       throw timeoutErr;
+    }
+    if (!init?.signal?.aborted) {
+      void captureAndReportCrash({
+        severity: 'error',
+        source: 'client_api',
+        category: 'API_NETWORK_ERROR',
+        title: `Falha de rede ${methodUpper} ${cleanRoute}`,
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack || '' : '',
+        endpoint: cleanRoute,
+        method: methodUpper,
+        extra: { durationMs: Math.round(elapsed) },
+      });
     }
     throw err;
   } finally {
     if (fallbackTimer !== undefined) {
       clearTimeout(fallbackTimer);
     }
+  }
+  if (!cleanRoute.includes('/api/telemetry/crash') && res.status >= 500) {
+    const durationMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt);
+    void res
+      .clone()
+      .json()
+      .catch(() => null)
+      .then((errJson) => {
+        const errDetail = String(errJson?.error || errJson?.message || `HTTP ${res.status}`);
+        void captureAndReportCrash({
+          severity: 'critical',
+          source: 'client_api',
+          category: `HTTP_${res.status}`,
+          title: `Falha HTTP ${res.status} em ${methodUpper} ${cleanRoute}`,
+          message: errDetail,
+          endpoint: cleanRoute,
+          method: methodUpper,
+          statusCode: res.status,
+          extra: { durationMs },
+        });
+      });
   }
   if (typeof window !== 'undefined' && (res.status === 402 || input.startsWith('/api/store-molde/') || input.startsWith('/api/whatsapp/ai/') || input.startsWith('/api/ai/'))) {
     try {

@@ -832,7 +832,7 @@ export function renderV9SectionHtml(sec, formulasIr, relPrefix = '') {
                 ${(t.steps || [])
                   .map(
                     (st) => `<div class="cg-card">
-                      <span class="cg-eyebrow">${escapeHtml(st.time)}</span>
+                      <small style="display:block;font-size:0.75rem;font-weight:700;color:var(--ink-muted);margin-bottom:4px;">${escapeHtml(st.time)}</small>
                       <h3 style="font-size:1.05rem;">${escapeHtml(st.title)}</h3>
                       <p style="font-size:0.88rem;color:var(--ink-muted);margin:0;">${escapeHtml(st.detail)}</p>
                     </div>`,

@@ -55,3 +55,10 @@ export {
   type HumanErrorInfo,
   type HumanErrorVariant,
 } from "@/utils/humanErrors";
+
+export {
+  AppErrorBoundary,
+  RootErrorBoundary,
+  RouteErrorBoundary,
+  type ErrorBoundaryProps,
+} from "./ErrorBoundary";

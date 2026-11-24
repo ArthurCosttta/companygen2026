@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "companygenai",
+    "site": "companygen-app",
     "public": "dist",
     "ignore": [
       "firebase.json",

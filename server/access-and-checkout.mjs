@@ -1,8 +1,10 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BoundedTtlMap } from './middleware/bounded-map.mjs';
+import { resolveClientIp } from './middleware/client-ip.mjs';
 
 const __ACCESS_DIR = path.dirname(fileURLToPath(import.meta.url));
 let EMBEDDED_SUPABASE_PUBLIC = { url: '', publishableKey: '' };
@@ -21,21 +23,59 @@ export function roundCredits(value) {
   return Math.round((num + Number.EPSILON) * 100) / 100;
 }
 
-// Tabela Oficial de Custos de Créditos de IA (FILA 11: 0,1 cr = R$ 0,04-0,05/msg WhatsApp)
+// Tabela Oficial de Custos de Créditos de IA (Margem protegida para páginas, artes e co-direção)
 export const CREDIT_ACTION_COSTS = {
   glm_whatsapp: 0.1,
-  edit_block: 0.5,
+  generate_message_flows: 0.5,
+  patch_micro: 0.5,
+  edit_block: 1,
   generate_image_schnell: 1,
   generate_hero_dev: 2,
-  edit_image_qwen: 2,
-  create_subpage: 2,
-  generate_full_storefront: 4,
+  edit_image_qwen: 1.5,
+  co_direction_upgrade: 1.5,
+  create_subpage: 4,
+  create_subpage_campaign: 4,
+  create_subpage_with_art: 6,
+  generate_full_storefront: 12,
+  generate_full_storefront_with_art: 18,
 };
 
-export const SHOWCASE_PROFILE_CODES = new Set(['AI10-FARM-LUME']);
+export const SHOWCASE_PROFILE_CODES = new Set([
+  'AI10-FARM-LUME',
+  'AI10-NATAL-VERT',
+  'AI10-NATA-LVER',
+  'AI10-NATAL-VER',
+  'AI10-NATL-VERT',
+  'AI10-BLCK-NORT',
+  'AI10-CUID-MOTI',
+  'AI10-DOCE-ATEL',
+  'AI10-TECH-APEX',
+]);
 export const SHOWCASE_USER_IDS = {
   'AI10-FARM-LUME': 'bbbbbbbb-2222-4222-8222-222222222222',
+  'AI10-NATAL-VERT': '11111111-1111-4111-8111-111111110001',
+  'AI10-NATA-LVER': '11111111-1111-4111-8111-111111110001',
+  'AI10-NATAL-VER': '11111111-1111-4111-8111-111111110001',
+  'AI10-NATL-VERT': '11111111-1111-4111-8111-111111110001',
+  'AI10-BLCK-NORT': '11111111-2222-4222-8222-111111110002',
+  'AI10-CUID-MOTI': '11111111-3333-4333-8333-111111110003',
+  'AI10-DOCE-ATEL': '11111111-4444-4444-8444-111111110004',
+  'AI10-TECH-APEX': '11111111-5555-4555-8555-111111110005',
 };
+
+export function normalizeAccessCodeKey(raw) {
+  const upper = String(raw || '').trim().toUpperCase();
+  if (
+    upper === 'AI10-NATA-LVER' ||
+    upper === 'AI10-NATAL-VER' ||
+    upper === 'AI10-NATL-VERT' ||
+    upper === 'AI10NATALVERT' ||
+    upper === 'AI10NATALVER'
+  ) {
+    return 'AI10-NATAL-VERT';
+  }
+  return upper;
+}
 
 function getLocalShowcaseHmacSecret() {
   if (process.env.CG_SHOWCASE_HMAC_SECRET) {
@@ -190,6 +230,83 @@ export const DEFAULT_ACCESS_CODES = [
     expiresAt: null,
   },
   {
+    code: 'AI10-NATAL-VERT',
+    hash: createHash('sha256').update('ai10-natal-vert').digest('hex'),
+    masked: 'AI10-****-VERT',
+    credits: 120,
+    maxRedemptions: 999,
+    redemptionCount: 0,
+    status: 'active',
+    expiresAt: null,
+    reusableInDev: true,
+  },
+  {
+    code: 'AI10-NATA-LVER',
+    hash: createHash('sha256').update('ai10-nata-lver').digest('hex'),
+    masked: 'AI10-****-LVER',
+    credits: 120,
+    maxRedemptions: 999,
+    redemptionCount: 0,
+    status: 'active',
+    expiresAt: null,
+    reusableInDev: true,
+  },
+  {
+    code: 'AI10-NATL-VERT',
+    hash: createHash('sha256').update('ai10-natl-vert').digest('hex'),
+    masked: 'AI10-****-VERT',
+    credits: 120,
+    maxRedemptions: 999,
+    redemptionCount: 0,
+    status: 'active',
+    expiresAt: null,
+    reusableInDev: true,
+  },
+  {
+    code: 'AI10-BLCK-NORT',
+    hash: createHash('sha256').update('ai10-blck-nort').digest('hex'),
+    masked: 'AI10-****-NORT',
+    credits: 120,
+    maxRedemptions: 999,
+    redemptionCount: 0,
+    status: 'active',
+    expiresAt: null,
+    reusableInDev: true,
+  },
+  {
+    code: 'AI10-CUID-MOTI',
+    hash: createHash('sha256').update('ai10-cuid-moti').digest('hex'),
+    masked: 'AI10-****-MOTI',
+    credits: 150,
+    maxRedemptions: 999,
+    redemptionCount: 0,
+    status: 'active',
+    expiresAt: null,
+    reusableInDev: true,
+  },
+  {
+    code: 'AI10-DOCE-ATEL',
+    hash: createHash('sha256').update('ai10-doce-atel').digest('hex'),
+    masked: 'AI10-****-ATEL',
+    credits: 100,
+    maxRedemptions: 999,
+    redemptionCount: 0,
+    status: 'active',
+    expiresAt: null,
+    reusableInDev: true,
+  },
+  {
+    code: 'AI10-TECH-APEX',
+    hash: createHash('sha256').update('ai10-tech-apex').digest('hex'),
+    masked: 'AI10-****-APEX',
+    credits: 100,
+    maxRedemptions: 999,
+    redemptionCount: 0,
+    status: 'active',
+    expiresAt: null,
+    reusableInDev: true,
+  },
+  {
     code: 'AI10-TEST-100C',
     hash: createHash('sha256').update('ai10-test-100c').digest('hex'),
     masked: 'AI10-****-100C',
@@ -217,6 +334,7 @@ export const DEFAULT_ACCESS_CODES = [
     maxRedemptions: 1,
     redemptionCount: 1,
     status: 'depleted',
+    lastRedeemedByEmail: 'usado@sandbox.local',
     expiresAt: null,
   },
   {
@@ -231,6 +349,104 @@ export const DEFAULT_ACCESS_CODES = [
     showcase: true,
     showcaseProfileId: 'bbbbbbbb-2222-4222-8222-222222222222',
     showcaseUserId: 'bbbbbbbb-2222-4222-8222-222222222222',
+    expiresAt: null,
+  },
+  {
+    code: 'AI10-NATAL-VERT',
+    hash: createHash('sha256').update('ai10-natal-vert').digest('hex'),
+    masked: 'AI10-****-VERT',
+    credits: 120,
+    maxRedemptions: 500,
+    redemptionCount: 0,
+    status: 'active',
+    reusableInDev: true,
+    showcase: true,
+    showcaseProfileId: '11111111-1111-4111-8111-111111110001',
+    showcaseUserId: '11111111-1111-4111-8111-111111110001',
+    expiresAt: null,
+  },
+  {
+    code: 'AI10-NATA-LVER',
+    hash: createHash('sha256').update('ai10-nata-lver').digest('hex'),
+    masked: 'AI10-****-LVER',
+    credits: 120,
+    maxRedemptions: 500,
+    redemptionCount: 0,
+    status: 'active',
+    reusableInDev: true,
+    showcase: true,
+    showcaseProfileId: '11111111-1111-4111-8111-111111110001',
+    showcaseUserId: '11111111-1111-4111-8111-111111110001',
+    expiresAt: null,
+  },
+  {
+    code: 'AI10-NATAL-VER',
+    hash: createHash('sha256').update('ai10-natal-ver').digest('hex'),
+    masked: 'AI10-****-VER',
+    credits: 120,
+    maxRedemptions: 500,
+    redemptionCount: 0,
+    status: 'active',
+    reusableInDev: true,
+    showcase: true,
+    showcaseProfileId: '11111111-1111-4111-8111-111111110001',
+    showcaseUserId: '11111111-1111-4111-8111-111111110001',
+    expiresAt: null,
+  },
+  {
+    code: 'AI10-BLCK-NORT',
+    hash: createHash('sha256').update('ai10-blck-nort').digest('hex'),
+    masked: 'AI10-****-NORT',
+    credits: 120,
+    maxRedemptions: 500,
+    redemptionCount: 0,
+    status: 'active',
+    reusableInDev: true,
+    showcase: true,
+    showcaseProfileId: '11111111-2222-4222-8222-111111110002',
+    showcaseUserId: '11111111-2222-4222-8222-111111110002',
+    expiresAt: null,
+  },
+  {
+    code: 'AI10-CUID-MOTI',
+    hash: createHash('sha256').update('ai10-cuid-moti').digest('hex'),
+    masked: 'AI10-****-MOTI',
+    credits: 150,
+    maxRedemptions: 500,
+    redemptionCount: 0,
+    status: 'active',
+    reusableInDev: true,
+    showcase: true,
+    showcaseProfileId: '11111111-3333-4333-8333-111111110003',
+    showcaseUserId: '11111111-3333-4333-8333-111111110003',
+    expiresAt: null,
+  },
+  {
+    code: 'AI10-DOCE-ATEL',
+    hash: createHash('sha256').update('ai10-doce-atel').digest('hex'),
+    masked: 'AI10-****-ATEL',
+    credits: 100,
+    maxRedemptions: 500,
+    redemptionCount: 0,
+    status: 'active',
+    reusableInDev: true,
+    showcase: true,
+    showcaseProfileId: '11111111-4444-4444-8444-111111110004',
+    showcaseUserId: '11111111-4444-4444-8444-111111110004',
+    expiresAt: null,
+  },
+  {
+    code: 'AI10-TECH-APEX',
+    hash: createHash('sha256').update('ai10-tech-apex').digest('hex'),
+    masked: 'AI10-****-APEX',
+    credits: 100,
+    maxRedemptions: 500,
+    redemptionCount: 0,
+    status: 'active',
+    reusableInDev: true,
+    showcase: true,
+    showcaseProfileId: '11111111-5555-4555-8555-111111110005',
+    showcaseUserId: '11111111-5555-4555-8555-111111110005',
     expiresAt: null,
   },
 ];
@@ -288,9 +504,14 @@ export function mapActionToDbOperationType(action) {
     case 'glm_whatsapp':
       return 'whatsapp_reply_consumed';
     case 'generate_full_storefront':
+    case 'generate_full_storefront_with_art':
       return 'generate_storefront';
+    case 'patch_micro':
     case 'edit_block':
     case 'create_subpage':
+    case 'create_subpage_campaign':
+    case 'create_subpage_with_art':
+    case 'co_direction_upgrade':
       return 'edit_storefront';
     case 'generate_image_schnell':
     case 'generate_hero_dev':
@@ -882,8 +1103,8 @@ export async function refundCredits({
   });
 }
 
-// Rate Limiter em memória por workspace + IP (5 tentativas reais por minuto; dryRun com balde dedicado)
-const rateLimitMap = new Map();
+// Rate Limiter em memória por workspace + IP com teto LRU + TTL (evita vazamento de RAM)
+const rateLimitMap = new BoundedTtlMap({ maxEntries: 3000, defaultTtlMs: 3600_000 });
 function checkRateLimit(bucketKey, maxAttempts = 5, windowMs = 60 * 1000) {
   const now = Date.now();
 
@@ -894,7 +1115,7 @@ function checkRateLimit(bucketKey, maxAttempts = 5, windowMs = 60 * 1000) {
   } else {
     entry.count += 1;
   }
-  rateLimitMap.set(bucketKey, entry);
+  rateLimitMap.set(bucketKey, entry, Math.max(windowMs, entry.resetAt - now));
 
   return {
     allowed: entry.count <= maxAttempts,
@@ -922,8 +1143,100 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
   const cloudFetch = fetchImpl || globalThis.fetch;
 
   const codesPath = path.join(directory, '..', '_shared_access_codes.json');
+  const guestClaimsPath = path.join(directory, '..', '_shared_guest_claims.json');
   const ledgerPath = path.join(directory, 'credits_ledger.json');
   const ordersPath = path.join(directory, 'payment_orders.json');
+
+  function maskEmailForHint(rawEmail) {
+    const clean = String(rawEmail || '').trim().toLowerCase();
+    const at = clean.indexOf('@');
+    if (at <= 0) return '';
+    const local = clean.slice(0, at);
+    const domain = clean.slice(at + 1);
+    const prefix = local.slice(0, Math.min(2, local.length));
+    return `${prefix}***@${domain}`;
+  }
+
+  function isGuestPlaceholderEmail(rawEmail) {
+    const clean = String(rawEmail || '').trim().toLowerCase();
+    return !clean || clean.endsWith('@guest.companygen.store') || clean.endsWith('@sandbox.local');
+  }
+
+  async function readGuestStoreSummary(guestUserId) {
+    if (!guestUserId || !UUID_REGEX.test(guestUserId)) return { balance: 0, storeName: '' };
+    const guestDir = path.resolve(path.dirname(directory), guestUserId);
+    const rawLedger = await readJsonFile(path.join(guestDir, 'credits_ledger.json'), []);
+    const balance =
+      Array.isArray(rawLedger) && rawLedger.length > 0
+        ? Math.max(0, roundCredits(rawLedger[rawLedger.length - 1]?.balance_after || 0))
+        : 0;
+    const rawProfile = await readJsonFile(path.join(guestDir, 'profile.json'), null);
+    const storeName = String(rawProfile?.data?.business?.name || rawProfile?.business?.name || '').trim();
+    return { balance, storeName };
+  }
+
+  async function rewriteCopiedStoreUrls(filePath, oldUserId, newUserId) {
+    try {
+      const raw = await readFile(filePath, 'utf8');
+      if (!raw.includes(oldUserId)) return;
+      const updated = raw.split(oldUserId).join(newUserId);
+      await writeFile(filePath, updated, 'utf8');
+    } catch {}
+  }
+
+  async function migrateGuestWorkspaceDirectory({ guestUserId, targetUserId }) {
+    const rootDir = path.dirname(directory);
+    const guestDir = path.resolve(rootDir, guestUserId);
+    const targetDir = path.resolve(rootDir, targetUserId);
+    await mkdir(targetDir, { recursive: true });
+
+    let entries = [];
+    try {
+      entries = await readdir(guestDir);
+    } catch {
+      return { copied: 0 };
+    }
+
+    const existingTargetProfile = await readJsonFile(path.join(targetDir, 'profile.json'), { revision: 0, data: {} });
+    const targetHasStore =
+      Number(existingTargetProfile?.revision || 0) > 0 ||
+      Boolean(existingTargetProfile?.data?.business?.name) ||
+      (Array.isArray(existingTargetProfile?.data?.catalog?.products) &&
+        existingTargetProfile.data.catalog.products.length > 0);
+
+    let copied = 0;
+    for (const entry of entries) {
+      if (entry === 'worker.lock' || entry === 'credits_ledger.json') continue;
+      const srcPath = path.join(guestDir, entry);
+      const dstPath = path.join(targetDir, entry);
+      const srcStat = await stat(srcPath).catch(() => null);
+      if (!srcStat) continue;
+
+      let dstExists = false;
+      try {
+        await stat(dstPath);
+        dstExists = true;
+      } catch {}
+
+      if (srcStat.isDirectory()) {
+        const shouldOverwrite = entry === 'storefront-molde' && !targetHasStore;
+        await cp(srcPath, dstPath, { recursive: true, force: shouldOverwrite, errorOnExist: false });
+        copied += 1;
+        if (entry === 'storefront-molde') {
+          await rewriteCopiedStoreUrls(path.join(dstPath, 'data', 'formulas-ir.json'), guestUserId, targetUserId);
+          await rewriteCopiedStoreUrls(path.join(dstPath, 'data', 'image-jobs.json'), guestUserId, targetUserId);
+          await rewriteCopiedStoreUrls(path.join(dstPath, 'data', 'storefront.json'), guestUserId, targetUserId);
+        }
+      } else {
+        if (!dstExists || !targetHasStore) {
+          await cp(srcPath, dstPath, { force: !dstExists || !targetHasStore });
+          await rewriteCopiedStoreUrls(dstPath, guestUserId, targetUserId);
+          copied += 1;
+        }
+      }
+    }
+    return { copied };
+  }
 
   // Helper para carregar códigos compartilhados locais (nunca expõe códigos dev em produção sem showcase explícito)
   async function loadAccessCodes() {
@@ -963,22 +1276,23 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
     });
   }
 
-  // 0b. POST /api/access/local-showcase-login (Sandbox Dev explícito com ALLOW_LOCAL_SHOWCASE_PROFILES=1)
+  // 0b. POST /api/access/guest-start (Cria ou retoma sessão convidada única enquanto o código ainda não tiver e-mail vinculado)
   if (pathname === '/api/access/guest-start') {
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
-    const clientIp = req.socket?.remoteAddress || '127.0.0.1';
-    const rate = checkRateLimit(`guest-start:${path.dirname(directory)}:${clientIp}`, 5, 3600_000);
+    const clientIp = resolveClientIp(req);
+    const maxGuestAttempts = process.env.NODE_ENV === 'production' ? 30 : 120;
+    const rate = checkRateLimit(`guest-start:${path.dirname(directory)}:${clientIp}`, maxGuestAttempts, 3600_000);
     if (!rate.allowed) {
       res.setHeader('Retry-After', String(rate.retryAfterSeconds));
       throw new ApiError(429, `Muitas sessões convidadas neste IP. Aguarde ${rate.retryAfterSeconds}s.`);
     }
     const body = await readJson(req, 4096);
-    const rawCode = String(body?.code || body?.inviteCode || '').trim().toUpperCase();
-    if (!/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(rawCode)) {
+    let rawCode = normalizeAccessCodeKey(String(body?.code || body?.inviteCode || '').trim().toUpperCase());
+    if (!/^AI10-[A-Z0-9]{3,5}-[A-Z0-9]{3,5}$/i.test(rawCode)) {
       throw new ApiError(400, 'Informe um código de convite válido no formato AI10-XXXX-XXXX.');
     }
-    const codes = await loadAccessCodes();
     const codeHash = computeSha256(rawCode);
+    const codes = await loadAccessCodes();
     let found = codes.find((c) => c.hash === codeHash);
 
     const adminCfg = resolveSupabaseAdminConfig();
@@ -986,7 +1300,7 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
       const cloudRes = await supabaseRestFetch({
         url: adminCfg.url,
         apiKey: adminCfg.serviceRoleKey,
-        route: `/rest/v1/cg_access_codes?code_hash=eq.${encodeURIComponent(codeHash)}&select=id,credits,code_masked,max_redemptions,redemption_count,expires_at,status&limit=1`,
+        route: `/rest/v1/cg_access_codes?code_hash=eq.${encodeURIComponent(codeHash)}&select=id,credits,code_masked,max_redemptions,redemption_count,expires_at,status,last_redeemed_by_email&limit=1`,
         method: 'GET',
         fetchImpl: cloudFetch,
       }).catch(() => null);
@@ -996,6 +1310,9 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
           hash: codeHash,
           credits: Number(row.credits || 0),
           masked: row.code_masked,
+          maxRedemptions: Number(row.max_redemptions || 1),
+          redemptionCount: Number(row.redemption_count || 0),
+          lastRedeemedByEmail: row.last_redeemed_by_email || null,
           status: row.status,
           active: row.status !== 'revoked',
         };
@@ -1007,38 +1324,133 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         credits: 100,
         masked: rawCode,
         active: true,
+        reusableInDev: true,
       };
     }
-    if (!found || found.active === false) {
+    if (!found || found.active === false || found.status === 'revoked') {
       throw new ApiError(404, 'Código de convite não encontrado ou inativo.');
     }
-    const guestUserId = randomUUID();
-    const guestDir = path.resolve(path.dirname(directory), guestUserId);
-    const guestLedgerPath = path.join(guestDir, 'credits_ledger.json');
-    const initialCredits = Math.max(0, Number(found.credits) || 100);
-    await atomicWriteJson(guestLedgerPath, [
-      {
-        id: randomUUID(),
-        user_id: guestUserId,
-        delta: initialCredits,
-        balance_after: initialCredits,
-        operation_type: 'guest_invite_start',
-        reference_id: found.hash,
-        metadata: { code_masked: found.masked, isGuest: true },
-        created_at: new Date().toISOString(),
-      },
-    ]);
-    const guestEmail = `guest.${guestUserId.slice(0, 8)}@guest.companygen.store`;
-    const token = issueGuestInviteToken(guestUserId, guestEmail);
-    return send(res, 200, {
-      ok: true,
-      token,
-      user: { id: guestUserId, email: guestEmail, isGuest: true },
-      code: rawCode,
-      credits: initialCredits,
-      balance: initialCredits,
-      isGuest: true,
-    });
+    if (found.expiresAt && new Date(found.expiresAt) < new Date()) {
+      throw new ApiError(400, 'Este código de convite expirou.');
+    }
+
+    const guestResult = await serializeCreditOp(guestClaimsPath, () =>
+      serializeCreditOp(codesPath, async () => {
+        const claimsRaw = await readJsonFile(guestClaimsPath, {});
+        const claims = claimsRaw && typeof claimsRaw === 'object' && !Array.isArray(claimsRaw) ? { ...claimsRaw } : {};
+        const existingClaim = claims[codeHash] || null;
+        const linkedEmail =
+          (existingClaim?.claimedByEmail && !isGuestPlaceholderEmail(existingClaim.claimedByEmail)
+            ? existingClaim.claimedByEmail
+            : null) ||
+          (found.lastRedeemedByEmail && !isGuestPlaceholderEmail(found.lastRedeemedByEmail)
+            ? found.lastRedeemedByEmail
+            : null);
+
+        if (linkedEmail && !found.reusableInDev) {
+          const maskedEmail = maskEmailForHint(linkedEmail);
+          throw new ApiError(
+            409,
+            maskedEmail
+              ? `Este código já foi reivindicado pelo e-mail ${maskedEmail}. Faça login com esse e-mail.`
+              : 'Este código já foi reivindicado por uma conta com e-mail cadastrado. Faça login com esse e-mail.',
+          );
+        }
+
+        if (
+          !existingClaim?.guestUserId &&
+          !found.reusableInDev &&
+          linkedEmail &&
+          (found.status === 'depleted' || Number(found.redemptionCount || 0) >= Number(found.maxRedemptions || 1))
+        ) {
+          throw new ApiError(409, 'Este código já atingiu o limite máximo de ativações.');
+        }
+
+        const nowIso = new Date().toISOString();
+        const isResumingGuest = Boolean(existingClaim?.guestUserId && UUID_REGEX.test(existingClaim.guestUserId));
+        const guestUserId = isResumingGuest ? existingClaim.guestUserId : randomUUID();
+        const guestDir = path.resolve(path.dirname(directory), guestUserId);
+        const guestLedgerPath = path.join(guestDir, 'credits_ledger.json');
+        const initialCredits = Math.max(0, roundCredits(found.credits || 100));
+
+        let currentBalance = initialCredits;
+        if (isResumingGuest) {
+          const existingLedger = await readJsonFile(guestLedgerPath, []);
+          if (Array.isArray(existingLedger) && existingLedger.length > 0) {
+            currentBalance = Math.max(0, roundCredits(existingLedger[existingLedger.length - 1]?.balance_after || 0));
+          } else {
+            await atomicWriteJson(guestLedgerPath, [
+              {
+                id: randomUUID(),
+                user_id: guestUserId,
+                delta: initialCredits,
+                balance_after: initialCredits,
+                operation_type: 'guest_invite_start',
+                reference_id: found.hash,
+                metadata: { code_masked: found.masked, isGuest: true },
+                created_at: nowIso,
+              },
+            ]);
+          }
+        } else {
+          await atomicWriteJson(guestLedgerPath, [
+            {
+              id: randomUUID(),
+              user_id: guestUserId,
+              delta: initialCredits,
+              balance_after: initialCredits,
+              operation_type: 'guest_invite_start',
+              reference_id: found.hash,
+              metadata: { code_masked: found.masked, isGuest: true },
+              created_at: nowIso,
+            },
+          ]);
+        }
+
+        claims[codeHash] = {
+          codeHash,
+          codeMasked: found.masked || rawCode,
+          guestUserId,
+          initialCredits,
+          claimedByEmail: null,
+          claimedByUserId: null,
+          guestStartedAt: existingClaim?.guestStartedAt || nowIso,
+          lastResumedAt: nowIso,
+          claimedAt: null,
+        };
+        await atomicWriteJson(guestClaimsPath, claims);
+
+        // Mantém referência de sessão convidada também no JSON compartilhado local sem marcar e-mail definitivo
+        const localCodes = await readJsonFile(codesPath, null);
+        if (Array.isArray(localCodes)) {
+          const idx = localCodes.findIndex((c) => c.hash === codeHash);
+          if (idx !== -1) {
+            localCodes[idx] = {
+              ...localCodes[idx],
+              guestUserId,
+              emailClaimed: false,
+              guestStartedAt: claims[codeHash].guestStartedAt,
+            };
+            await atomicWriteJson(codesPath, localCodes);
+          }
+        }
+
+        const guestEmail = `guest.${guestUserId.slice(0, 8)}@guest.companygen.store`;
+        const token = issueGuestInviteToken(guestUserId, guestEmail);
+        return {
+          ok: true,
+          resumed: isResumingGuest,
+          claimedWithoutEmail: true,
+          token,
+          user: { id: guestUserId, email: guestEmail, isGuest: true },
+          code: rawCode,
+          credits: currentBalance,
+          balance: currentBalance,
+          isGuest: true,
+        };
+      }),
+    );
+    return send(res, 200, guestResult);
   }
 
   if (pathname === '/api/access/local-showcase-login') {
@@ -1046,14 +1458,14 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
     if (!isLocalShowcaseEnabled()) {
       throw new ApiError(403, 'Login sandbox local desabilitado neste ambiente.');
     }
-    const clientIp = req.socket?.remoteAddress || '127.0.0.1';
+    const clientIp = resolveClientIp(req);
     const rate = checkRateLimit(`showcase-login:${path.dirname(directory)}:${clientIp}`);
     if (!rate.allowed) {
       res.setHeader('Retry-After', String(rate.retryAfterSeconds));
       throw new ApiError(429, `Muitas tentativas. Aguarde ${rate.retryAfterSeconds} segundos.`);
     }
     const body = await readJson(req, 4096);
-    const rawCode = String(body?.code || '').trim().toUpperCase();
+    let rawCode = normalizeAccessCodeKey(String(body?.code || '').trim().toUpperCase());
     if (!rawCode) throw new ApiError(400, 'Informe o código de acesso.');
     const codes = await loadAccessCodes();
     const codeHash = computeSha256(rawCode);
@@ -1131,7 +1543,7 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
 
     const body = await readJson(req, 4096);
     const isDryRun = Boolean(body?.dryRun);
-    const clientIp = req.socket?.remoteAddress || '127.0.0.1';
+    const clientIp = resolveClientIp(req);
     const rate = isDryRun
       ? checkRateLimit(`dry:${path.dirname(directory)}:${clientIp}`, 30)
       : checkRateLimit(`${path.dirname(directory)}:${clientIp}`, 5);
@@ -1143,7 +1555,12 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
     const rawCode = String(body?.code || '').trim();
     if (!rawCode) throw new ApiError(400, 'Informe o código de acesso.');
 
-    const formattedMatch = /^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(rawCode);
+    const upper = rawCode.toUpperCase();
+    const effectiveCode = normalizeAccessCodeKey(upper);
+
+    const formattedMatch =
+      /^AI10-[A-Z0-9]{3,5}-[A-Z0-9]{3,5}$/i.test(upper) ||
+      /^AI10-[A-Z0-9]{3,5}-[A-Z0-9]{3,5}$/i.test(effectiveCode);
     if (!formattedMatch) {
       return send(res, 200, {
         valid: false,
@@ -1152,16 +1569,32 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
       });
     }
 
-    const codeHash = computeSha256(rawCode);
+    const codeHash = computeSha256(effectiveCode);
     const codes = await loadAccessCodes();
-    let found = codes.find((c) => c.hash === codeHash);
+    let found = codes.find((c) => c.hash === codeHash || c.code?.toUpperCase() === effectiveCode);
+
+    if (!found && SHOWCASE_PROFILE_CODES.has(effectiveCode)) {
+      found = {
+        hash: codeHash,
+        code: effectiveCode,
+        credits: effectiveCode === 'AI10-CUID-MOTI' ? 150 : 120,
+        masked: effectiveCode,
+        maxRedemptions: 999,
+        redemptionCount: 0,
+        expiresAt: null,
+        lastRedeemedByEmail: null,
+        status: 'active',
+        reusableInDev: true,
+        showcaseProfileId: SHOWCASE_USER_IDS[effectiveCode],
+      };
+    }
 
     const adminCfg = resolveSupabaseAdminConfig();
     if (!found && process.env.CG_PERSISTENCE !== 'local' && adminCfg.url && adminCfg.serviceRoleKey) {
       const cloudRes = await supabaseRestFetch({
         url: adminCfg.url,
         apiKey: adminCfg.serviceRoleKey,
-        route: `/rest/v1/cg_access_codes?code_hash=eq.${encodeURIComponent(codeHash)}&select=id,credits,code_masked,max_redemptions,redemption_count,expires_at,status&limit=1`,
+        route: `/rest/v1/cg_access_codes?code_hash=eq.${encodeURIComponent(codeHash)}&select=id,credits,code_masked,max_redemptions,redemption_count,expires_at,status,last_redeemed_by_email&limit=1`,
         method: 'GET',
         fetchImpl: cloudFetch,
       }).catch(() => null);
@@ -1177,6 +1610,7 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
           maxRedemptions: Number(row.max_redemptions || 1),
           redemptionCount: Number(row.redemption_count || 0),
           expiresAt: row.expires_at || null,
+          lastRedeemedByEmail: row.last_redeemed_by_email || null,
           status: row.status,
           reusableInDev: false,
           showcaseProfileId: null,
@@ -1208,21 +1642,415 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
       });
     }
 
-    if (found.status === 'depleted' || found.redemptionCount >= found.maxRedemptions) {
+    const claimsRaw = await readJsonFile(guestClaimsPath, {});
+    const claims = claimsRaw && typeof claimsRaw === 'object' && !Array.isArray(claimsRaw) ? claimsRaw : {};
+    const claim = claims[codeHash] || null;
+    const linkedEmail =
+      (claim?.claimedByEmail && !isGuestPlaceholderEmail(claim.claimedByEmail) ? claim.claimedByEmail : null) ||
+      (found.lastRedeemedByEmail && !isGuestPlaceholderEmail(found.lastRedeemedByEmail) ? found.lastRedeemedByEmail : null);
+
+    if (linkedEmail && !found.reusableInDev) {
+      const maskedEmail = maskEmailForHint(linkedEmail);
       return send(res, 200, {
         valid: false,
         reason: 'already_redeemed',
-        error: 'Este código de acesso já foi utilizado e atingiu o limite máximo de ativações.',
+        hasLinkedEmail: true,
+        maskedEmail,
+        error: maskedEmail
+          ? `Este código já foi reivindicado pelo e-mail ${maskedEmail}. Faça login com esse e-mail.`
+          : 'Este código de acesso já foi vinculado a uma conta com e-mail cadastrado. Faça login para acessar.',
+      });
+    }
+
+    if (
+      (claim?.guestUserId && !claim?.claimedByEmail && UUID_REGEX.test(claim.guestUserId)) ||
+      (!linkedEmail && (found.status === 'depleted' || found.redemptionCount >= found.maxRedemptions) && !found.reusableInDev)
+    ) {
+      const summary = claim?.guestUserId ? await readGuestStoreSummary(claim.guestUserId) : { balance: 0, storeName: '' };
+      const effectiveCredits = summary.balance > 0 ? summary.balance : roundCredits(found.credits || 0);
+      return send(res, 200, {
+        valid: true,
+        state: 'claimed_guest_no_email',
+        claimedWithoutEmail: true,
+        guestStoreName: summary.storeName || null,
+        credits: effectiveCredits,
+        remainingCredits: effectiveCredits,
+        masked: found.masked,
+        expiresAt: found.expiresAt,
+        reusableInDev: Boolean(found.reusableInDev),
+        showcaseProfileId: found.showcaseProfileId || null,
       });
     }
 
     return send(res, 200, {
       valid: true,
+      state: 'available',
+      claimedWithoutEmail: false,
       credits: found.credits,
       masked: found.masked,
       expiresAt: found.expiresAt,
       reusableInDev: Boolean(found.reusableInDev),
       showcaseProfileId: found.showcaseProfileId || null,
+    });
+  }
+
+  // 1b. POST /api/access/claim-email (Autenticado com e-mail real: vincula código/sessão convidada ao e-mail do usuário)
+  if (pathname === '/api/access/claim-email') {
+    if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
+    if (!user?.id || !UUID_REGEX.test(user.id) || user.isGuest || isGuestPlaceholderEmail(user.email)) {
+      throw new ApiError(401, 'Entre ou crie uma conta com e-mail válido antes de vincular este código.');
+    }
+
+    const body = await readJson(req, 8192);
+    const rawCode = String(body?.code || body?.inviteCode || '').trim().toUpperCase();
+    const guestToken = String(body?.guestToken || '').trim();
+    const verifiedGuest = guestToken ? verifyLocalShowcaseToken(guestToken) : null;
+    if (guestToken && (!verifiedGuest || !verifiedGuest.isGuest)) {
+      throw new ApiError(401, 'Sessão convidada expirada ou inválida.');
+    }
+    if (!rawCode && !verifiedGuest?.id) {
+      throw new ApiError(400, 'Informe o código de entrada ou a sessão convidada para vincular ao e-mail.');
+    }
+
+    const realEmail = String(user.email || '').trim().toLowerCase();
+    const claimResult = await serializeCreditOp(guestClaimsPath, () =>
+      serializeCreditOp(codesPath, () =>
+        serializeCreditOp(directory, async () => {
+          const claimsRaw = await readJsonFile(guestClaimsPath, {});
+          const claims = claimsRaw && typeof claimsRaw === 'object' && !Array.isArray(claimsRaw) ? { ...claimsRaw } : {};
+
+          let targetClaimKey = rawCode ? computeSha256(rawCode) : '';
+          let targetClaim = targetClaimKey ? claims[targetClaimKey] || null : null;
+
+          if (!targetClaim && verifiedGuest?.id) {
+            const matchEntry = Object.entries(claims).find(([, entry]) => entry?.guestUserId === verifiedGuest.id);
+            if (matchEntry) {
+              [targetClaimKey, targetClaim] = matchEntry;
+            }
+          }
+
+          if (targetClaim?.claimedByEmail && !isGuestPlaceholderEmail(targetClaim.claimedByEmail)) {
+            if (targetClaim.claimedByUserId === user.id || targetClaim.claimedByEmail === realEmail) {
+              const bal = await getCreditBalance({ user, bearer: effectiveBearer, directory, readJsonFile, fetchImpl: cloudFetch });
+              return { ok: true, alreadyClaimedByYou: true, email: realEmail, balance: bal, codeMasked: targetClaim.codeMasked || '' };
+            }
+            throw new ApiError(409, 'Este código já foi reivindicado por outro e-mail cadastrado.');
+          }
+
+          const guestUserId = verifiedGuest?.id || targetClaim?.guestUserId || '';
+          if (!guestUserId || !UUID_REGEX.test(guestUserId)) {
+            throw new ApiError(404, 'Nenhuma loja convidada sem e-mail foi encontrada para este código.');
+          }
+
+          const guestDir = path.resolve(path.dirname(directory), guestUserId);
+          const guestLedgerPath = path.join(guestDir, 'credits_ledger.json');
+          const rawGuestLedger = await readJsonFile(guestLedgerPath, []);
+          const guestLedger = Array.isArray(rawGuestLedger) ? [...rawGuestLedger] : [];
+          const guestBalance =
+            guestLedger.length > 0
+              ? Math.max(0, roundCredits(guestLedger[guestLedger.length - 1]?.balance_after || 0))
+              : roundCredits(targetClaim?.initialCredits || 0);
+
+          await migrateGuestWorkspaceDirectory({ guestUserId, targetUserId: user.id });
+
+          const nowIso = new Date().toISOString();
+          const claimRefId = `claim:${targetClaimKey || guestUserId}`;
+
+          if (guestBalance > 0) {
+            guestLedger.push({
+              id: randomUUID(),
+              user_id: guestUserId,
+              delta: -guestBalance,
+              balance_after: 0,
+              operation_type: 'guest_account_claimed',
+              reference_id: `${claimRefId}:debit_guest`,
+              metadata: { claimedByEmail: realEmail, claimedByUserId: user.id },
+              created_at: nowIso,
+            });
+            await atomicWriteJson(guestLedgerPath, guestLedger);
+          }
+
+          let newBalance = 0;
+          if (isCloudCreditMode({ user, bearer: effectiveBearer })) {
+            const { url: sbUrl, publishableKey, serviceRoleKey } = resolveSupabaseAdminConfig();
+            let redeemedCloud = false;
+            if (rawCode) {
+              const rpcRes = await supabaseRestFetch({
+                url: sbUrl,
+                apiKey: publishableKey || serviceRoleKey,
+                authToken: effectiveBearer,
+                route: '/rest/v1/rpc/cg_redeem_access_code',
+                method: 'POST',
+                body: { p_code: rawCode, p_ip_hash: computeSha256(req.socket?.remoteAddress || '127.0.0.1') },
+                fetchImpl: cloudFetch,
+              }).catch(() => null);
+              if (rpcRes?.ok && rpcRes.payload?.success) {
+                redeemedCloud = true;
+                newBalance = roundCredits(rpcRes.payload.new_balance || guestBalance);
+                const granted = roundCredits(rpcRes.payload.credits_added || 0);
+                const spentByGuest = roundCredits(Math.max(0, granted - guestBalance));
+                if (spentByGuest > 0) {
+                  const debRes = await supabaseRestFetch({
+                    url: sbUrl,
+                    apiKey: serviceRoleKey,
+                    route: '/rest/v1/rpc/cg_debit_credits',
+                    method: 'POST',
+                    body: {
+                      p_user_id: user.id,
+                      p_cost: spentByGuest,
+                      p_operation_type: 'edit_storefront',
+                      p_reference_id: `${claimRefId}:guest_spent`,
+                      p_metadata: { guestUserId, note: 'Ajuste de créditos já utilizados na sessão convidada' },
+                    },
+                    fetchImpl: cloudFetch,
+                  }).catch(() => null);
+                  if (debRes?.ok && typeof debRes.payload?.new_balance === 'number') {
+                    newBalance = roundCredits(debRes.payload.new_balance);
+                  }
+                }
+              }
+            }
+            if (!redeemedCloud) {
+              const curCloudBal = await getCreditBalance({ user, bearer: effectiveBearer, directory, readJsonFile, fetchImpl: cloudFetch });
+              if (guestBalance > 0) {
+                const targetCloudBal = roundCredits(curCloudBal + guestBalance);
+                const insLedger = await supabaseRestFetch({
+                  url: sbUrl,
+                  apiKey: serviceRoleKey,
+                  route: '/rest/v1/cg_credit_ledger',
+                  method: 'POST',
+                  body: {
+                    user_id: user.id,
+                    delta: guestBalance,
+                    balance_after: targetCloudBal,
+                    operation_type: 'welcome_invite',
+                    reference_id: claimRefId,
+                    metadata: { claimedFromGuestId: guestUserId, claimedByEmail: realEmail, code_masked: targetClaim?.codeMasked || rawCode || '' },
+                  },
+                  fetchImpl: cloudFetch,
+                }).catch(() => null);
+                if (insLedger?.ok) {
+                  await supabaseRestFetch({
+                    url: sbUrl,
+                    apiKey: serviceRoleKey,
+                    route: '/rest/v1/cg_credit_accounts?on_conflict=user_id',
+                    method: 'POST',
+                    body: { user_id: user.id, balance: targetCloudBal, updated_at: nowIso },
+                    fetchImpl: cloudFetch,
+                  }).catch(() => null);
+                  newBalance = targetCloudBal;
+                } else {
+                  newBalance = curCloudBal;
+                }
+              } else {
+                newBalance = curCloudBal;
+              }
+            }
+          } else {
+            const targetLedgerRaw = await readJsonFile(ledgerPath, []);
+            const targetLedger = Array.isArray(targetLedgerRaw) ? [...targetLedgerRaw] : [];
+            const alreadyMigrated = targetLedger.some((entry) => entry?.reference_id === claimRefId);
+            const currentTargetBal =
+              targetLedger.length > 0
+                ? Math.max(0, roundCredits(targetLedger[targetLedger.length - 1]?.balance_after || 0))
+                : 0;
+            if (!alreadyMigrated && guestBalance > 0) {
+              newBalance = roundCredits(currentTargetBal + guestBalance);
+              targetLedger.push({
+                id: randomUUID(),
+                user_id: user.id,
+                delta: guestBalance,
+                balance_after: newBalance,
+                operation_type: 'welcome_invite',
+                reference_id: claimRefId,
+                metadata: {
+                  claimedFromGuestId: guestUserId,
+                  claimedByEmail: realEmail,
+                  code_masked: targetClaim?.codeMasked || rawCode || '',
+                },
+                created_at: nowIso,
+              });
+              await atomicWriteJson(ledgerPath, targetLedger);
+            } else {
+              newBalance = currentTargetBal;
+            }
+          }
+
+          if (targetClaimKey) {
+            claims[targetClaimKey] = {
+              ...(targetClaim || {}),
+              codeHash: targetClaimKey,
+              codeMasked: targetClaim?.codeMasked || rawCode || 'AI10-****',
+              guestUserId: null,
+              claimedByEmail: realEmail,
+              claimedByUserId: user.id,
+              claimedAt: nowIso,
+            };
+            await atomicWriteJson(guestClaimsPath, claims);
+          }
+
+          // Atualiza também o registro em _shared_access_codes.json (e Supabase se disponível)
+          const localCodes = await readJsonFile(codesPath, null);
+          if (Array.isArray(localCodes) && targetClaimKey) {
+            const idx = localCodes.findIndex((c) => c.hash === targetClaimKey);
+            if (idx !== -1) {
+              const codeObj = { ...localCodes[idx] };
+              codeObj.emailClaimed = true;
+              codeObj.guestUserId = null;
+              codeObj.lastRedeemedByEmail = realEmail;
+              codeObj.lastRedeemedAt = nowIso;
+              codeObj.redemptionCount = Math.max(1, Number(codeObj.redemptionCount || 0));
+              if (!codeObj.reusableInDev && codeObj.redemptionCount >= (codeObj.maxRedemptions || 1)) {
+                codeObj.status = 'depleted';
+              }
+              localCodes[idx] = codeObj;
+              await atomicWriteJson(codesPath, localCodes);
+            }
+          }
+
+          const { url: sbUrl, serviceRoleKey } = resolveSupabaseAdminConfig();
+          if (process.env.CG_PERSISTENCE !== 'local' && sbUrl && serviceRoleKey && targetClaimKey) {
+            await supabaseRestFetch({
+              url: sbUrl,
+              apiKey: serviceRoleKey,
+              route: `/rest/v1/cg_access_codes?code_hash=eq.${encodeURIComponent(targetClaimKey)}`,
+              method: 'PATCH',
+              body: {
+                last_redeemed_by_email: realEmail,
+                last_redeemed_at: nowIso,
+              },
+              fetchImpl: cloudFetch,
+            }).catch(() => null);
+          }
+
+          return {
+            ok: true,
+            email: realEmail,
+            userId: user.id,
+            balance: newBalance,
+            codeMasked: targetClaim?.codeMasked || rawCode || '',
+          };
+        }),
+      ),
+    );
+
+    return send(res, 200, claimResult);
+  }
+
+  // 1c. POST /api/kiwify/lookup-code (Público, Rate Limited: busca código AI10 por email + order_id da compra Kiwify)
+  if (pathname === '/api/kiwify/lookup-code') {
+    if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
+
+    const clientIp = resolveClientIp(req);
+    const rl = checkRateLimit(`kiwify-lookup:${path.dirname(directory)}:${clientIp}`, 12, 5 * 60 * 1000);
+    if (!rl.allowed) {
+      res.setHeader('Retry-After', String(rl.retryAfterSeconds));
+      throw new ApiError(429, `Muitas consultas. Aguarde ${rl.retryAfterSeconds}s e tente novamente.`);
+    }
+
+    const body = await readJson(req, 4096);
+    const email = String(body?.email || '').trim().toLowerCase();
+    const rawOrderId = String(body?.orderId || body?.order_id || '')
+      .trim()
+      .replace(/^#/, '')
+      .trim();
+
+    if (!email || !email.includes('@') || email.length > 160) {
+      throw new ApiError(400, 'Informe o e-mail usado na compra da Kiwify.');
+    }
+    if (!rawOrderId || rawOrderId.length < 3 || rawOrderId.length > 120) {
+      throw new ApiError(400, 'Informe o ID do pedido recebido no recibo da Kiwify.');
+    }
+
+    const adminCfg = resolveSupabaseAdminConfig();
+    if (process.env.CG_PERSISTENCE === 'local' || !adminCfg.url || !adminCfg.serviceRoleKey) {
+      return send(res, 404, {
+        ok: false,
+        found: false,
+        error: 'Nenhuma compra aprovada encontrada para este e-mail e ID do pedido.',
+      });
+    }
+
+    const orderCandidates = [rawOrderId];
+    const lowerOrderId = rawOrderId.toLowerCase();
+    if (lowerOrderId !== rawOrderId) orderCandidates.push(lowerOrderId);
+
+    let purchaseRow = null;
+    for (const candidateOrderId of orderCandidates) {
+      const lookupRes = await supabaseRestFetch({
+        url: adminCfg.url,
+        apiKey: adminCfg.serviceRoleKey,
+        route: `/rest/v1/cg_kiwify_purchase_codes?buyer_email=eq.${encodeURIComponent(email)}&order_id=eq.${encodeURIComponent(candidateOrderId)}&select=id,order_id,webhook_event_type,access_code_id,buyer_email,code_plain,code_masked,credits,plan_code,created_at&order=created_at.desc&limit=1`,
+        method: 'GET',
+        fetchImpl: cloudFetch,
+      }).catch(() => null);
+      if (!lookupRes || !lookupRes.ok) {
+        throw new ApiError(503, 'Não foi possível consultar seu pedido agora. Tente novamente em instantes.');
+      }
+      if (Array.isArray(lookupRes.payload) && lookupRes.payload[0]) {
+        purchaseRow = lookupRes.payload[0];
+        break;
+      }
+    }
+
+    if (!purchaseRow) {
+      return send(res, 404, {
+        ok: false,
+        found: false,
+        error: 'Nenhuma compra aprovada encontrada para este e-mail e ID do pedido. Confira os dados no recibo da Kiwify.',
+      });
+    }
+
+    const codeRes = await supabaseRestFetch({
+      url: adminCfg.url,
+      apiKey: adminCfg.serviceRoleKey,
+      route: `/rest/v1/cg_access_codes?id=eq.${encodeURIComponent(purchaseRow.access_code_id)}&select=id,status,redemption_count,max_redemptions,last_redeemed_at,credits&limit=1`,
+      method: 'GET',
+      fetchImpl: cloudFetch,
+    }).catch(() => null);
+    if (!codeRes || !codeRes.ok) {
+      throw new ApiError(503, 'Não foi possível validar o status do código agora.');
+    }
+    const codeRow = Array.isArray(codeRes.payload) ? codeRes.payload[0] : null;
+    const credits = roundCredits(codeRow?.credits ?? purchaseRow.credits ?? 0);
+
+    if (!codeRow || codeRow.status === 'revoked') {
+      return send(res, 200, {
+        ok: true,
+        found: true,
+        status: 'revoked',
+        orderId: purchaseRow.order_id,
+        codeMasked: purchaseRow.code_masked,
+        credits,
+        message: 'Este pedido foi cancelado ou estornado e o código foi revogado.',
+      });
+    }
+
+    if (
+      codeRow.status !== 'active' ||
+      Number(codeRow.redemption_count || 0) >= Number(codeRow.max_redemptions || 1) ||
+      !purchaseRow.code_plain
+    ) {
+      return send(res, 200, {
+        ok: true,
+        found: true,
+        status: 'redeemed',
+        orderId: purchaseRow.order_id,
+        codeMasked: purchaseRow.code_masked,
+        credits,
+        redeemedAt: codeRow.last_redeemed_at || null,
+        message: `O código ${purchaseRow.code_masked} (${credits} cr) deste pedido já foi resgatado em uma conta.`,
+      });
+    }
+
+    return send(res, 200, {
+      ok: true,
+      found: true,
+      status: 'available',
+      orderId: purchaseRow.order_id,
+      code: purchaseRow.code_plain,
+      codeMasked: purchaseRow.code_masked,
+      credits,
     });
   }
 
@@ -1266,6 +2094,24 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         };
         const [st, msg] = errMap[data.error] || [400, 'Não foi possível resgatar este código de acesso.'];
         throw new ApiError(st, msg);
+      }
+      const claimEmailStr = !isGuestPlaceholderEmail(user?.email) ? String(user.email).trim().toLowerCase() : null;
+      if (claimEmailStr) {
+        await serializeCreditOp(guestClaimsPath, async () => {
+          const codeHash = computeSha256(rawCode);
+          const prevClaims = await readJsonFile(guestClaimsPath, {});
+          const nextClaims = prevClaims && typeof prevClaims === 'object' && !Array.isArray(prevClaims) ? { ...prevClaims } : {};
+          nextClaims[codeHash] = {
+            ...(nextClaims[codeHash] || {}),
+            codeHash,
+            codeMasked: data.code_masked || '',
+            guestUserId: null,
+            claimedByEmail: claimEmailStr,
+            claimedByUserId: user?.id || null,
+            claimedAt: new Date().toISOString(),
+          };
+          await atomicWriteJson(guestClaimsPath, nextClaims);
+        }).catch(() => {});
       }
       return send(res, 200, {
         success: true,
@@ -1330,6 +2176,24 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         }
         codes[foundIndex] = found;
         await atomicWriteJson(codesPath, codes);
+
+        const claimEmailStr = !isGuestPlaceholderEmail(user?.email) ? String(user.email).trim().toLowerCase() : null;
+        if (claimEmailStr && !found.reusableInDev) {
+          await serializeCreditOp(guestClaimsPath, async () => {
+            const prevClaims = await readJsonFile(guestClaimsPath, {});
+            const nextClaims = prevClaims && typeof prevClaims === 'object' && !Array.isArray(prevClaims) ? { ...prevClaims } : {};
+            nextClaims[found.hash] = {
+              ...(nextClaims[found.hash] || {}),
+              codeHash: found.hash,
+              codeMasked: found.masked || '',
+              guestUserId: null,
+              claimedByEmail: claimEmailStr,
+              claimedByUserId: user?.id || null,
+              claimedAt: nowIso,
+            };
+            await atomicWriteJson(guestClaimsPath, nextClaims);
+          }).catch(() => {});
+        }
 
         // Adiciona ao ledger do usuário
         const creditsToAdd = roundCredits(found.credits || 0);
@@ -1532,7 +2396,7 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         }
         const found = { ...codes[foundIndex] };
         const effectiveType = found.codeType || 'invite_only';
-        if (effectiveType !== 'user_recharge') {
+        if (effectiveType !== 'user_recharge' && effectiveType !== 'kiwify_purchase') {
           throw new ApiError(
             400,
             'Este código é exclusivo de convite para novas contas e não pode ser resgatado aqui.',
@@ -1551,7 +2415,7 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         const rawLedger = await readJsonFile(ledgerPath, []);
         const ledger = Array.isArray(rawLedger) ? [...rawLedger] : [];
         const usedRechargeCount = ledger.filter((entry) => entry?.operation_type === 'recharge_code').length;
-        if (usedRechargeCount >= 3) {
+        if (effectiveType === 'user_recharge' && usedRechargeCount >= 3) {
           throw new ApiError(409, 'Você já atingiu o limite máximo de 3 resgates de códigos por conta.');
         }
         const alreadyRedeemed = ledger.some((entry) => entry?.reference_id === `recharge:${found.hash}`);
@@ -1568,6 +2432,24 @@ export async function handleAccessAndCheckoutRoutes(req, res, ctx) {
         }
         codes[foundIndex] = found;
         await atomicWriteJson(codesPath, codes);
+
+        const claimEmailStr = !isGuestPlaceholderEmail(user?.email) ? String(user.email).trim().toLowerCase() : null;
+        if (claimEmailStr && !found.reusableInDev) {
+          await serializeCreditOp(guestClaimsPath, async () => {
+            const prevClaims = await readJsonFile(guestClaimsPath, {});
+            const nextClaims = prevClaims && typeof prevClaims === 'object' && !Array.isArray(prevClaims) ? { ...prevClaims } : {};
+            nextClaims[found.hash] = {
+              ...(nextClaims[found.hash] || {}),
+              codeHash: found.hash,
+              codeMasked: found.masked || '',
+              guestUserId: null,
+              claimedByEmail: claimEmailStr,
+              claimedByUserId: user?.id || null,
+              claimedAt: nowIso,
+            };
+            await atomicWriteJson(guestClaimsPath, nextClaims);
+          }).catch(() => {});
+        }
 
         const currentBalance = ledger.length > 0 ? Math.max(0, roundCredits(ledger[ledger.length - 1]?.balance_after || 0)) : 0;
         const creditsToAdd = roundCredits(found.credits || 0);

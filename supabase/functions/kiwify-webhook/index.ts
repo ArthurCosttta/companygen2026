@@ -23,7 +23,33 @@ export {
 
 const APPROVED_EVENTS = new Set(["order_approved", "subscription_renewed"]);
 const REFUNDED_EVENTS = new Set(["order_refunded", "chargeback"]);
-const APP_URL = Deno.env.get("APP_URL") ?? "https://companygen.store";
+const DEFAULT_APP_URL = "https://companygen-app.web.app";
+let resolvedAppUrlCache: { url: string; checkedAt: number } | null = null;
+
+async function resolveAppUrl(): Promise<string> {
+  const raw = (Deno.env.get("APP_URL") ?? "").trim().replace(/\/+$/, "");
+  if (!raw || raw.endsWith(".run.app")) {
+    return DEFAULT_APP_URL;
+  }
+  if (raw === "https://companygen.store" || raw === "http://companygen.store") {
+    if (resolvedAppUrlCache && Date.now() - resolvedAppUrlCache.checkedAt < 300_000) {
+      return resolvedAppUrlCache.url;
+    }
+    try {
+      const probe = await fetch(raw, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(1200),
+      });
+      const resolved = probe.ok || probe.status < 500 ? raw : DEFAULT_APP_URL;
+      resolvedAppUrlCache = { url: resolved, checkedAt: Date.now() };
+      return resolved;
+    } catch {
+      resolvedAppUrlCache = { url: DEFAULT_APP_URL, checkedAt: Date.now() };
+      return DEFAULT_APP_URL;
+    }
+  }
+  return raw;
+}
 
 type JsonRecord = Record<string, unknown>;
 type NotifyKind = "new_code" | "credits_added" | "refund";
@@ -70,24 +96,53 @@ async function notifyBuyer(
   supabase: ReturnType<typeof createClient>,
   email: string,
   kind: NotifyKind,
-  context: { code?: string; credits: number; balance: number | null },
+  context: {
+    code?: string;
+    credits: number;
+    balance: number | null;
+    orderId?: string;
+    userExists?: boolean;
+  },
 ): Promise<NotifyResult> {
+  const appUrl = await resolveAppUrl();
   const params = new URLSearchParams();
-  if (context.code) params.set("code", context.code);
+  if (context.code) {
+    params.set("route", "access");
+    params.set("code", context.code);
+  }
   params.set("credits", String(context.credits));
   if (context.balance !== null) params.set("balance", String(context.balance));
   if (kind === "refund") params.set("refund", "1");
-  const redirectTo = `${APP_URL}/?${params.toString()}`;
+  const redirectTo = `${appUrl}/?${params.toString()}`;
+  const mailData = context.code
+    ? {
+        access_code: context.code,
+        credits: context.credits,
+        order_id: context.orderId ?? "",
+        app_url: redirectTo,
+      }
+    : {
+        credits: context.credits,
+        order_id: context.orderId ?? "",
+        app_url: redirectTo,
+      };
 
   try {
-    if (kind === "new_code") {
-      const { error } = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo });
+    if (kind === "new_code" && !context.userExists) {
+      const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+        redirectTo,
+        data: mailData,
+      });
       if (!error) return { sent: true };
     }
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: redirectTo, shouldCreateUser: false },
+      options: {
+        emailRedirectTo: redirectTo,
+        shouldCreateUser: false,
+        data: mailData,
+      },
     });
     if (error) throw error;
     return { sent: true };
@@ -148,7 +203,7 @@ export async function handleKiwifyRequest(req: Request): Promise<Response> {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
 
-  const { data, error } = await supabase.rpc("cg_process_kiwify_event", {
+  const rpcArgs = {
     p_order_id: orderId,
     p_event_type: eventType,
     p_order_status: orderStatus,
@@ -159,7 +214,18 @@ export async function handleKiwifyRequest(req: Request): Promise<Response> {
     p_payload: event,
     p_access_code_hash: generatedCodeHash,
     p_access_code_masked: generatedCode ? maskAccessCode(generatedCode) : null,
+  };
+
+  let { data, error } = await supabase.rpc("cg_process_kiwify_event", {
+    ...rpcArgs,
+    p_access_code_plain: generatedCode,
   });
+  if (
+    error &&
+    (error.code === "PGRST202" || String(error.message || "").includes("p_access_code_plain"))
+  ) {
+    ({ data, error } = await supabase.rpc("cg_process_kiwify_event", rpcArgs));
+  }
 
   if (error) {
     const classification = classifyKiwifyError(error.message, 500);
@@ -237,11 +303,14 @@ export async function handleKiwifyRequest(req: Request): Promise<Response> {
       code: generatedCode,
       credits: hit.credits,
       balance: null,
+      orderId,
+      userExists: Boolean((result as Record<string, unknown>).user_exists),
     });
   } else if (email && result.action === "account_credited" && hit) {
     notification = await notifyBuyer(supabase, email, "credits_added", {
       credits: hit.credits,
       balance: result.balance ?? null,
+      orderId,
     });
   } else if (
     email &&
@@ -251,6 +320,7 @@ export async function handleKiwifyRequest(req: Request): Promise<Response> {
     notification = await notifyBuyer(supabase, email, "refund", {
       credits: hit.credits,
       balance: result.balance ?? null,
+      orderId,
     });
   }
 

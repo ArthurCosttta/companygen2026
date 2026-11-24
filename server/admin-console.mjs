@@ -1,6 +1,9 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { readdir } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import JSZip from 'jszip';
 import {
   applyKiwifyReversalLocal,
   DEFAULT_ACCESS_CODES,
@@ -18,13 +21,16 @@ import {
   listAllQrCampaigns,
   listAllTickets,
   renderQrAssets,
+  resolveBrandedServerOrigin,
   resolveTicketStatus,
   toggleOrDeleteQrCampaign,
 } from './support-and-qr.mjs';
 import { TIER_LIMITS } from './middleware/ai-budget.mjs';
+import { BoundedTtlMap } from './middleware/bounded-map.mjs';
 import { sendEmail } from './email-mailer.mjs';
 import { creditsAddedEmail } from './email-templates.mjs';
 import { loadStorefrontSnapshot } from './public-storefront-loader.mjs';
+import { queryCrashTelemetryLogs, updateCrashTelemetryStatus } from './crash-telemetry.mjs';
 
 const REASON_LABELS_PT = Object.freeze({
   support_comp: 'Compensação de Suporte',
@@ -285,19 +291,19 @@ export async function recordSystemIncident({
 
 const DEFAULT_OWNER_ADMIN_EMAIL = 'arthurpolarbuy@gmail.com';
 
+function resolveVerifiedUserEmail(user) {
+  const verified = String(user?.email || '').trim().toLowerCase();
+  if (verified) return verified;
+  const claims = decodeJwtClaims(user?.bearer);
+  return String(claims?.email || '').trim().toLowerCase();
+}
+
 function getEnvAdminEmails() {
-  const configured = String(process.env.CG_ADMIN_EMAILS || '')
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  return configured.length > 0 ? configured : [DEFAULT_OWNER_ADMIN_EMAIL];
+  return [DEFAULT_OWNER_ADMIN_EMAIL];
 }
 
 function getEnvAdminUserIds() {
-  return String(process.env.CG_ADMIN_USER_IDS || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return [];
 }
 
 function isLocalShowcaseUser(user) {
@@ -307,31 +313,17 @@ function isLocalShowcaseUser(user) {
   );
 }
 
-function computeIsAdmin(user, email, registry) {
+function computeIsAdmin(user, email) {
   if (!user?.id || user.id === 'public-visitor' || isLocalShowcaseUser(user)) {
     return false;
   }
-  const envUserIds = getEnvAdminUserIds();
-  if (envUserIds.length > 0 && user?.id && envUserIds.includes(user.id)) {
-    return true;
-  }
-  const envEmails = getEnvAdminEmails();
-  const cleanEmail = String(email || '').trim().toLowerCase();
-  if (envEmails.length > 0 && cleanEmail && envEmails.includes(cleanEmail)) {
-    return true;
-  }
-  if (registry.adminUserIds.includes(user.id)) return true;
-  if (cleanEmail && registry.adminEmails.includes(cleanEmail)) return true;
-  return false;
+  const cleanEmail = String(email || resolveVerifiedUserEmail(user) || '').trim().toLowerCase();
+  return cleanEmail === DEFAULT_OWNER_ADMIN_EMAIL;
 }
 
-export async function isAdminRequest({ root, user, readJsonFile }) {
+export async function isAdminRequest({ user }) {
   if (!user?.id || user.id === 'public-visitor' || isLocalShowcaseUser(user)) return false;
-  const registryPath = path.join(root, '_admin_registry.json');
-  const registry = normalizeAdminRegistry(await readJsonFile(registryPath, emptyAdminRegistry()));
-  const claims = decodeJwtClaims(user?.bearer);
-  const email = String(claims?.email || claims?.user_metadata?.email || '').trim().toLowerCase();
-  return computeIsAdmin(user, email, registry);
+  return computeIsAdmin(user, resolveVerifiedUserEmail(user));
 }
 
 function generateAccessCode(prefix = 'AI10') {
@@ -349,16 +341,7 @@ function generateAccessCode(prefix = 'AI10') {
 }
 
 function resolvePublicOrigin(req) {
-  const envOrigin = String(process.env.COMPANYGEN_URL || '').trim().replace(/\/+$/, '');
-  if (envOrigin && !/127\.0\.0\.1|localhost/i.test(envOrigin)) {
-    return envOrigin;
-  }
-  const host = String(req?.headers?.['x-forwarded-host'] || req?.headers?.host || '').split(',')[0].trim();
-  const proto = String(req?.headers?.['x-forwarded-proto'] || 'https').split(',')[0].trim();
-  if (host && !/127\.0\.0\.1|localhost/i.test(host)) {
-    return `${proto}://${host}`;
-  }
-  return envOrigin || 'https://companygen.store';
+  return resolveBrandedServerOrigin(req);
 }
 
 function computeCodeStatusTag(entry) {
@@ -381,7 +364,13 @@ function computeCodeStatusTag(entry) {
 
 function formatInviteRow(raw, originBase) {
   const code = raw?.code_display || raw?.code || null;
-  const codeType = (raw?.code_type || raw?.codeType) === 'user_recharge' ? 'user_recharge' : 'invite_only';
+  const rawType = raw?.code_type || raw?.codeType || 'invite_only';
+  const codeType =
+    rawType === 'user_recharge'
+      ? 'user_recharge'
+      : rawType === 'kiwify_purchase'
+        ? 'kiwify_purchase'
+        : 'invite_only';
   const masked = raw?.code_masked || raw?.masked || (codeType === 'user_recharge' ? 'RC10-****' : 'AI10-****');
   const maxRedemptions = Math.max(1, Number(raw?.max_redemptions ?? raw?.maxRedemptions ?? 1));
   const redemptionCount = Math.max(0, Number(raw?.redemption_count ?? raw?.redemptionCount ?? 0));
@@ -391,9 +380,9 @@ function formatInviteRow(raw, originBase) {
     maxRedemptions,
     expiresAt: raw?.expires_at ?? raw?.expiresAt ?? null,
   });
-  const base = originBase || 'https://companygen.store';
+  const base = originBase || 'https://companygen-app.web.app';
   const inviteUrl =
-    code && codeType === 'invite_only' ? `${base}/?route=access&code=${encodeURIComponent(code)}` : null;
+    code && codeType !== 'user_recharge' ? `${base}/?route=access&code=${encodeURIComponent(code)}` : null;
   const redeemUrl =
     code && codeType === 'user_recharge' ? `${base}/?route=settings&redeem=${encodeURIComponent(code)}` : null;
 
@@ -426,7 +415,7 @@ export async function recordUserTouchAndCheckBan({ root, user, readJsonFile, ato
   const registryPath = path.join(root, '_admin_registry.json');
   const registry = normalizeAdminRegistry(await readJsonFile(registryPath, emptyAdminRegistry()));
   const claims = decodeJwtClaims(user.bearer);
-  const email = String(claims?.email || claims?.user_metadata?.email || '').trim().toLowerCase();
+  const email = resolveVerifiedUserEmail(user);
   const displayName = String(
     claims?.user_metadata?.full_name || claims?.user_metadata?.name || '',
   ).trim();
@@ -575,15 +564,15 @@ function evaluateFleetAndCanary(fleetList = [], desktopPolicy = DEFAULT_DESKTOP_
   };
 }
 
-const fleetHeartbeatLimiter = new Map();
+const fleetHeartbeatLimiter = new BoundedTtlMap({ maxEntries: 2000, defaultTtlMs: 120_000 });
 function allowFleetHeartbeat(key, nowMs = Date.now()) {
   const prev = fleetHeartbeatLimiter.get(key) || { count: 0, resetAt: nowMs + 60_000 };
   if (nowMs > prev.resetAt) {
-    fleetHeartbeatLimiter.set(key, { count: 1, resetAt: nowMs + 60_000 });
+    fleetHeartbeatLimiter.set(key, { count: 1, resetAt: nowMs + 60_000 }, 60_000);
     return true;
   }
   prev.count += 1;
-  fleetHeartbeatLimiter.set(key, prev);
+  fleetHeartbeatLimiter.set(key, prev, Math.max(1000, prev.resetAt - nowMs));
   return prev.count <= 20;
 }
 
@@ -597,6 +586,84 @@ export async function handlePublicOrUserFleetRoutes(req, res, ctx) {
     if (req.method !== 'GET') throw new ApiError(405, 'Método indisponível.');
     const registry = normalizeAdminRegistry(await readJsonFile(registryPath, emptyAdminRegistry()));
     return send(res, 200, { ok: true, policy: registry.desktopPolicy });
+  }
+
+  if (pathname === '/api/desktop/download') {
+    if (!['GET', 'HEAD'].includes(req.method || 'GET')) throw new ApiError(405, 'Método indisponível.');
+    const targetOs = String(url.searchParams.get('os') || 'win64').toLowerCase();
+    const originBase = resolveBrandedServerOrigin(req);
+
+    if (targetOs === 'mac' || targetOs === 'linux') {
+      const zip = new JSZip();
+      const targetAppUrl = `${originBase}/?theme=light`;
+      if (targetOs === 'mac') {
+        zip.file(
+          'Abrir-CompanyGen.command',
+          `#!/bin/bash\nif [ -d "/Applications/Google Chrome.app" ]; then\n  open -a "Google Chrome" --args --app="${targetAppUrl}"\nelif [ -d "/Applications/Microsoft Edge.app" ]; then\n  open -a "Microsoft Edge" --args --app="${targetAppUrl}"\nelse\n  open "${targetAppUrl}"\nfi\n`,
+          { unixPermissions: '755' },
+        );
+        zip.file(
+          'LEIA-ME.txt',
+          `CompanyGen Desktop Launcher (macOS)\n1. Extraia este ZIP.\n2. Clique duas vezes em Abrir-CompanyGen.command (ou dê chmod +x no Terminal se necessário).\nURL oficial: ${targetAppUrl}\n`,
+        );
+      } else {
+        zip.file(
+          'Abrir-CompanyGen.sh',
+          `#!/usr/bin/env bash\nURL="${targetAppUrl}"\nif command -v google-chrome >/dev/null 2>&1; then\n  exec google-chrome --app="$URL" &\nelif command -v chromium >/dev/null 2>&1; then\n  exec chromium --app="$URL" &\nelse\n  exec xdg-open "$URL"\nfi\n`,
+          { unixPermissions: '755' },
+        );
+        zip.file(
+          'CompanyGen.desktop',
+          `[Desktop Entry]\nType=Application\nName=CompanyGen\nExec=xdg-open ${targetAppUrl}\nTerminal=false\nCategories=Office;Network;\n`,
+        );
+      }
+      const zipBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+      const fileName = targetOs === 'mac' ? 'CompanyGen-macOS-App.zip' : 'CompanyGen-Linux-App.zip';
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Length': String(zipBuf.length),
+        'Content-Disposition': `attachment; filename="${fileName}"`,
+        'Cache-Control': 'no-cache',
+      });
+      res.end(req.method === 'HEAD' ? undefined : zipBuf);
+      return true;
+    }
+
+    const downloadFilename =
+      targetOs === 'win32'
+        ? 'CompanyGen-Windows-32bit-Leve-1.1.0.exe'
+        : 'CompanyGen-Windows-64bit-1.1.0.exe';
+    const projectDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+    const localCandidates = [
+      path.join(projectDir, 'release', 'CompanyGen-Setup-1.1.0.exe'),
+      path.join(projectDir, 'dist', 'downloads', 'CompanyGen-Setup-1.1.0.exe'),
+    ];
+    for (const exePath of localCandidates) {
+      const info = await stat(exePath).catch(() => null);
+      if (info && info.isFile() && info.size > 0) {
+        res.writeHead(200, {
+          'Content-Type': 'application/vnd.microsoft.portable-executable',
+          'Content-Length': String(info.size),
+          'Content-Disposition': `attachment; filename="${downloadFilename}"`,
+          'Cache-Control': 'no-cache',
+        });
+        if (req.method === 'HEAD') {
+          res.end();
+        } else {
+          createReadStream(exePath).pipe(res);
+        }
+        return true;
+      }
+    }
+
+    const registry = normalizeAdminRegistry(await readJsonFile(registryPath, emptyAdminRegistry()));
+    const hostedFallback =
+      registry?.desktopPolicy?.downloadUrl && /^https?:\/\//i.test(registry.desktopPolicy.downloadUrl)
+        ? registry.desktopPolicy.downloadUrl
+        : `${originBase}/downloads/CompanyGen-Setup-1.1.0.exe`;
+    res.writeHead(302, { Location: hostedFallback });
+    res.end();
+    return true;
   }
 
   if (pathname === '/api/features') {
@@ -691,8 +758,7 @@ export async function handleAdminRoutes(req, res, ctx) {
   const codesPath = path.join(root, '_shared_access_codes.json');
 
   const registry = normalizeAdminRegistry(await readJsonFile(registryPath, emptyAdminRegistry()));
-  const claims = decodeJwtClaims(user?.bearer);
-  const email = String(claims?.email || claims?.user_metadata?.email || '').trim().toLowerCase();
+  const email = resolveVerifiedUserEmail(user);
   const isAdmin = computeIsAdmin(user, email, registry);
 
   if (pathname === '/api/admin/status') {
@@ -763,10 +829,7 @@ export async function handleAdminRoutes(req, res, ctx) {
           ? Math.max(0, Math.floor((Date.now() - lastSeenMs) / 3_600_000))
           : 0;
       const isRowAdmin =
-        getEnvAdminUserIds().includes(uid) ||
-        (meta.email && getEnvAdminEmails().includes(String(meta.email).toLowerCase())) ||
-        registry.adminUserIds.includes(uid) ||
-        (meta.email && registry.adminEmails.includes(String(meta.email).toLowerCase()));
+        Boolean(meta.email) && String(meta.email).trim().toLowerCase() === DEFAULT_OWNER_ADMIN_EMAIL;
 
       users.push({
         id: uid,
@@ -911,11 +974,7 @@ export async function handleAdminRoutes(req, res, ctx) {
         const existing = localById.get(uid);
         const ban = registry.bannedUsers[uid] || {};
         const uEmail = String(au.email || existing?.email || '').trim().toLowerCase();
-        const isRowAdmin =
-          getEnvAdminUserIds().includes(uid) ||
-          (uEmail && getEnvAdminEmails().includes(uEmail)) ||
-          registry.adminUserIds.includes(uid) ||
-          (uEmail && registry.adminEmails.includes(uEmail));
+        const isRowAdmin = Boolean(uEmail) && uEmail === DEFAULT_OWNER_ADMIN_EMAIL;
         const storeSlug = cp?.public_slug || '';
         const mergedRow = {
           id: uid,
@@ -964,15 +1023,14 @@ export async function handleAdminRoutes(req, res, ctx) {
     const bannedCount = users.filter((u) => u.banned).length;
     const activeInvites = invites.filter((i) => i.status === 'active').length;
 
-    const [tickets, rawQrCampaigns, onboardingFeedback] = await Promise.all([
+    const [tickets, rawQrCampaigns, onboardingFeedback, crashTelemetry] = await Promise.all([
       listAllTickets({ root, readJsonFile, fetchImpl: sbFetch }),
       listAllQrCampaigns({ root, readJsonFile, fetchImpl: sbFetch }),
       listAllOnboardingFeedback({ root, readJsonFile, fetchImpl: sbFetch }),
+      queryCrashTelemetryLogs({ root, limit: 40, readJsonFile }),
     ]);
 
-    const requestProto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
-    const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '127.0.0.1:1245').split(',')[0].trim();
-    const originBase = process.env.COMPANYGEN_URL?.replace(/\/+$/, '') || `${requestProto}://${requestHost}`;
+    const originBase = resolveBrandedServerOrigin(req);
 
     const qrCampaigns = await Promise.all(
       rawQrCampaigns.map(async (q) => {
@@ -1041,6 +1099,9 @@ export async function handleAdminRoutes(req, res, ctx) {
         openTicketsCount: tickets.filter((t) => t.status !== 'resolved').length,
         qrCount: qrCampaigns.length,
         incidentsCount: mergedIncidents.length,
+        openCrashesCount: crashTelemetry.summary.openCount,
+        normalUserOpenCrashes: crashTelemetry.summary.normalUserOpenCount,
+        criticalCrashes24h: crashTelemetry.summary.criticalOpen24h,
         onboardingFeedbackCount: onboardingFeedback.length,
         grossRevenueCents: allEcon.grossRevenueCents,
         kiwifyFeeCents: allEcon.kiwifyFeeCents,
@@ -1066,6 +1127,8 @@ export async function handleAdminRoutes(req, res, ctx) {
       onboardingFeedback,
       invites,
       incidents: [...mergedIncidents].reverse(),
+      crashSummary: crashTelemetry.summary,
+      crashLogs: crashTelemetry.logs,
     });
   }
 
@@ -1652,9 +1715,7 @@ export async function handleAdminRoutes(req, res, ctx) {
   if (pathname === '/api/admin/qr-batches') {
     if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
     const body = await readJson(req, 16 * 1024);
-    const requestProto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
-    const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '127.0.0.1:1245').split(',')[0].trim();
-    const originBase = process.env.COMPANYGEN_URL?.replace(/\/+$/, '') || `${requestProto}://${requestHost}`;
+    const originBase = resolveBrandedServerOrigin(req);
     const pkg = await createQrBatchPackage({
       root,
       batchName: body?.batchName || 'Campanha CompanyGen',
@@ -1999,9 +2060,7 @@ export async function handleAdminRoutes(req, res, ctx) {
           atomicWriteJson,
           fetchImpl: sbFetch,
         });
-        const requestProto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
-        const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '127.0.0.1:1245').split(',')[0].trim();
-        const originBase = process.env.COMPANYGEN_URL?.replace(/\/+$/, '') || `${requestProto}://${requestHost}`;
+        const originBase = resolveBrandedServerOrigin(req);
         const shortUrl = `${originBase}/q/${created.slug}`;
         const assets = await renderQrAssets(shortUrl).catch(() => ({ svg: '', pngDataUrl: '' }));
         return send(res, 200, { ok: true, campaign: { ...created, shortUrl, ...assets } });
@@ -2035,6 +2094,53 @@ export async function handleAdminRoutes(req, res, ctx) {
       return send(res, 200, { ok: true });
     }
     throw new ApiError(405, 'Método indisponível.');
+  }
+
+  // GET /api/admin/logs/crashes (Telemetria Contextual de Crashs & Stack Completo)
+  if (pathname === '/api/admin/logs/crashes') {
+    if (req.method !== 'GET') throw new ApiError(405, 'Método indisponível.');
+    const result = await queryCrashTelemetryLogs({
+      root,
+      severity: url.searchParams.get('severity') || '',
+      status: url.searchParams.get('status') || '',
+      source: url.searchParams.get('source') || '',
+      q: url.searchParams.get('q') || '',
+      limit: Number(url.searchParams.get('limit') || 100),
+      readJsonFile,
+    });
+    return send(res, 200, { ok: true, ...result });
+  }
+
+  // POST /api/admin/logs/crashes/status
+  if (pathname === '/api/admin/logs/crashes/status') {
+    if (req.method !== 'POST') throw new ApiError(405, 'Método indisponível.');
+    const body = await readJson(req, 16 * 1024);
+    const updated = await updateCrashTelemetryStatus({
+      root,
+      id: String(body?.id || ''),
+      fingerprint: String(body?.fingerprint || ''),
+      status: String(body?.status || 'resolved'),
+      adminNote: String(body?.adminNote || ''),
+      actor: email || user.id,
+      readJsonFile,
+      atomicWriteJson,
+    });
+    if (!updated) throw new ApiError(404, 'Registro de crash não encontrado.');
+    const now = new Date().toISOString();
+    await serializeCreditOp(registryPath, async () => {
+      const latest = normalizeAdminRegistry(await readJsonFile(registryPath, emptyAdminRegistry()));
+      latest.auditLog.push({
+        id: randomUUID(),
+        action: 'crash_log_status',
+        fingerprint: updated.fingerprint,
+        status: updated.status,
+        by: email || user.id,
+        at: now,
+      });
+      latest.updatedAt = now;
+      await atomicWriteJson(registryPath, latest);
+    });
+    return send(res, 200, { ok: true, log: updated });
   }
 
   return false;

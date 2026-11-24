@@ -1,0 +1,16 @@
+{
+  "name": "CompanyGen — Loja & Atendimento IA",
+  "short_name": "CompanyGen",
+  "start_url": "/?theme=light",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#09090B",
+  "icons": [
+    {
+      "src": "/brand/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

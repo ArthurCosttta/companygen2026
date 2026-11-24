@@ -1,6 +1,7 @@
 import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeImage, Notification, session, shell, Tray, webContents } from 'electron';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -10,13 +11,14 @@ import {
   buildWebviewClickSendScript,
   buildWebviewFocusComposerScript,
   buildWebviewIdentityScript,
+  buildWebviewImageExtractScript,
   buildWebviewPollScript,
   buildWebviewSendScript,
 } from '../shared/whatsapp-webview-script.mjs';
 import { verifyWebviewScriptsPayload } from '../shared/webview-scripts-signer.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DEFAULT_CLOUD_APP_URL = 'https://companygen-app-468840292234.southamerica-east1.run.app/';
+const DEFAULT_CLOUD_APP_URL = 'https://companygen-app.web.app/';
 const appUrl =
   process.env.COMPANYGEN_URL ||
   (app.isPackaged && process.env.COMPANYGEN_LOCAL_ONLY !== '1'
@@ -84,9 +86,18 @@ if (!hasSingleInstanceLock) app.quit();
 // surface. CompanyGen does not need GPU acceleration, and disabling it keeps
 // the shell and the embedded WhatsApp Web observable and interactive.
 app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-background-timer-throttling');
-app.commandLine.appendSwitch('disable-renderer-backgrounding');
-app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+// Otimização para PCs modestos / 32-bit / <=4GB RAM: limita renderers extras, cache em disco e heap V8
+const totalSystemRamBytes = os.totalmem();
+if (process.arch === 'ia32' || totalSystemRamBytes <= 4.5 * 1024 * 1024 * 1024) {
+  app.commandLine.appendSwitch('js-flags', '--max-old-space-size=384');
+} else {
+  app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512');
+}
+app.commandLine.appendSwitch('renderer-process-limit', '2');
+app.commandLine.appendSwitch('disk-cache-size', '33554432');
+app.commandLine.appendSwitch('media-cache-size', '16777216');
+app.commandLine.appendSwitch('disable-features', 'BackForwardCache');
+app.commandLine.appendSwitch('disable-gpu-vsync');
 
 function isLoopbackAppUrl(rawUrl) {
   try {
@@ -174,7 +185,9 @@ function chromeUserAgent() {
 
 function configureWhatsappContents(contents) {
   contents.setUserAgent(chromeUserAgent());
-  try { contents.setBackgroundThrottling?.(false); } catch {}
+  // Nunca vazar audio dos chats/audios dos clientes nos alto-falantes do lojista
+  try { contents.setAudioMuted(true); } catch {}
+  try { contents.setBackgroundThrottling?.(true); } catch {}
   contents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//i.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
@@ -698,6 +711,20 @@ async function extractEmbeddedWhatsappAudio(payload) {
   }
 }
 
+async function extractEmbeddedWhatsappImage(payload) {
+  const guests = getWhatsappWebviews();
+  const guest = guests[0];
+  if (!guest) return { ok: false, reason: 'no_webview' };
+  try {
+    const msgKey = String(payload?.msgKey || '');
+    const script = buildWebviewImageExtractScript({ msgKey });
+    const result = await guest.executeJavaScript(script, true);
+    return result && typeof result === 'object' ? result : { ok: false, reason: 'empty_image_result' };
+  } catch (err) {
+    return { ok: false, reason: err?.message || 'image_ipc_error' };
+  }
+}
+
 async function repairEmbeddedWhatsappWebview() {
   const guests = getWhatsappWebviews();
   if (guests.length === 0) return { ok: false, reason: 'no_webview' };
@@ -863,7 +890,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       webviewTag: true,
-      backgroundThrottling: false,
+      backgroundThrottling: true,
     },
   });
   mainWindow = window;
@@ -898,7 +925,7 @@ function createWindow() {
     webPreferences.contextIsolation = true;
     webPreferences.sandbox = true;
     webPreferences.webSecurity = true;
-    webPreferences.backgroundThrottling = false;
+    webPreferences.backgroundThrottling = true;
     const isolated = session.fromPartition(params.partition);
     isolated.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === 'notifications'));
     isolated.setPermissionCheckHandler((_contents, permission) => permission === 'notifications');
@@ -945,6 +972,7 @@ ipcMain.handle('companygen:open-whatsapp', () => shell.openExternal('https://web
 ipcMain.handle('companygen:whatsapp-identity', () => readEmbeddedWhatsappIdentity());
 ipcMain.handle('companygen:whatsapp-poll-inbox', () => pollEmbeddedWhatsappInbox());
 ipcMain.handle('companygen:whatsapp-extract-audio', (_event, payload) => extractEmbeddedWhatsappAudio(payload));
+ipcMain.handle('companygen:whatsapp-extract-image', (_event, payload) => extractEmbeddedWhatsappImage(payload));
 ipcMain.handle('companygen:whatsapp-send-reply', (_event, payload) => sendEmbeddedWhatsappReply(payload));
 ipcMain.handle('companygen:whatsapp-repair', () => repairEmbeddedWhatsappWebview());
 ipcMain.handle('companygen:whatsapp-logout', () => logoutEmbeddedWhatsappWebview());

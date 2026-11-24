@@ -1,7 +1,14 @@
 import path from 'node:path';
 import JSZip from 'jszip';
 import { buildDefaultMensagemMoldeServer } from './sync-engine.mjs';
+import { callGlm53Json } from './storefront-molde-fs.mjs';
 import { normalizeSpreadsheetItemType } from '../shared/formula-ir/composer-schema.mjs';
+import {
+  buildRecommendedPagesForProfile,
+  buildWorkspaceWhatsappFlows,
+  classifyBusinessArchetype,
+  extractSpreadsheetSignals,
+} from '../shared/formula-ir/spreadsheet-intelligence.mjs';
 
 function inferItemTypeForSpreadsheetRow({
   rawType = '',
@@ -20,10 +27,6 @@ function inferItemTypeForSpreadsheetRow({
     sourceHint,
   });
 }
-
-const OLLAMA_URL = 'http://127.0.0.1:11434/api/generate';
-const PREFERRED_OLLAMA_MODELS = ['qwen3:4b-instruct', 'qwen3.5:4b'];
-const OLLAMA_TIMEOUT_MS = 30_000;
 
 function escapeXml(raw) {
   const cleaned = String(raw ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
@@ -95,19 +98,31 @@ function parseAttrs(attrString) {
   return attrs;
 }
 
-function rowsToSheet(name, matrix) {
-  const nonEmptyRows = matrix
-    .map(row => row.map(cell => String(cell ?? '').trim()))
-    .filter(row => row.some(cell => cell.length > 0));
-  if (!nonEmptyRows.length) return null;
+function rowsToSheet(name, matrix, rawRowNums) {
+  const indexedRows = matrix
+    .map((row, idx) => ({
+      cells: row.map(cell => String(cell ?? '').trim()),
+      excelRowZero: rawRowNums && Number.isInteger(rawRowNums[idx]) ? rawRowNums[idx] : idx,
+    }))
+    .filter(item => item.cells.some(cell => cell.length > 0));
+  if (!indexedRows.length) return null;
 
-  const maxCols = Math.max(...nonEmptyRows.map(r => r.length), 1);
+  let headerIdx = 0;
+  const countNonEmpty = r => r.filter(Boolean).length;
+  if (indexedRows.length >= 2 && countNonEmpty(indexedRows[0].cells) === 1) {
+    const better = indexedRows.slice(1, 5).findIndex(it => countNonEmpty(it.cells) >= 2);
+    if (better >= 0) headerIdx = better + 1;
+  }
+
+  const sliceRows = indexedRows.slice(headerIdx);
+  const maxCols = Math.max(...sliceRows.map(r => r.cells.length), 1);
   const pad = row => Array.from({ length: maxCols }, (_, idx) => row[idx] ?? '');
-  const [headerRow, ...dataRows] = nonEmptyRows;
+  const [headerItem, ...dataItems] = sliceRows;
   return {
     name,
-    headers: pad(headerRow).map((h, idx) => h || `Coluna_${idx + 1}`),
-    rows: dataRows.map(pad),
+    headers: pad(headerItem.cells).map((h, idx) => h || `Coluna_${idx + 1}`),
+    rows: dataItems.map(d => pad(d.cells)),
+    _excelRowByDataRow: dataItems.map(d => d.excelRowZero),
   };
 }
 
@@ -320,11 +335,17 @@ function parseSharedStringsXml(xml) {
 
 function parseWorksheetXml(xml, sharedStrings, sheetName) {
   const matrix = [];
-  const rowRegex = /<row(?:\s[^>]*)?>([\s\S]*?)<\/row>/gi;
+  const rawRowNums = [];
+  const rowRegex = /<row(\s[^>]*)?>([\s\S]*?)<\/row>/gi;
   let rowMatch;
+  let seqRowZero = 0;
 
   while ((rowMatch = rowRegex.exec(xml)) !== null) {
-    const rowBody = rowMatch[1];
+    const rowAttrs = parseAttrs(rowMatch[1] || '');
+    const explicitRowNum = rowAttrs.r ? Number(rowAttrs.r) - 1 : seqRowZero;
+    const rowZero = Number.isFinite(explicitRowNum) && explicitRowNum >= 0 ? explicitRowNum : seqRowZero;
+    seqRowZero = rowZero + 1;
+    const rowBody = rowMatch[2];
     const rowCells = [];
     const cellRegex = /<c(\s[^>]*)?(?:\/>|>([\s\S]*?)<\/c>)/gi;
     let cellMatch;
@@ -362,10 +383,88 @@ function parseWorksheetXml(xml, sharedStrings, sheetName) {
       rowCells[colIdx] = value;
     }
 
-    if (rowCells.some(c => c.trim().length > 0)) matrix.push(rowCells);
+    if (rowCells.some(c => c.trim().length > 0)) {
+      matrix.push(rowCells);
+      rawRowNums.push(rowZero);
+    }
   }
 
-  return rowsToSheet(sheetName, matrix);
+  return rowsToSheet(sheetName, matrix, rawRowNums);
+}
+
+function guessImageMimeFromPath(filePath) {
+  const lower = String(filePath || '').toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  return null;
+}
+
+async function extractWorksheetEmbeddedImages(zip, sheetPath) {
+  const byExcelRowZero = new Map();
+  const normalizedSheetPath = String(sheetPath || '').replace(/^\/+/, '');
+  const sheetDir = normalizedSheetPath.split('/').slice(0, -1).join('/');
+  const sheetFile = normalizedSheetPath.split('/').pop() || '';
+  const sheetRelsPath = `${sheetDir}/_rels/${sheetFile}.rels`;
+
+  const drawingPaths = [];
+  const sheetRelsFile = zip.file(sheetRelsPath);
+  if (sheetRelsFile) {
+    const relsXml = await sheetRelsFile.async('string');
+    const relRegex = /<Relationship\s+([^>]+?)\/?>/gi;
+    let rm;
+    while ((rm = relRegex.exec(relsXml)) !== null) {
+      const attrs = parseAttrs(rm[1]);
+      if (attrs.Target && /drawing/i.test(attrs.Target)) {
+        const clean = attrs.Target.replace(/^\.\.\//, 'xl/').replace(/^\/+/, '');
+        drawingPaths.push(clean.startsWith('xl/') ? clean : `xl/${clean}`);
+      }
+    }
+  }
+
+  for (const drawingPath of drawingPaths) {
+    const drawingFile = zip.file(drawingPath);
+    if (!drawingFile) continue;
+    const drawingXml = await drawingFile.async('string');
+    const drawingDir = drawingPath.split('/').slice(0, -1).join('/');
+    const drawingName = drawingPath.split('/').pop() || '';
+    const drawingRelsFile = zip.file(`${drawingDir}/_rels/${drawingName}.rels`);
+    const embedToMedia = new Map();
+    if (drawingRelsFile) {
+      const dRelsXml = await drawingRelsFile.async('string');
+      const relRegex = /<Relationship\s+([^>]+?)\/?>/gi;
+      let rm;
+      while ((rm = relRegex.exec(dRelsXml)) !== null) {
+        const attrs = parseAttrs(rm[1]);
+        if (attrs.Id && attrs.Target) {
+          const clean = attrs.Target.replace(/^\.\.\//, 'xl/').replace(/^\/+/, '');
+          embedToMedia.set(attrs.Id, clean.startsWith('xl/') ? clean : `xl/${clean}`);
+        }
+      }
+    }
+
+    const anchorRe = /<xdr:(?:twoCellAnchor|oneCellAnchor)[^>]*>([\s\S]*?)<\/xdr:(?:twoCellAnchor|oneCellAnchor)>/gi;
+    let am;
+    while ((am = anchorRe.exec(drawingXml)) !== null) {
+      const block = am[1];
+      const rowMatch = block.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/i);
+      const blipMatch = block.match(/<a:blip[^>]*r:embed=["']([^"']+)["']/i);
+      if (!rowMatch || !blipMatch) continue;
+      const excelRowZero = Number(rowMatch[1]);
+      const mediaPath = embedToMedia.get(blipMatch[1]);
+      if (!mediaPath) continue;
+      const mediaFile = zip.file(mediaPath);
+      const mime = guessImageMimeFromPath(mediaPath);
+      if (!mediaFile || !mime) continue;
+      const b64 = await mediaFile.async('base64');
+      if (b64 && !byExcelRowZero.has(excelRowZero)) {
+        byExcelRowZero.set(excelRowZero, `data:${mime};base64,${b64}`);
+      }
+    }
+  }
+
+  return byExcelRowZero;
 }
 
 export async function parseUniversalSpreadsheet(input, filename) {
@@ -427,7 +526,21 @@ export async function parseUniversalSpreadsheet(input, filename) {
         const file = zip.file(entry.path);
         if (!file) continue;
         const parsed = parseWorksheetXml(await file.async('string'), sharedStrings, entry.name);
-        if (parsed) sheets.push(parsed);
+        if (!parsed) continue;
+        const embeddedMap = await extractWorksheetEmbeddedImages(zip, entry.path);
+        const imagesByRow = {};
+        if (embeddedMap.size > 0 && Array.isArray(parsed._excelRowByDataRow)) {
+          parsed._excelRowByDataRow.forEach((excelRowZero, dataIdx) => {
+            const uri = embeddedMap.get(excelRowZero);
+            if (uri) imagesByRow[dataIdx] = uri;
+          });
+        }
+        sheets.push({
+          name: parsed.name,
+          headers: parsed.headers,
+          rows: parsed.rows,
+          ...(Object.keys(imagesByRow).length > 0 ? { imagesByRow } : {}),
+        });
       }
       return { format: 'xlsx', sheets };
     }
@@ -642,44 +755,55 @@ function fuzzyMatchCatalogColumns(headers) {
     variationCol: findCol([/\b(variacao|variacoes|tamanho|cor|sabor|modelo|grade|opcao|opcoes|peso|medida|variant)\b/]),
     skuCol: findCol([/\b(sku|codigo|cod|ref|referencia|ean|barcode)\b/, /\b(id_item|id)\b/]),
     stockCol: findCol([/\b(estoque|qtd|quantidade|saldo|disponivel|stock|qty)\b/]),
+    imageCol: findCol([/\b(foto|imagem|image|thumb|miniatura|url_imagem|foto_url|link_foto|img)\b/]),
   };
 }
 
-async function callOllamaJson(prompt) {
-  if (typeof fetch !== 'function') return { parsed: null, modelUsed: null };
-  for (const model of PREFERRED_OLLAMA_MODELS) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
-    try {
-      const response = await fetch(OLLAMA_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          prompt,
-          stream: false,
-          think: false,
-          keep_alive: '10m',
-          options: { temperature: 0.15, num_predict: 260 },
-        }),
-        signal: controller.signal,
-      });
-      if (!response.ok) continue;
-      const body = await response.json();
-      const rawText = String(body?.response || '').trim();
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) continue;
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed && typeof parsed === 'object') {
-        return { parsed, modelUsed: model };
-      }
-    } catch {
-      // Fall back cleanly if Ollama is offline, refused, or timed out
-    } finally {
-      clearTimeout(timer);
-    }
+const MAX_CATALOG_BATCH_ITEMS = 120;
+
+function classifyNonCatalogHeaders(headers, deterministicCols) {
+  const joined = headers.map(normalizeHeaderKey).join(' | ');
+  const looksFinancial =
+    /\b(receita|despesa|saldo|extrato|dre|contas a pagar|contas a receber|boleto|vencimento|fluxo de caixa|folha|imposto|irpf|pix enviado)\b/.test(
+      joined,
+    );
+  const hasCatalogAnchor = Boolean(deterministicCols.nameCol && deterministicCols.priceCol);
+  if (looksFinancial && !hasCatalogAnchor) {
+    return {
+      isNonCatalog: true,
+      reactiveCode: 'NON_CATALOG_FINANCIAL_SHEET',
+      message:
+        'Identificamos uma planilha financeira/fluxo de caixa com colunas como [' +
+        headers.slice(0, 4).join(', ') +
+        '] e sem lista de produtos. Por favor, envie sua tabela de catálogo com Nome e Preço.',
+    };
   }
-  return { parsed: null, modelUsed: null };
+  if (!deterministicCols.nameCol && !deterministicCols.priceCol) {
+    return {
+      isNonCatalog: true,
+      reactiveCode: 'NO_CATALOG_ITEMS_FOUND',
+      message:
+        'Não encontramos colunas reconhecíveis de Nome do Produto e Preço nos cabeçalhos [' +
+        headers.slice(0, 5).join(', ') +
+        ']. Envie uma planilha de catálogo ou renomeie as colunas.',
+    };
+  }
+  return { isNonCatalog: false };
+}
+
+function classifyImageCandidate(raw) {
+  const val = String(raw || '').trim();
+  if (!val) return { status: 'empty', url: '' };
+  if (/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(val)) {
+    return { status: 'embedded', url: val };
+  }
+  if (/^https?:\/\/[^\s"'<>]+/i.test(val)) {
+    return { status: 'public_url', url: val };
+  }
+  if (/^(file:\/\/|[a-z]:\\|\/users\/|fakepath)/i.test(val) || /\.(png|jpe?g|webp)$/i.test(val)) {
+    return { status: 'invalid_local_path', url: '' };
+  }
+  return { status: 'empty', url: '' };
 }
 
 function normalizeTextValue(raw) {
@@ -691,6 +815,92 @@ function buildSkuFromName(name, rowIndex) {
   return `${base || 'ITEM'}-${String(rowIndex + 1).padStart(3, '0')}`;
 }
 
+function findFirstPriceLikeColumnIndex(headers, rows) {
+  if (!Array.isArray(headers) || !Array.isArray(rows) || !rows.length) return -1;
+  const sample = rows.slice(0, 10);
+  for (let col = 0; col < headers.length; col += 1) {
+    let priceHits = 0;
+    for (const r of sample) {
+      const cell = String(r?.[col] ?? '').trim();
+      if (!cell) continue;
+      if (/^(?:r\$\s*)?\d{1,6}(?:[.,]\d{2})?$/i.test(cell) || /r\$\s*\d+/i.test(cell)) {
+        priceHits += 1;
+      }
+    }
+    if (priceHits >= Math.max(1, Math.floor(sample.length / 2))) {
+      return col;
+    }
+  }
+  return -1;
+}
+
+async function inferCatalogMappingWithGlm({
+  headers = [],
+  sampleRows = [],
+  storeName = '',
+  filename = '',
+  deterministicCols = {},
+}) {
+  if (!headers.length || !sampleRows.length) return null;
+  const validHeader = (col) => (col && headers.includes(String(col)) ? String(col) : null);
+  const compactSample = sampleRows.slice(0, 6).map((row) => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      const val = String(row?.[i] ?? '').trim();
+      if (val) obj[h] = val.slice(0, 80);
+    });
+    return obj;
+  });
+
+  const hasStrongDeterministic = Boolean(deterministicCols.nameCol && deterministicCols.priceCol);
+  const timeoutMs = hasStrongDeterministic ? 9000 : 18000;
+
+  try {
+    const glm = await callGlm53Json({
+      systemPrompt:
+        'Você é Especialista em Engenharia de Dados e Catálogo de Lojas BR. Sua missão é ler cabeçalhos e amostras reais de QUALQUER planilha de produtos/serviços (inclusive planilhas desorganizadas de farmácias, oficinas, lojas, clínicas, distribuidoras ou restaurantes) e mapear exatamente para o esquema padrão do sistema. Retorne APENAS JSON válido.',
+      userPrompt: JSON.stringify({
+        filename: String(filename || '').slice(0, 80),
+        storeName: String(storeName || '').slice(0, 80),
+        headers,
+        sampleRows: compactSample,
+        instruction:
+          'Responda JSON: {"isCatalogSheet":boolean,"rejectionReasonPt":string,"detectedNicheLabel":string,"columnMapping":{"nameCol":string|null,"priceCol":string|null,"categoryCol":string|null,"descriptionCol":string|null,"variationCol":string|null,"skuCol":string|null,"stockCol":string|null,"imageCol":string|null},"suggestedCategoryFixes":{}}. Use SOMENTE nomes exatos presentes em `headers` (ou null se ausente). Só marque isCatalogSheet=false se for claramente extrato financeiro, RH ou contas a pagar sem itens vendáveis.',
+      }),
+      maxTokens: 650,
+      timeoutMs,
+    });
+    if (!glm?.ok || !glm?.data || typeof glm.data !== 'object') return null;
+    const cm = glm.data.columnMapping && typeof glm.data.columnMapping === 'object' ? glm.data.columnMapping : {};
+    const rawFixes =
+      glm.data.suggestedCategoryFixes && typeof glm.data.suggestedCategoryFixes === 'object'
+        ? glm.data.suggestedCategoryFixes
+        : {};
+    const cleanFixes = {};
+    for (const [k, v] of Object.entries(rawFixes)) {
+      if (k && typeof v === 'string' && v.trim()) cleanFixes[String(k)] = v.trim().slice(0, 48);
+    }
+    return {
+      isCatalogSheet: glm.data.isCatalogSheet !== false,
+      rejectionReasonPt: String(glm.data.rejectionReasonPt || '').trim(),
+      detectedNicheLabel: String(glm.data.detectedNicheLabel || '').trim().slice(0, 80),
+      columnMapping: {
+        nameCol: validHeader(cm.nameCol),
+        priceCol: validHeader(cm.priceCol),
+        categoryCol: validHeader(cm.categoryCol),
+        descriptionCol: validHeader(cm.descriptionCol),
+        variationCol: validHeader(cm.variationCol),
+        skuCol: validHeader(cm.skuCol),
+        stockCol: validHeader(cm.stockCol),
+        imageCol: validHeader(cm.imageCol),
+      },
+      suggestedCategoryFixes: cleanFixes,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function transformCatalogData({
   filename,
   base64Content,
@@ -698,11 +908,15 @@ export async function transformCatalogData({
   headers: directHeaders,
   rows: directRows,
   businessModel = 'produtos',
+  storeName = '',
+  segment = '',
 }) {
   let headers = Array.isArray(directHeaders) ? directHeaders.map(h => String(h ?? '').trim()) : [];
   let rows = Array.isArray(directRows)
     ? directRows.map(r => (Array.isArray(r) ? r.map(c => String(c ?? '').trim()) : []))
     : [];
+  let imagesByRow = {};
+  let extraSheets = [];
   let detectedFormat = 'csv';
 
   if ((!headers.length || !rows.length) && (base64Content || rawText)) {
@@ -716,50 +930,80 @@ export async function transformCatalogData({
     if (parsed.sheets.length > 0) {
       headers = parsed.sheets[0].headers;
       rows = parsed.sheets[0].rows;
+      imagesByRow = parsed.sheets[0].imagesByRow || {};
+      extraSheets = parsed.sheets[1] ? parsed.sheets.slice(1) : [];
     }
   }
 
-  if (!headers.length) {
-    return { ok: false, error: 'Planilha vazia ou sem cabeçalho legível.' };
+  if (!headers.length || !rows.length) {
+    return {
+      ok: false,
+      reactiveCode: 'EMPTY_OR_UNREADABLE',
+      error: 'Planilha vazia ou sem linhas de produtos legíveis. Verifique se a aba principal possui cabeçalho e itens.',
+    };
   }
 
   const deterministicCols = fuzzyMatchCatalogColumns(headers);
-  const sampleRows = rows.slice(0, 5);
+  const nonCatalogCheck = classifyNonCatalogHeaders(headers, deterministicCols);
+  if (nonCatalogCheck.isNonCatalog && nonCatalogCheck.reactiveCode === 'NON_CATALOG_FINANCIAL_SHEET') {
+    return {
+      ok: false,
+      reactiveCode: nonCatalogCheck.reactiveCode,
+      detectedHeaders: headers,
+      error: nonCatalogCheck.message,
+    };
+  }
 
-  const aiPrompt = [
-    'Você é um engenheiro de dados de catálogo e-commerce.',
-    'Mapeie EXATAMENTE os nomes de colunas fornecidos para o esquema semântico JSON:',
-    '{ "nameCol": string|null, "priceCol": string|null, "categoryCol": string|null, "descriptionCol": string|null, "variationCol": string|null, "skuCol": string|null, "stockCol": string|null, "suggestedCategoryFixes": Record<string,string> }',
-    `Cabeçalhos exatos: ${JSON.stringify(headers)}`,
-    `Amostra (5 linhas): ${JSON.stringify(sampleRows)}`,
-    'Responda apenas JSON válido sem explicações.',
-  ].join('\n');
+  const glmMapping = await inferCatalogMappingWithGlm({
+    headers,
+    sampleRows: rows.slice(0, 6),
+    storeName,
+    filename,
+    deterministicCols,
+  });
 
-  const ollamaResult = await callOllamaJson(aiPrompt);
-  const aiCols = ollamaResult.parsed || {};
-  const validHeaderSet = new Set(headers);
-  const pickHeader = (aiCandidate, deterministicCandidate) =>
-    typeof aiCandidate === 'string' && validHeaderSet.has(aiCandidate)
-      ? aiCandidate
-      : deterministicCandidate;
+  if (glmMapping && glmMapping.isCatalogSheet === false && !deterministicCols.nameCol && !deterministicCols.priceCol) {
+    return {
+      ok: false,
+      reactiveCode: 'NON_CATALOG_SHEET',
+      detectedHeaders: headers,
+      error:
+        glmMapping.rejectionReasonPt ||
+        nonCatalogCheck.message ||
+        'A planilha enviada não parece conter um catálogo de produtos ou serviços.',
+    };
+  }
+
+  const gCols = glmMapping?.columnMapping || {};
+  const fallbackPriceIdx = !deterministicCols.priceCol && !gCols.priceCol ? findFirstPriceLikeColumnIndex(headers, rows) : -1;
 
   const finalMap = {
-    nameCol: pickHeader(aiCols.nameCol, deterministicCols.nameCol),
-    priceCol: pickHeader(aiCols.priceCol, deterministicCols.priceCol),
-    categoryCol: pickHeader(aiCols.categoryCol, deterministicCols.categoryCol),
-    descriptionCol: pickHeader(aiCols.descriptionCol, deterministicCols.descriptionCol),
-    variationCol: pickHeader(aiCols.variationCol, deterministicCols.variationCol),
-    skuCol: pickHeader(aiCols.skuCol, deterministicCols.skuCol),
-    stockCol: pickHeader(aiCols.stockCol, deterministicCols.stockCol),
-    suggestedCategoryFixes:
-      aiCols.suggestedCategoryFixes && typeof aiCols.suggestedCategoryFixes === 'object'
-        ? aiCols.suggestedCategoryFixes
-        : {},
+    nameCol: gCols.nameCol || deterministicCols.nameCol || null,
+    priceCol: gCols.priceCol || deterministicCols.priceCol || (fallbackPriceIdx >= 0 ? headers[fallbackPriceIdx] : null),
+    categoryCol: gCols.categoryCol || deterministicCols.categoryCol || null,
+    descriptionCol: gCols.descriptionCol || deterministicCols.descriptionCol || null,
+    variationCol: gCols.variationCol || deterministicCols.variationCol || null,
+    skuCol: gCols.skuCol || deterministicCols.skuCol || null,
+    stockCol: gCols.stockCol || deterministicCols.stockCol || null,
+    imageCol: gCols.imageCol || deterministicCols.imageCol || null,
+    suggestedCategoryFixes: glmMapping?.suggestedCategoryFixes || {},
   };
 
-  // Fallback: if nameCol still missing, pick first non-empty text column
+  if (!finalMap.nameCol && !finalMap.priceCol && headers.length >= 2) {
+    // Última tentativa apenas se houver ao menos um nome de item claro na coluna 0
+    const nonEmptyTextRows = rows.slice(0, 5).filter((r) => /[a-zA-ZÀ-ÿ]{3,}/.test(String(r?.[0] || '')));
+    if (nonEmptyTextRows.length === 0) {
+      return {
+        ok: false,
+        reactiveCode: nonCatalogCheck.reactiveCode || 'NO_CATALOG_ITEMS_FOUND',
+        detectedHeaders: headers,
+        error: nonCatalogCheck.message,
+      };
+    }
+  }
+
   if (!finalMap.nameCol && headers.length > 0) {
-    finalMap.nameCol = headers[0];
+    finalMap.nameCol = headers.find((h) => h !== finalMap.priceCol) || headers[0];
   }
 
   const idxOf = colName => (colName ? headers.indexOf(colName) : -1);
@@ -770,9 +1014,11 @@ export async function transformCatalogData({
   const variationIdx = idxOf(finalMap.variationCol);
   const skuIdx = idxOf(finalMap.skuCol);
   const stockIdx = idxOf(finalMap.stockCol);
+  const imageIdx = idxOf(finalMap.imageCol);
   const typeIdx = headers.findIndex(h => /^(tipo|item_?type|modalidade|formato)$/i.test(String(h || '').trim()));
   const durationIdx = headers.findIndex(h => /^(prazo|duracao|dura[cç][aã]o|tempo|entrega)$/i.test(String(h || '').trim()));
 
+  const mappingUsedGlm = Boolean(glmMapping && Object.values(gCols).some(Boolean));
   const mappings = [
     { targetField: 'name', sourceColumn: finalMap.nameCol },
     { targetField: 'price', sourceColumn: finalMap.priceCol },
@@ -781,17 +1027,26 @@ export async function transformCatalogData({
     { targetField: 'variation', sourceColumn: finalMap.variationCol },
     { targetField: 'sku', sourceColumn: finalMap.skuCol },
     { targetField: 'stock', sourceColumn: finalMap.stockCol },
+    { targetField: 'image', sourceColumn: finalMap.imageCol },
   ].map(entry => ({
     ...entry,
     sourceIndex: entry.sourceColumn ? headers.indexOf(entry.sourceColumn) : -1,
-    detectedBy:
-      ollamaResult.modelUsed && aiCols[`${entry.targetField}Col`] === entry.sourceColumn
-        ? 'ollama'
-        : 'deterministic',
+    detectedBy: mappingUsedGlm && Object.values(gCols).includes(entry.sourceColumn) ? 'ai-semantic' : 'deterministic',
   }));
 
+  const validRowCount = rows.filter(r => {
+    const nm = normalizeTextValue(nameIdx >= 0 ? r[nameIdx] : '');
+    return Boolean(nm && !/^[-=_*]+$/.test(nm));
+  }).length;
+  const exceedsBatchLimit = validRowCount > MAX_CATALOG_BATCH_ITEMS;
+  const rowsToProcess = rows.slice(0, MAX_CATALOG_BATCH_ITEMS);
+
+  let embeddedImagesCount = 0;
+  let publicImageUrlsCount = 0;
+  let invalidImageUrlsCount = 0;
+
   const products = [];
-  rows.forEach((row, rowIdx) => {
+  rowsToProcess.forEach((row, rowIdx) => {
     const name = normalizeTextValue(nameIdx >= 0 ? row[nameIdx] : '');
     if (!name || /^[-=_*]+$/.test(name)) return;
 
@@ -812,6 +1067,28 @@ export async function transformCatalogData({
     const stockRaw = normalizeTextValue(stockIdx >= 0 ? row[stockIdx] : '');
     const stockParsed = stockRaw ? parseInt(stockRaw.replace(/\D/g, ''), 10) : NaN;
     const stockQty = Number.isFinite(stockParsed) ? stockParsed : 10;
+
+    // Extract embedded .xlsx image or public cell image URL
+    let resolvedImageUrl = '';
+    if (imagesByRow[rowIdx]) {
+      resolvedImageUrl = imagesByRow[rowIdx];
+      embeddedImagesCount += 1;
+    } else {
+      const candidateCell =
+        imageIdx >= 0
+          ? row[imageIdx]
+          : row.find(c => /^https?:\/\/[^\s"'<>]+/i.test(String(c || '').trim())) || '';
+      const imgCheck = classifyImageCandidate(candidateCell);
+      if (imgCheck.status === 'public_url') {
+        resolvedImageUrl = imgCheck.url;
+        publicImageUrlsCount += 1;
+      } else if (imgCheck.status === 'embedded') {
+        resolvedImageUrl = imgCheck.url;
+        embeddedImagesCount += 1;
+      } else if (imgCheck.status === 'invalid_local_path') {
+        invalidImageUrlsCount += 1;
+      }
+    }
 
     const rawTypeVal = normalizeTextValue(typeIdx >= 0 ? row[typeIdx] : '');
     const prazoOuDuracao = normalizeTextValue(durationIdx >= 0 ? row[durationIdx] : '');
@@ -849,9 +1126,52 @@ export async function transformCatalogData({
       prazoOuDuracao,
       itensInclusosKit: [],
       mensagemMolde,
+      ...(resolvedImageUrl ? { imageUrl: resolvedImageUrl } : {}),
+      approvedAsset: true,
       active: true,
     });
   });
+
+  if (products.length === 0) {
+    return {
+      ok: false,
+      reactiveCode: 'NO_CATALOG_ITEMS_FOUND',
+      detectedHeaders: headers,
+      error: 'Nenhum produto válido foi extraído da planilha. Confira se os nomes não estão vazios.',
+    };
+  }
+
+  const clarifyingQuestions = [
+    {
+      id: 'flagship_sku',
+      question: `Dos ${products.length} itens importados, qual é o seu produto carro-chefe para destacarmos no topo?`,
+      options: products.slice(0, 3).map(p => ({ label: p.name, value: p.sku })),
+    },
+    ...(embeddedImagesCount + publicImageUrlsCount === 0
+      ? [
+          {
+            id: 'missing_photos',
+            question:
+              invalidImageUrlsCount > 0
+                ? `Encontramos ${invalidImageUrlsCount} caminhos locais de arquivo (que não abrem na web). Deseja buscar fotos públicas ou gerar capas com IA?`
+                : 'Sua planilha não trouxe links de imagens ou fotos embutidas. Como prefere ilustrar a vitrine?',
+            options: [
+              { label: 'Manter vitrine minimalista e subir fotos depois', value: 'clean_minimal' },
+              { label: 'Gerar fotos de estúdio com IA sob demanda', value: 'generate_ai' },
+            ],
+          },
+        ]
+      : []),
+    {
+      id: 'brand_voice',
+      question: 'Qual clima visual combina mais com o seu cliente?',
+      options: [
+        { label: 'Editorial & Minimalista', value: 'editorial_minimal' },
+        { label: 'Artesanal & Acolhedor', value: 'warm_artisan' },
+        { label: 'Direto & Alta Rotatividade Pix', value: 'bold_modern' },
+      ],
+    },
+  ];
 
   const xlsxBytes = await buildXlsxUint8Array([
     {
@@ -887,10 +1207,52 @@ export async function transformCatalogData({
     },
   ]);
 
+  const productArchetype = classifyBusinessArchetype({
+    segment: glmMapping?.detectedNicheLabel || segment || '',
+    storeName: String(storeName || ''),
+    headers,
+    products,
+  });
+  const spreadsheetSignals = extractSpreadsheetSignals({
+    headers,
+    rows: rowsToProcess,
+    products,
+    extraSheets,
+    business: { segment: String(glmMapping?.detectedNicheLabel || productArchetype.nicheLabel || segment || ''), name: String(storeName || '') },
+  });
+  const resolvedNicheLabel =
+    productArchetype.archetype !== 'varejo_geral'
+      ? productArchetype.nicheLabel
+      : glmMapping?.detectedNicheLabel || spreadsheetSignals.nicheLabel;
+  const simulatedProfile = {
+    business: { name: String(storeName || 'Sua Loja'), segment: resolvedNicheLabel },
+    catalog: { products },
+  };
+  const recommendedSubpages = buildRecommendedPagesForProfile(simulatedProfile).pages;
+  const whatsappMessageFlows = buildWorkspaceWhatsappFlows({ profile: simulatedProfile });
+
   return {
     ok: true,
-    modelUsed: ollamaResult.modelUsed || 'deterministic-fuzzy-mapper',
-    usedFallback: !ollamaResult.modelUsed,
+    reactiveCode: exceedsBatchLimit ? 'EXCEEDS_BATCH_LIMIT' : 'CATALOG_READY',
+    ...(exceedsBatchLimit
+      ? {
+          warning: `Sua planilha possui ${validRowCount} itens, acima do limite de ${MAX_CATALOG_BATCH_ITEMS} por lote. Importamos os primeiros ${MAX_CATALOG_BATCH_ITEMS} itens para abrir a vitrine instantaneamente.`,
+          totalRowsInSheet: validRowCount,
+          truncatedCount: validRowCount - MAX_CATALOG_BATCH_ITEMS,
+        }
+      : { totalRowsInSheet: validRowCount, truncatedCount: 0 }),
+    imageStats: {
+      embeddedImagesCount,
+      publicImageUrlsCount,
+      invalidImageUrlsCount,
+    },
+    clarifyingQuestions,
+    spreadsheetSignals,
+    detectedSegment: resolvedNicheLabel,
+    recommendedSubpages,
+    whatsappMessageFlows,
+    modelUsed: mappingUsedGlm ? 'zai-org/GLM-5.3' : 'deterministic-fuzzy-mapper',
+    usedFallback: !mappingUsedGlm,
     format: detectedFormat,
     columnMapping: {
       ...finalMap,
@@ -1030,17 +1392,28 @@ export async function catalogOrdersData(orders, profile) {
   }));
 
   const businessName = profile?.business?.name || 'Loja CompanyGen';
-  const aiPrompt = compactForAi.length
-    ? [
-        `Negócio: ${businessName}.`,
-        'Para cada pedido abaixo, classifique categoriaIA, prioridadeIA ("Alta"|"Média"|"Baixa") e resumoIA curto.',
-        'Responda JSON no formato: { "classifications": { "<idx>": { "categoriaIA": string, "prioridadeIA": "Alta"|"Média"|"Baixa", "resumoIA": string } } }',
-        JSON.stringify(compactForAi),
-      ].join('\n')
-    : '';
-
-  const ollamaResult = aiPrompt ? await callOllamaJson(aiPrompt) : { parsed: null, modelUsed: null };
-  const aiMap = ollamaResult.parsed?.classifications || {};
+  let glmOrdersMap = {};
+  let glmOrdersModel = null;
+  if (compactForAi.length > 0) {
+    try {
+      const glmRes = await callGlm53Json({
+        systemPrompt:
+          'Você é analista de pedidos e DRE de e-commerce BR. Para cada pedido enviado, classifique categoriaIA, prioridadeIA ("Alta"|"Média"|"Baixa") e resumoIA curto em Português. Retorne APENAS JSON válido.',
+        userPrompt: JSON.stringify({
+          storeName: businessName,
+          orders: compactForAi,
+          instruction:
+            'Responda JSON no formato: { "classifications": { "<idx>": { "categoriaIA": string, "prioridadeIA": "Alta"|"Média"|"Baixa", "resumoIA": string } } }',
+        }),
+        maxTokens: 700,
+        timeoutMs: 14000,
+      });
+      if (glmRes?.ok && glmRes?.data?.classifications && typeof glmRes.data.classifications === 'object') {
+        glmOrdersMap = glmRes.data.classifications;
+        glmOrdersModel = glmRes.model || 'zai-org/GLM-5.3';
+      }
+    } catch {}
+  }
 
   const productStats = new Map();
   let faturamentoLiquidoCents = 0;
@@ -1088,7 +1461,7 @@ export async function catalogOrdersData(orders, profile) {
     }
 
     const fallback = deterministicOrderInsight(order, totalCents, canalOrigem);
-    const aiRow = aiMap[String(idx)];
+    const aiRow = glmOrdersMap[String(idx)];
     const rawPhone = String(order.customer_jid || '').replace(/@.*$/, '');
 
     return {
@@ -1203,8 +1576,8 @@ export async function catalogOrdersData(orders, profile) {
 
   return {
     ok: true,
-    modelUsed: ollamaResult.modelUsed || 'deterministic-order-classifier',
-    usedFallback: !ollamaResult.modelUsed,
+    modelUsed: glmOrdersModel || 'deterministic-order-classifier',
+    usedFallback: !glmOrdersModel,
     summary,
     dreSummary,
     catalogedOrders,
@@ -1237,6 +1610,8 @@ export async function handleSpreadsheetRoutes(
       headers: body?.headers,
       rows: body?.rows,
       businessModel: body?.businessModel || fallbackModel,
+      storeName: body?.storeName || profileState?.current?.data?.business?.name || '',
+      segment: body?.segment || '',
     });
     if (!result.ok) {
       throw new ApiError(400, result.error || 'Não foi possível transformar a planilha.');

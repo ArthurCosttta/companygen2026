@@ -76,6 +76,39 @@ function detectMagicMimeFromBytes(bytes) {
   return '';
 }
 
+export function sanitizeImageUrl(rawUrl, options = {}) {
+  const allowDataUrl = options.allowDataUrl !== false;
+  const fallback = typeof options.fallback === 'string' ? options.fallback : '';
+  const clean = String(rawUrl ?? '').trim();
+  if (!clean) return fallback;
+  const lower = clean.toLowerCase();
+  if (
+    lower.startsWith('javascript:') ||
+    lower.startsWith('vbscript:') ||
+    lower.startsWith('data:image/svg') ||
+    lower.startsWith('data:text/html') ||
+    lower.startsWith('//') ||
+    clean.includes('..')
+  ) {
+    return fallback;
+  }
+  if (/^\/(?:media|api\/store-molde)\/[a-z0-9._~/%-]+$/i.test(clean)) {
+    return clean;
+  }
+  if (allowDataUrl && /^data:image\/(?:jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i.test(clean)) {
+    return clean;
+  }
+  try {
+    const parsed = new URL(clean);
+    if (parsed.protocol === 'https:' || (parsed.protocol === 'http:' && /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname))) {
+      return parsed.toString();
+    }
+  } catch {
+    // Reject malformed URLs
+  }
+  return fallback;
+}
+
 export function validateImageMagicBytes(input) {
   let buf = null;
 

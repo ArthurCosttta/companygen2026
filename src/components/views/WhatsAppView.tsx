@@ -159,7 +159,7 @@ export const RealWhatsAppWeb = memo(function RealWhatsAppWeb({
               className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-4 text-xs font-bold text-white hover:bg-[#1D4ED8] transition"
             >
               {copiedCmd ? <Check size={15} /> : <Copy size={15} />}
-              <span>{copiedCmd ? 'Comando copiado!' : 'Copiar comando de instalaÃ§Ã£o'}</span>
+              <span>{copiedCmd ? 'Comando copiado!' : 'Copiar comando de instalação'}</span>
             </button>
 
             <a
@@ -169,7 +169,7 @@ export const RealWhatsAppWeb = memo(function RealWhatsAppWeb({
               className="inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-xl border border-slate-300 dark:border-[#334155] bg-white dark:bg-[#111726] px-3.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-[#1E293B] transition"
             >
               <ExternalLink size={14} />
-              <span>Abrir pÃ¡gina de instalaÃ§Ã£o</span>
+              <span>Abrir página de instalação</span>
             </a>
           </div>
         </div>
@@ -192,10 +192,10 @@ export const RealWhatsAppWeb = memo(function RealWhatsAppWeb({
     <header className="cg-real-whatsapp-toolbar">
       <div className="cg-browser-controls" aria-label="Controles do WhatsApp Web">
         <button type="button" className="cg-icon-button" aria-label="Voltar" disabled={!canBack} onClick={() => webview.current?.goBack()}><ArrowLeft size={17} /></button>
-        <button type="button" className="cg-icon-button" aria-label="AvanÃ§ar" disabled={!canForward} onClick={() => webview.current?.goForward()}><ArrowRight size={17} /></button>
+        <button type="button" className="cg-icon-button" aria-label="Avançar" disabled={!canForward} onClick={() => webview.current?.goForward()}><ArrowRight size={17} /></button>
         <button type="button" className="cg-icon-button" aria-label="Atualizar WhatsApp Web" onClick={() => webview.current?.reload()}><RefreshCw className={loading ? 'cg-spin' : ''} size={17} /></button>
       </div>
-      <div className="cg-real-whatsapp-address"><i /> web.whatsapp.com <span>sessÃ£o local isolada</span></div>
+      <div className="cg-real-whatsapp-address"><i /> web.whatsapp.com <span>sessão local isolada</span></div>
     </header>
     {error && <p className="cg-wa-notice" role="alert">{error}</p>}
     <div ref={host} className="cg-real-whatsapp-host bg-white dark:bg-[#090D16]" />

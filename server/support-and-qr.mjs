@@ -16,9 +16,56 @@ const ALLOWED_REDIRECT_HOSTS = new Set([
   'companygen.store',
   'www.companygen.store',
   'app.companygen.store',
+  'companygen-app.web.app',
+  'companygen-app.firebaseapp.com',
+  'companygenai.web.app',
+  'companygenai.firebaseapp.com',
   '127.0.0.1',
   'localhost',
 ]);
+
+export function resolveBrandedServerOrigin(req) {
+  const reqHostRaw = String(req?.headers?.['x-forwarded-host'] || req?.headers?.host || '')
+    .split(',')[0]
+    .trim();
+  const reqProto =
+    String(req?.headers?.['x-forwarded-proto'] || 'https')
+      .split(',')[0]
+      .trim() || 'https';
+  const reqHost = reqHostRaw.split(':')[0].toLowerCase();
+
+  if (
+    reqHost &&
+    reqHost !== '127.0.0.1' &&
+    reqHost !== 'localhost' &&
+    !reqHost.endsWith('.run.app') &&
+    (ALLOWED_REDIRECT_HOSTS.has(reqHost) ||
+      reqHost.endsWith('.companygen.store') ||
+      reqHost.endsWith('.web.app') ||
+      reqHost.endsWith('.firebaseapp.com'))
+  ) {
+    return `https://${reqHostRaw}`;
+  }
+
+  const envOrigin = String(process.env.COMPANYGEN_URL || '')
+    .trim()
+    .replace(/\/+$/, '');
+  if (
+    envOrigin &&
+    !envOrigin.includes('.run.app') &&
+    !/127\.0\.0\.1|localhost/i.test(envOrigin)
+  ) {
+    if (reqHost.endsWith('.run.app') && envOrigin === 'https://companygen.store') {
+      return 'https://companygen-app.web.app';
+    }
+    return envOrigin;
+  }
+
+  if (reqHost === '127.0.0.1' || reqHost === 'localhost') {
+    return `${reqProto}://${reqHostRaw}`;
+  }
+  return 'https://companygen-app.web.app';
+}
 
 function isCloudTableMode() {
   if (process.env.CG_PERSISTENCE === 'local') return false;
@@ -503,6 +550,20 @@ export async function handlePublicQrRedirect(req, res, { root, readJsonFile, ato
     return true;
   }
 
+  const userAgent = String(req.headers?.['user-agent'] || '').toLowerCase();
+  const isLinkPreviewBot = /(whatsapp|facebookexternalhit|twitterbot|telegrambot|slackbot|discordbot)/i.test(userAgent);
+  if (isLinkPreviewBot) {
+    const safeTitle = String(match.label || match.title || 'Vitrine Online · CompanyGen').replace(/[<>"&]/g, '').slice(0, 90);
+    const safeDesc = String(match.description || 'Confira produtos, preços e envie seu pedido direto no WhatsApp.').replace(/[<>"&]/g, '').slice(0, 160);
+    const safeOgUrl = String(safeTarget).replace(/"/g, '&quot;');
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=120',
+    });
+    res.end(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" /><title>${safeTitle}</title><meta property="og:type" content="website" /><meta property="og:title" content="${safeTitle}" /><meta property="og:description" content="${safeDesc}" /><meta property="og:url" content="${safeOgUrl}" /><meta http-equiv="refresh" content="0;url=${safeOgUrl}" /></head><body>Redirecionando para <a href="${safeOgUrl}">${safeTitle}</a>...</body></html>`);
+    return true;
+  }
+
   res.writeHead(isLegacyAutoHeal ? 301 : 302, {
     Location: match.target_url,
     'Cache-Control': isLegacyAutoHeal ? 'public, max-age=300' : 'no-store',
@@ -695,12 +756,24 @@ export async function handleSupportAndQrClientRoutes(req, res, ctx) {
     }
 
     if (!targetUrl) {
-      const origin = String(
+      const requestedOrigin = String(
         (req.method === 'GET' ? url.searchParams.get('origin') : body?.origin) ||
           req.headers?.origin ||
-          'https://companygen.store',
-      ).replace(/\/+$/, '');
-      const base = new URL(origin.startsWith('http') ? origin : 'https://companygen.store');
+          '',
+      )
+        .trim()
+        .replace(/\/+$/, '');
+      const fallbackOrigin = resolveBrandedServerOrigin(req);
+      let safeOrigin = fallbackOrigin;
+      if (requestedOrigin && /^https?:\/\//i.test(requestedOrigin)) {
+        try {
+          const parsedReq = new URL(requestedOrigin);
+          if (!parsedReq.hostname.toLowerCase().endsWith('.run.app')) {
+            safeOrigin = parsedReq.origin;
+          }
+        } catch {}
+      }
+      const base = new URL(safeOrigin);
       base.searchParams.set('view', 'store');
       if (slug) base.searchParams.set('loja', slug);
       else if (user?.id) base.searchParams.set('u', user.id);
@@ -711,7 +784,7 @@ export async function handleSupportAndQrClientRoutes(req, res, ctx) {
       throw new ApiError(400, 'Link inválido para gerar QR Code.');
     }
 
-    const parsedTarget = new URL(targetUrl, 'https://companygen.store');
+    const parsedTarget = new URL(targetUrl, resolveBrandedServerOrigin(req));
     if ((targetMode === 'product' || safeSku) && safeSku) {
       parsedTarget.searchParams.set('item', safeSku);
     }
@@ -825,7 +898,7 @@ export async function createQrBatchPackage({
   batchName = 'Lote Campanha',
   count = 10,
   credits = 100,
-  originBase = 'https://companygen.store',
+  originBase = 'https://companygen-app.web.app',
   createdBy = 'admin',
   readJsonFile,
   atomicWriteJson,
@@ -833,7 +906,7 @@ export async function createQrBatchPackage({
   const safeCount = Math.max(1, Math.min(50, Math.round(Number(count) || 10)));
   const safeCredits = Math.max(10, Math.min(100000, Math.round(Number(credits) || 100)));
   const cleanBatch = String(batchName || 'Lote Campanha').trim().slice(0, 60);
-  const cleanOrigin = String(originBase || 'https://companygen.store').replace(/\/+$/, '');
+  const cleanOrigin = String(originBase || 'https://companygen-app.web.app').replace(/\/+$/, '');
   const batchId = `batch-${Date.now().toString(36)}-${randomBytes(2).toString('hex')}`;
   const slugBase = normalizeQrSlug(cleanBatch) || 'lote';
   const now = new Date().toISOString();

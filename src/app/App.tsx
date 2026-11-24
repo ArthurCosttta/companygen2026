@@ -1,5 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { MotionConfig } from 'motion/react';
 import {
   AlertTriangle,
   LogOut,
@@ -39,6 +40,7 @@ import {
   authenticatedFetch,
   clearLocalShowcaseSession,
   getSupportReadonlySession,
+  isGuestAccountUser,
   readLocalShowcaseSession,
   setSupportReadonlySession,
   supabase,
@@ -48,11 +50,20 @@ import {
 import { syncConnectedWhatsappProfile } from '@/services/whatsapp-profile-sync';
 import { AuthFlowView } from '@/components/auth/AuthFlowView';
 import {
+  GuestClaimEmailModal,
+  PENDING_GUEST_CLAIM_KEY,
+} from '@/components/auth/GuestClaimEmailModal';
+import {
   CommandPaletteModal,
   Sidebar,
   Topbar,
   type SidebarTab,
 } from '@/components/shell';
+import { RouteErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { lazyNamed } from '@/utils/chunk-recovery';
+import { isLowSpecEnabled, syncLowSpecClassOnHtml } from '@/utils/performance-mode';
+import { recordTelemetryBreadcrumb, updateTelemetryAppContext } from '@/utils/crash-telemetry';
+import { FloatingTopPill } from '@/components/shell/FloatingTopPill';
 import { HighSaturationNotificationBar } from '@/components/shell/HighSaturationNotificationBar';
 import {
   ActionButton,
@@ -66,45 +77,61 @@ import {
 } from '@/components/ui';
 import { GlobalAiAssistantWidget } from '@/components/ui/GlobalAiAssistantWidget';
 import {
-  buildDraftFromProfile,
+  clearExpressFichaDraft,
   ContextualHelpModal,
-  ExpressFichaWizardModal,
-  GuidedChecklistCard,
   readExpressFichaDraft,
-  StoreCreatedSuccessModal,
-  WelcomeModal,
-  writeExpressFichaDraft,
+  type GenerateFullStorefrontResponse,
+  type IgnitionSubmissionPayload,
   type OnboardingHelpTopic,
-  type OnboardingWizardStep,
 } from '@/components/views/onboarding';
-const ArchetypeComposerView = lazy(() =>
-  import('@/components/views/studio').then((m) => ({ default: m.ArchetypeComposerView })),
+const OnboardingIgnitionView = lazyNamed(
+  () => import('@/components/views/onboarding/OnboardingIgnitionView'),
+  'OnboardingIgnitionView',
+);
+const OnboardingSynthesisStage = lazyNamed(
+  () => import('@/components/views/onboarding/OnboardingSynthesisStage'),
+  'OnboardingSynthesisStage',
+);
+import type { CatalogProduct } from '@/schemas/profile.schema';
+const ArchetypeComposerView = lazyNamed(
+  () => import('@/components/views/studio'),
+  'ArchetypeComposerView',
 );
 import {
   buildStorePublicUrl,
-  CustomerStorefrontView,
-  ProductCatalogTable,
   readImageFileAsDataUrl,
-} from '@/components/views/storefront';
-import {
-  WhatsAppConnectionView,
-  type WhatsappDadosResponse,
-} from '@/components/views/whatsapp';
-const OrdersKanbanView = lazy(() =>
-  import('@/components/views/orders').then((m) => ({ default: m.OrdersKanbanView })),
+} from '@/components/views/storefront/storefront-utils';
+const CustomerStorefrontView = lazyNamed(
+  () => import('@/components/views/storefront/CustomerStorefrontView'),
+  'CustomerStorefrontView',
 );
-const SettingsView = lazy(() =>
-  import('@/components/views/settings').then((m) => ({ default: m.SettingsView })),
+const EditorialStoreControlView = lazyNamed(
+  () => import('@/components/views/storefront/EditorialStoreControlView'),
+  'EditorialStoreControlView',
+);
+import type { WhatsappDadosResponse } from '@/components/views/whatsapp';
+const WhatsAppConnectionView = lazyNamed(
+  () => import('@/components/views/whatsapp/WhatsAppConnectionView'),
+  'WhatsAppConnectionView',
+);
+const OrdersKanbanView = lazyNamed(
+  () => import('@/components/views/orders'),
+  'OrdersKanbanView',
+);
+const SettingsView = lazyNamed(
+  () => import('@/components/views/settings'),
+  'SettingsView',
 );
 import { AccessCodeView } from '@/components/views/access/AccessCodeView';
-const AdminConsoleView = lazy(() =>
-  import('@/components/views/admin/AdminConsoleView').then((m) => ({ default: m.AdminConsoleView })),
+const AdminConsoleView = lazyNamed(
+  () => import('@/components/views/admin/AdminConsoleView'),
+  'AdminConsoleView',
 );
-const CheckoutPlansView = lazy(() =>
-  import('@/components/views/checkout/CheckoutPlansView').then((m) => ({ default: m.CheckoutPlansView })),
+const CheckoutPlansView = lazyNamed(
+  () => import('@/components/views/checkout/CheckoutPlansView'),
+  'CheckoutPlansView',
 );
 import { getDesktopBridge } from '@/hooks/useWebviewWhatsappResponder';
-import { runWithFichaModalLayout } from '@/utils/fichaModalLayout';
 
 type PreviewKind = 'preview' | 'public' | null;
 
@@ -140,7 +167,7 @@ function readInitialRoute(): 'access' | 'checkout' | null {
     if (pathname === '/access' || route === 'access') {
       return 'access';
     }
-    if (/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(codeParam)) {
+    if (/^AI10-[A-Z0-9]{3,5}-[A-Z0-9]{3,5}$/i.test(codeParam)) {
       try {
         const validatedRaw = sessionStorage.getItem('cg_validated_invite');
         const validatedParsed = validatedRaw ? (JSON.parse(validatedRaw) as { code?: string }) : null;
@@ -366,11 +393,18 @@ function PublicStorefrontRoute({
           <span className="font-mono text-[11px] opacity-90">{lookupKey}</span>
         </div>
       ) : null}
-      <CustomerStorefrontView
-        profile={publicProfile}
-        ownerId={lookupKey}
-        mode="public"
-      />
+      <RouteErrorBoundary
+        routeName="Vitrine Pública"
+        onBack={() => {
+          window.location.href = '/';
+        }}
+      >
+        <CustomerStorefrontView
+          profile={publicProfile}
+          ownerId={lookupKey}
+          mode="public"
+        />
+      </RouteErrorBoundary>
     </div>
   );
 }
@@ -383,17 +417,28 @@ export function App() {
     readPublicStoreRouteTarget(),
   );
 
+  const [lowSpecActive, setLowSpecActive] = useState<boolean>(() => isLowSpecEnabled());
+
   useEffect(() => {
+    setLowSpecActive(syncLowSpecClassOnHtml());
+    const onLowSpecChange = () => setLowSpecActive(isLowSpecEnabled());
+    window.addEventListener('companygen:low-spec-change', onLowSpecChange);
     try {
+      const qs = new URLSearchParams(window.location.search);
+      const qTheme = (qs.get('theme') || qs.get('cg_theme') || '').toLowerCase();
+      if (qTheme === 'light' || qTheme === 'dark') {
+        window.localStorage.setItem('cg_theme', qTheme);
+      }
       const saved = window.localStorage.getItem('cg_theme');
-      const shouldDark =
-        saved === 'dark' ||
-        (!saved && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+      const shouldDark = qTheme === 'dark' ? true : qTheme === 'light' ? false : saved === 'dark';
       document.documentElement.classList.toggle('dark', Boolean(shouldDark));
       window.dispatchEvent(new CustomEvent('companygen:theme-change'));
     } catch {
       // Ignore storage access failures
     }
+    return () => {
+      window.removeEventListener('companygen:low-spec-change', onLowSpecChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -552,11 +597,9 @@ export function App() {
     })();
     return (
       <ToastProvider>
-        <Suspense fallback={<div className="p-6 text-xs text-slate-400">Carregando módulo...</div>}>
-        <CheckoutPlansView
-          userId={user?.id}
-          initialSubTab={initialCheckoutTab}
-          onBackToApp={() => {
+        <RouteErrorBoundary
+          routeName="Créditos & Planos"
+          onBack={() => {
             setCurrentRoute(null);
             try {
               const url = new URL(window.location.href);
@@ -566,8 +609,24 @@ export function App() {
               window.history.pushState({}, '', url.toString());
             } catch {}
           }}
-        />
-        </Suspense>
+        >
+          <Suspense fallback={<div className="p-6 text-xs text-slate-400">Carregando módulo...</div>}>
+          <CheckoutPlansView
+            userId={user?.id}
+            initialSubTab={initialCheckoutTab}
+            onBackToApp={() => {
+              setCurrentRoute(null);
+              try {
+                const url = new URL(window.location.href);
+                url.pathname = '/';
+                url.searchParams.delete('route');
+                url.searchParams.delete('tab');
+                window.history.pushState({}, '', url.toString());
+              } catch {}
+            }}
+          />
+          </Suspense>
+        </RouteErrorBoundary>
       </ToastProvider>
     );
   }
@@ -589,32 +648,35 @@ export function App() {
   }
 
   return (
-    <ToastProvider>
-      <CreditAlertCenterModal onOpenPlans={() => setCurrentRoute('checkout')} />
-      {user === undefined ? (
-        <main
-          className="flex min-h-dvh w-full items-center justify-center bg-[#F8FAFC] p-6"
-          role="status"
-          aria-label="Validando sessão"
-        >
-          <div className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <SkeletonBlock className="h-6 w-40" />
-            <SkeletonBlock className="h-4 w-64" />
-            <SkeletonBlock className="h-12 w-full" rounded="xl" />
-          </div>
-        </main>
-      ) : preAuthMaturity.maturityState === 'ESTADO_0' || !user ? (
-        <AuthFlowView />
-      ) : (
-        <StudioApp key={user.id} user={user} />
-      )}
-    </ToastProvider>
+    <MotionConfig reducedMotion={lowSpecActive ? 'always' : 'user'}>
+      <ToastProvider>
+        <CreditAlertCenterModal onOpenPlans={() => setCurrentRoute('checkout')} />
+        {user === undefined ? (
+          <main
+            className="flex min-h-dvh w-full items-center justify-center bg-[#F8FAFC] p-6"
+            role="status"
+            aria-label="Validando sessão"
+          >
+            <div className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <SkeletonBlock className="h-6 w-40" />
+              <SkeletonBlock className="h-4 w-64" />
+              <SkeletonBlock className="h-12 w-full" rounded="xl" />
+            </div>
+          </main>
+        ) : preAuthMaturity.maturityState === 'ESTADO_0' || !user ? (
+          <AuthFlowView />
+        ) : (
+          <StudioApp key={user.id} user={user} />
+        )}
+      </ToastProvider>
+    </MotionConfig>
   );
 }
 
 function StudioApp({ user }: { user: User }) {
   const { showToast } = useToast();
   const [creditBalance, setCreditBalance] = useState<number>(0);
+  const [claimEmailModalOpen, setClaimEmailModalOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [bannedReason, setBannedReason] = useState('');
   const inviteRedeemAttemptedRef = useRef(false);
@@ -631,7 +693,10 @@ function StudioApp({ user }: { user: User }) {
   const notificationsState = useHighSaturationNotifications({
     owner: user?.id,
     enabled: Boolean(user?.id),
+    pollIntervalMs: activeTab === 'whatsapp' ? 5000 : 18000,
   });
+
+  // Modulos secundarios carregados sob demanda (sem bloquear boot ou travar PCs com pouca RAM)
   const [archetypeComposerOpen, setArchetypeComposerOpen] = useState(false);
 
   // Runtime WhatsApp state (Baileys worker + embedded Electron WebView identity)
@@ -642,22 +707,17 @@ function StudioApp({ user }: { user: User }) {
   }>();
   const whatsappProfileSync = useRef('');
 
-  // Onboarding modals state
-  const [welcomeOpen, setWelcomeOpen] = useState(false);
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const [wizardStep, setWizardStep] = useState<OnboardingWizardStep>(1);
+  // Onboarding state (TELA 01 Ignição + TELA 02 Síntese Real)
+  const [onboardingStage, setOnboardingStage] = useState<'none' | 'ignition' | 'synthesis'>('none');
+  const [ignitionDraftSnapshot, setIgnitionDraftSnapshot] =
+    useState<Partial<IgnitionSubmissionPayload> | null>(null);
+  const [synthesisCtx, setSynthesisCtx] = useState<{
+    clientJobId: string;
+    profile: BusinessProfile;
+    seedProducts: CatalogProduct[];
+    nicheSearchQuery?: string;
+  } | null>(null);
   const [helpTopic, setHelpTopic] = useState<OnboardingHelpTopic | null>(null);
-  const [successModalState, setSuccessModalState] = useState<{
-    open: boolean;
-    storeName: string;
-    publicSlug?: string;
-    productsCount: number;
-  }>({
-    open: false,
-    storeName: '',
-    productsCount: 0,
-  });
-  const initialWelcomeCheckedRef = useRef(false);
   const visitRecordedRef = useRef(false);
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -687,9 +747,18 @@ function StudioApp({ user }: { user: User }) {
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
+      const qs = new URLSearchParams(window.location.search);
+      const qTheme = (qs.get('theme') || qs.get('cg_theme') || '').toLowerCase();
+      if (qTheme === 'light') {
+        localStorage.setItem('cg_theme', 'light');
+        return false;
+      }
+      if (qTheme === 'dark') {
+        localStorage.setItem('cg_theme', 'dark');
+        return true;
+      }
       const saved = localStorage.getItem('cg_theme');
-      if (saved) return saved === 'dark';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return saved === 'dark';
     } catch {
       return false;
     }
@@ -706,11 +775,18 @@ function StudioApp({ user }: { user: User }) {
   }, [isDarkMode]);
 
   const handleLogout = useCallback(() => {
+    setIsAdmin(false);
+    setActiveTab('store');
+    setProfileSnap(null);
     setSupportReadonlySession(null);
     clearLocalShowcaseSession();
     try {
       sessionStorage.removeItem('cg_validated_invite');
       sessionStorage.removeItem(`cg_welcome_dismissed_${user.id}`);
+      sessionStorage.removeItem(`cg_post_onboarding_tips_${user.id}`);
+      localStorage.removeItem(`cg_ignition_wizard_draft_${user.id}`);
+      localStorage.removeItem(`cg_global_ai_msgs_${user.id}`);
+      localStorage.removeItem('companygen_active_workspace_user');
     } catch {}
     void getDesktopBridge()?.setTrayStatus?.({
       active: false,
@@ -772,6 +848,51 @@ function StudioApp({ user }: { user: User }) {
     let active = true;
 
     async function syncInviteAndBalance() {
+      const isGuest = isGuestAccountUser(user);
+      if (!isGuest) {
+        try {
+          const pendingRaw =
+            sessionStorage.getItem(PENDING_GUEST_CLAIM_KEY) ||
+            localStorage.getItem(PENDING_GUEST_CLAIM_KEY);
+          if (pendingRaw) {
+            const pending = JSON.parse(pendingRaw) as { guestToken?: string; code?: string };
+            if (pending?.guestToken || pending?.code) {
+              const claimRes = await authenticatedFetch(
+                '/api/access/claim-email',
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    guestToken: pending.guestToken || '',
+                    code: pending.code || '',
+                  }),
+                },
+                user.id,
+              );
+              const claimJson = await claimRes.json().catch(() => null);
+              if (claimRes.ok && claimJson?.ok) {
+                sessionStorage.removeItem(PENDING_GUEST_CLAIM_KEY);
+                localStorage.removeItem(PENDING_GUEST_CLAIM_KEY);
+                sessionStorage.removeItem('cg_validated_invite');
+                clearLocalShowcaseSession();
+                if (active) {
+                  if (typeof claimJson.balance === 'number') setCreditBalance(claimJson.balance);
+                  setLoadVersion((v) => v + 1);
+                  showToast({
+                    type: 'success',
+                    message: 'Loja convidada vinculada ao seu e-mail com sucesso!',
+                    durationMs: 4500,
+                  });
+                }
+              } else if (claimRes.status >= 400 && claimRes.status < 500) {
+                sessionStorage.removeItem(PENDING_GUEST_CLAIM_KEY);
+                localStorage.removeItem(PENDING_GUEST_CLAIM_KEY);
+              }
+            }
+          }
+        } catch {}
+      }
+
       let pendingInviteCode = '';
       try {
         const rawInvite = sessionStorage.getItem('cg_validated_invite');
@@ -838,6 +959,7 @@ function StudioApp({ user }: { user: User }) {
       }
 
       try {
+        setIsAdmin(false);
         const adminRes = await authenticatedFetch('/api/admin/status', {}, user.id);
         if (active) {
           if (adminRes.status === 403) {
@@ -850,7 +972,9 @@ function StudioApp({ user }: { user: User }) {
             }
           } else if (adminRes.ok) {
             const statusJson = await adminRes.json().catch(() => null);
-            setIsAdmin(Boolean(statusJson?.isAdmin));
+            const verifiedUserEmail = String(user.email || statusJson?.email || '').trim().toLowerCase();
+            const isStrictAdmin = Boolean(statusJson?.isAdmin) && verifiedUserEmail === 'arthurpolarbuy@gmail.com';
+            setIsAdmin(isStrictAdmin);
             if (statusJson?.banned) {
               setBannedReason('Sua conta foi suspensa pelo administrador.');
             }
@@ -864,12 +988,14 @@ function StudioApp({ user }: { user: User }) {
     const onBalanceUpdate = (ev: Event) => {
       const detail = (ev as CustomEvent<{ balance?: number }>).detail;
       if (detail && typeof detail.balance === 'number') {
-        setCreditBalance(detail.balance);
+        setCreditBalance((prev) => (prev === detail.balance ? prev : detail.balance!));
       } else {
         void authenticatedFetch('/api/credits/balance', undefined, user.id)
           .then((r) => (r.ok ? r.json() : null))
           .then((j) => {
-            if (active && typeof j?.balance === 'number') setCreditBalance(j.balance);
+            if (active && typeof j?.balance === 'number') {
+              setCreditBalance((prev) => (prev === j.balance ? prev : j.balance));
+            }
           })
           .catch(() => {});
       }
@@ -888,7 +1014,7 @@ function StudioApp({ user }: { user: User }) {
         if (balRes.ok && active) {
           const balJson = await balRes.json().catch(() => null);
           if (typeof balJson?.balance === 'number') {
-            setCreditBalance(balJson.balance);
+            setCreditBalance((prev) => (prev === balJson.balance ? prev : balJson.balance));
           }
         }
       } catch {
@@ -953,7 +1079,18 @@ function StudioApp({ user }: { user: User }) {
       const res = await authenticatedFetch('/api/whatsapp/api/dados', undefined, user.id);
       if (res.ok) {
         const json = (await res.json()) as WhatsappDadosResponse;
-        setWhatsapp(json);
+        setWhatsapp((prev) => {
+          if (
+            prev &&
+            prev.conectado === json.conectado &&
+            prev.status === json.status &&
+            prev.numeroBot === json.numeroBot &&
+            prev.qr === json.qr
+          ) {
+            return prev;
+          }
+          return json;
+        });
         whatsappErrorStreakRef.current = 0;
         return true;
       }
@@ -981,8 +1118,9 @@ function StudioApp({ user }: { user: User }) {
     const scheduleNext = (ok: boolean) => {
       if (!active) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const baseDelay = activeTab === 'whatsapp' ? 5000 : 15000;
       const delay = ok
-        ? 5000
+        ? baseDelay
         : Math.min(30000, 5000 * Math.pow(2, Math.max(0, whatsappErrorStreakRef.current - 1)));
       clearPollTimer();
       timer = window.setTimeout(() => {
@@ -1108,48 +1246,13 @@ function StudioApp({ user }: { user: User }) {
     runtimeStatus,
   });
 
-  // Open WelcomeModal automatically on first visit when in ESTADO_1 (not dismissed in this session)
-  useEffect(() => {
-    if (maturity.isBootstrapping || !profileSnap || initialWelcomeCheckedRef.current) return;
-    initialWelcomeCheckedRef.current = true;
-
-    if (maturity.maturityState === 'ESTADO_1' && !previewKind) {
-      try {
-        const dismissed = sessionStorage.getItem(`cg_welcome_dismissed_${user.id}`) === '1';
-        if (!dismissed) {
-          setWelcomeOpen(true);
-        }
-      } catch {
-        setWelcomeOpen(true);
-      }
-    }
-  }, [maturity.isBootstrapping, maturity.maturityState, previewKind, profileSnap, user.id]);
-
-  const dismissWelcomeRemember = useCallback(
-    (open: boolean) => {
-      setWelcomeOpen(open);
-      if (!open) {
-        try {
-          sessionStorage.setItem(`cg_welcome_dismissed_${user.id}`, '1');
-        } catch {
-          // Ignore storage errors
-        }
-      }
-    },
-    [user.id],
-  );
-
-  const openWizard = useCallback((step: OnboardingWizardStep = 1) => {
-    runWithFichaModalLayout(() => {
-      setWizardStep(step);
-      setWizardOpen(true);
-    });
-  }, []);
-
-  const handleWizardOpenChange = useCallback((nextOpen: boolean) => {
-    runWithFichaModalLayout(() => {
-      setWizardOpen(nextOpen);
-    });
+  const openCheckoutRoute = useCallback(() => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('route', 'checkout');
+      window.history.pushState({}, '', url.toString());
+    } catch {}
+    window.dispatchEvent(new CustomEvent('companygen:open-checkout'));
   }, []);
 
   const handleProfileUpdated = useCallback(
@@ -1159,29 +1262,6 @@ function StudioApp({ user }: { user: User }) {
     },
     [refreshDashboard],
   );
-
-  const handlePublishStore = useCallback(async () => {
-    const snap = await updateBusinessProfile(
-      (draft) => {
-        draft.onboarding.fichaCompleted = true;
-        draft.onboarding.storeGenerated = true;
-        draft.publishedStore = {
-          ...draft.publishedStore,
-          published: true,
-        };
-      },
-      { publish: true },
-      user.id,
-    );
-    handleProfileUpdated(snap);
-    const activeCount = (snap.profile.catalog?.products ?? []).filter((p) => p.active !== false).length;
-    setSuccessModalState({
-      open: true,
-      storeName: snap.profile.business.name || 'Minha Loja',
-      publicSlug: snap.profile.publishedStore?.publicSlug,
-      productsCount: activeCount,
-    });
-  }, [handleProfileUpdated, user.id]);
 
   const enterPreview = useCallback((kind: Exclude<PreviewKind, null> = 'preview') => {
     setPreviewKind(kind);
@@ -1214,19 +1294,154 @@ function StudioApp({ user }: { user: User }) {
     }
   }, []);
 
+  const handleStartSynthesis = useCallback(
+    async (payload: IgnitionSubmissionPayload) => {
+      const savedSnap = await updateBusinessProfile(
+        (draft) => {
+          const alreadyOperational = Boolean(
+            draft.onboarding?.storeGenerated ||
+              draft.publishedStore?.published ||
+              (draft.business?.name && (draft.catalog?.products?.length || 0) > 0),
+          );
+          draft.onboarding = {
+            ...draft.onboarding,
+            fichaCompleted: alreadyOperational ? Boolean(draft.onboarding?.fichaCompleted) : true,
+            storeGenerated: alreadyOperational ? Boolean(draft.onboarding?.storeGenerated) : false,
+          };
+          draft.business = {
+            ...draft.business,
+            name: payload.businessName,
+            segment: payload.segment,
+            description: payload.description,
+            ...(payload.address !== undefined ? { address: payload.address } : {}),
+            ...(payload.goalText !== undefined ? { experienceGoal: payload.goalText } : {}),
+          };
+          draft.brand = {
+            ...draft.brand,
+            instagram: payload.instagramHandle || '',
+            primaryColor: payload.primaryColor || draft.brand.primaryColor || '#09090B',
+            accentColor: payload.accentColor || draft.brand.accentColor || '#2563EB',
+            logoUrl: payload.logoUrl || draft.brand.logoUrl || '',
+            ...(payload.storefrontPhotoUrl !== undefined ? { storefrontPhotoUrl: payload.storefrontPhotoUrl } : {}),
+          };
+          draft.whatsapp = {
+            ...draft.whatsapp,
+            phoneE164: payload.whatsappDigits,
+            displayPhone: payload.whatsappDisplay,
+            verifiedOrigin: 'manual',
+          };
+          draft.payment = {
+            ...draft.payment,
+            pixKey: payload.pixKey,
+          };
+          draft.catalog = {
+            products: payload.importedProducts,
+          };
+          if (payload.marketingConcept) {
+            draft.marketingConcept = {
+              brandVoice: payload.marketingConcept.brandVoice,
+              coreProductSku: payload.marketingConcept.coreProductSku,
+              buyerPersona: payload.marketingConcept.buyerPersona,
+              mainObjection: payload.marketingConcept.mainObjection,
+              buyingTrigger: payload.marketingConcept.buyingTrigger,
+              growthGoal: payload.marketingConcept.growthGoal,
+              heroLayout: payload.marketingConcept.heroLayout,
+              showcaseLayout: payload.marketingConcept.showcaseLayout,
+              gridDensity: payload.marketingConcept.gridDensity,
+              monthlyHooks: draft.marketingConcept?.monthlyHooks || [],
+            };
+          }
+        },
+        undefined,
+        user.id,
+      );
+
+      handleProfileUpdated(savedSnap);
+      try {
+        window.sessionStorage.setItem(
+          `cg_ignition_opts_${payload.clientJobId}`,
+          JSON.stringify({
+            layoutArchetype: payload.layoutArchetype,
+            addons: payload.addons,
+            briefAnswers: payload.briefAnswers,
+            questionsJson: payload.questionsJson,
+            estimatedCredits: payload.estimatedCredits,
+            extraPages: payload.extraPages || [],
+          }),
+        );
+      } catch {
+        // Ignore sessionStorage restrictions
+      }
+      setIgnitionDraftSnapshot(payload);
+      setSynthesisCtx({
+        clientJobId: payload.clientJobId,
+        profile: savedSnap.profile,
+        seedProducts: payload.importedProducts,
+        nicheSearchQuery: payload.nicheSearchQuery,
+      });
+      setOnboardingStage('synthesis');
+    },
+    [handleProfileUpdated, user.id],
+  );
+
+  const handleSynthesisCompleted = useCallback(
+    (publishedSnap: ProfileSnapshot, result: GenerateFullStorefrontResponse) => {
+      handleProfileUpdated(publishedSnap);
+      if (typeof result.balanceAfter === 'number') {
+        setCreditBalance(result.balanceAfter);
+      }
+      clearExpressFichaDraft(user.id);
+      try {
+        sessionStorage.setItem(`cg_post_onboarding_tips_${user.id}`, '1');
+      } catch {}
+      setOnboardingStage('none');
+      setSynthesisCtx(null);
+      setIgnitionDraftSnapshot(null);
+      showToast({
+        type: 'success',
+        message: 'Vitrine publicada! Veja as sugestões da IA no painel para os próximos passos.',
+        durationMs: 4200,
+      });
+      enterPreview('preview');
+    },
+    [enterPreview, handleProfileUpdated, showToast, user.id],
+  );
+
   const handleSelectTab = useCallback(
     (tab: SidebarTab) => {
+      if (tab === 'admin' && !isAdmin) return;
+      recordTelemetryBreadcrumb('navigation', `Aba -> ${tab}`);
       setPreviewKind(null);
       setArchetypeComposerOpen(false);
+      if (tab !== 'store') {
+        setOnboardingStage('none');
+      }
       if (tab === 'dashboard') {
         void refreshDashboard();
       }
       setActiveTab(tab);
     },
-    [refreshDashboard],
+    [isAdmin, refreshDashboard],
   );
 
-  const hasDraft = useMemo(() => Boolean(readExpressFichaDraft(user.id)), [user.id, wizardOpen]);
+  useEffect(() => {
+    const prof = profileSnap?.profile;
+    updateTelemetryAppContext({
+      activeTab,
+      onboardingStep: onboardingStage !== 'none' ? onboardingStage : 'completed',
+      storeName: prof?.business?.name || '',
+      segment: prof?.business?.segment || '',
+      productsCount: Array.isArray(prof?.catalog?.products) ? prof.catalog.products.length : 0,
+      onboardingCompleted: Boolean(prof?.onboarding?.fichaCompleted),
+      published: Boolean(prof?.publishedStore?.published),
+      whatsappConnected: Boolean(whatsapp?.connected || browserWhatsapp?.connected),
+    });
+  }, [activeTab, browserWhatsapp?.connected, onboardingStage, profileSnap, whatsapp?.connected]);
+
+  const hasDraft = useMemo(
+    () => Boolean(readExpressFichaDraft(user.id) || ignitionDraftSnapshot),
+    [user.id, ignitionDraftSnapshot],
+  );
   const { isOffline } = useNetworkAndDraftGuard({
     isDirty: hasDraft,
     onSaveDraft: () => {
@@ -1264,7 +1479,7 @@ function StudioApp({ user }: { user: User }) {
             <ActionButton
               variant="primary"
               size={44}
-              fullWidth
+              className="flex-1"
               leftIcon={<RefreshCw className="size-4" />}
               onClick={() => setLoadVersion((n) => n + 1)}
             >
@@ -1273,7 +1488,7 @@ function StudioApp({ user }: { user: User }) {
             <ActionButton
               variant="secondary"
               size={44}
-              fullWidth
+              className="flex-1"
               leftIcon={<LogOut className="size-4" />}
               onClick={handleLogout}
             >
@@ -1338,6 +1553,23 @@ function StudioApp({ user }: { user: User }) {
   const isStoreOperationReady =
     maturity.maturityState === 'ESTADO_3' || maturity.maturityState === 'ESTADO_4';
   const isDesktop = Boolean(getDesktopBridge()?.isDesktop);
+  const showFullScreenOnboarding =
+    !previewKind &&
+    activeTab === 'store' &&
+    (!isStoreOperationReady || onboardingStage === 'ignition' || onboardingStage === 'synthesis');
+  const showEditorialStoreCanvas =
+    !previewKind &&
+    activeTab === 'store' &&
+    isStoreOperationReady &&
+    !archetypeComposerOpen &&
+    onboardingStage === 'none';
+  const showSharedFloatingTopPill =
+    !previewKind &&
+    isStoreOperationReady &&
+    !showFullScreenOnboarding &&
+    !archetypeComposerOpen &&
+    (activeTab === 'store' || activeTab === 'whatsapp' || activeTab === 'dashboard' || activeTab === 'settings');
+  const hideLegacyChrome = showFullScreenOnboarding || showEditorialStoreCanvas || showSharedFloatingTopPill;
 
   return (
     <div
@@ -1347,11 +1579,63 @@ function StudioApp({ user }: { user: User }) {
           : 'flex h-dvh w-full overflow-hidden bg-[#F8FAFC] text-[#0F172A]'
       }
     >
+      {previewKind !== 'public' ? (
+        <HighSaturationNotificationBar
+          notifications={notificationsState.notifications}
+          waitingHumanCount={notificationsState.waitingHumanCount}
+          isMuted={notificationsState.isMuted}
+          muteRemainingMinutes={notificationsState.muteRemainingMinutes}
+          notificationPermission={notificationsState.notificationPermission}
+          onRequestMobilePermission={() => {
+            void notificationsState.requestMobilePermission();
+          }}
+          onMute15Min={notificationsState.muteFor15Min}
+          onUnmute={notificationsState.unmute}
+          onAckEvent={(eventId, action, item) => {
+            const act = action || 'ack';
+            void notificationsState
+              .ackNotification({
+                eventId,
+                customerPhone: item?.customerPhone || '',
+                customerJid: item?.customerJid || '',
+                action: act,
+              })
+              .then((res) => {
+                if (!res?.ok) {
+                  showToast({
+                    type: 'error',
+                    message: String(res?.error || 'Não foi possível concluir essa ação na fila do WhatsApp.'),
+                  });
+                  return;
+                }
+                if (act === 'resume_ai') {
+                  showToast({
+                    type: 'success',
+                    message: 'Conversa devolvida para a IA Sofia com sucesso.',
+                  });
+                } else if (act === 'assume_human') {
+                  showToast({
+                    type: 'amber',
+                    message: 'Conversa assumida por humano. A IA não responderá neste chat.',
+                  });
+                }
+              });
+          }}
+          onOpenQueueDrawer={() => {
+            if (previewKind) exitPreview();
+            handleSelectTab('whatsapp');
+          }}
+          fixed
+        />
+      ) : null}
+
+      <Suspense fallback={null}>
       {previewKind ? (
         <div
           data-testid="vitrine-overlay-persistent"
           className="relative z-50 min-h-dvh w-full bg-[#F3F8FE]"
         >
+          <RouteErrorBoundary routeName="Prévia da Vitrine" onBack={exitPreview}>
           <CustomerStorefrontView
             profile={profile}
             ownerId={user.id}
@@ -1421,8 +1705,10 @@ function StudioApp({ user }: { user: User }) {
                 : undefined
             }
           />
+          </RouteErrorBoundary>
         </div>
       ) : null}
+      </Suspense>
 
       <div
         className="flex h-dvh w-full overflow-hidden"
@@ -1438,60 +1724,54 @@ function StudioApp({ user }: { user: User }) {
             : undefined
         }
       >
-        <Sidebar
-          storeName={storeName}
-          activeTab={activeTab}
-          onSelectTab={handleSelectTab}
-          onOpenSupport={() => setSupportModalOpen(true)}
-          connectionPhaseInfo={connectionPhaseInfo}
-          pendingOrdersCount={pendingOrdersCount}
-          waitingHumanCount={notificationsState.waitingHumanCount}
-          isAdmin={isAdmin}
-          onLogout={handleLogout}
-          electronHealth={{
-            isDesktop,
-            trayActive: isDesktop,
-            soundEnabled: !notificationsState.isMuted,
-            updateReadyVersion,
-            onInstallUpdate: () => {
-              void getDesktopBridge()?.installDesktopUpdate?.();
-            },
-          }}
-        />
+        {!hideLegacyChrome ? (
+          <Sidebar
+            storeName={storeName}
+            activeTab={activeTab}
+            onSelectTab={handleSelectTab}
+            onOpenSupport={() => setSupportModalOpen(true)}
+            connectionPhaseInfo={connectionPhaseInfo}
+            pendingOrdersCount={pendingOrdersCount}
+            waitingHumanCount={notificationsState.waitingHumanCount}
+            isAdmin={isAdmin}
+            onLogout={handleLogout}
+            electronHealth={{
+              isDesktop,
+              trayActive: isDesktop,
+              soundEnabled: !notificationsState.isMuted,
+              updateReadyVersion,
+              onInstallUpdate: () => {
+                void getDesktopBridge()?.installDesktopUpdate?.();
+              },
+            }}
+          />
+        ) : null}
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Centro de Notificações Estilo Celular (2 estados: principal + fila expansível + som imediato) */}
-        <HighSaturationNotificationBar
-          notifications={notificationsState.notifications}
-          waitingHumanCount={notificationsState.waitingHumanCount}
-          onAckEvent={(eventId, action) => {
-            void notificationsState.ackNotification({ eventId, action: action || 'ack' });
-          }}
-          onOpenQueueDrawer={() => handleSelectTab('whatsapp')}
-          fixed
-        />
 
-        {/* Topbar 3 Zonas: Breadcrumb, Ctrl+K, Saldo Tabular, Ver Vitrine, Tema e Menu Ajuda (?) */}
-        <Topbar
-          storeName={storeName}
-          activeTab={activeTab}
-          creditBalance={creditBalance}
-          isCatalogEmpty={isCatalogEmpty}
-          isDarkMode={isDarkMode}
-          onToggleDarkMode={() => setIsDarkMode((v) => !v)}
-          onOpenCheckout={() => {
-            try {
-              const url = new URL(window.location.href);
-              url.searchParams.set('route', 'checkout');
-              window.history.pushState({}, '', url.toString());
-            } catch {}
-            window.dispatchEvent(new CustomEvent('companygen:open-checkout'));
-          }}
-          onOpenPreview={() => enterPreview('preview')}
-          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-          onOpenSupport={() => setSupportModalOpen(true)}
-          onOpenTour={() => setWelcomeOpen(true)}
-        />
+        {!hideLegacyChrome ? (
+          <>
+            {/* Topbar 3 Zonas: Breadcrumb, Ctrl+K, Saldo Tabular, Ver Vitrine, Tema e Menu Ajuda (?) */}
+            <Topbar
+              storeName={storeName}
+              activeTab={activeTab}
+              creditBalance={creditBalance}
+              isCatalogEmpty={isCatalogEmpty}
+              isDarkMode={isDarkMode}
+              isGuestSession={isGuestAccountUser(user)}
+              onClaimGuestEmail={() => setClaimEmailModalOpen(true)}
+              onToggleDarkMode={() => setIsDarkMode((v) => !v)}
+              onOpenCheckout={openCheckoutRoute}
+              onOpenPreview={() => enterPreview('preview')}
+              onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+              onOpenSupport={() => setSupportModalOpen(true)}
+              onOpenTour={() => {
+                setActiveTab('store');
+                setOnboardingStage('ignition');
+              }}
+            />
+          </>
+        ) : null}
 
         {/* Banner Sticky Modo Suporte Somente Leitura (40px --cg-error) */}
         {supportReadonly ? (
@@ -1532,11 +1812,64 @@ function StudioApp({ user }: { user: User }) {
         ) : null}
 
         {/* Main Workspace Stage (extra bottom padding on mobile for 64px fixed bar) */}
-        <main className="flex-1 min-h-0 overflow-y-auto pb-20 min-[769px]:pb-0">
+        <main className={hideLegacyChrome ? 'flex-1 min-h-0 overflow-y-auto bg-[#F8FAFC]' : 'flex-1 min-h-0 overflow-y-auto pb-20 min-[769px]:pb-0'}>
+          {showSharedFloatingTopPill ? (
+            <FloatingTopPill
+              activeTab={activeTab}
+              onSelectTab={handleSelectTab}
+              onOpenVitrine={() => enterPreview('preview')}
+              isOnline={Boolean(profile.publishedStore?.published)}
+              isAdmin={isAdmin}
+              pendingOrdersCount={pendingOrdersCount}
+              waitingHumanCount={notificationsState.waitingHumanCount}
+              creditBalance={creditBalance}
+              onOpenCheckout={openCheckoutRoute}
+              onLogout={handleLogout}
+            />
+          ) : null}
+          <RouteErrorBoundary
+            routeName="Painel Principal"
+            onBack={() => {
+              setActiveTab('store');
+              setOnboardingStage('none');
+            }}
+          >
           <Suspense fallback={<div className="p-6 text-xs text-slate-400">Carregando módulo...</div>}>
-          {/* TAB 1: Minha Loja */}
+          {/* TAB 1: Minha Loja (Onboarding Tela Cheia ou Centro Editorial Imagem 1) */}
           {!previewKind && activeTab === 'store' &&
-            (archetypeComposerOpen && isStoreOperationReady ? (
+            (onboardingStage === 'synthesis' && synthesisCtx ? (
+              <OnboardingSynthesisStage
+                ownerId={user.id}
+                clientJobId={synthesisCtx.clientJobId}
+                initialProfile={synthesisCtx.profile}
+                seedProducts={synthesisCtx.seedProducts}
+                nicheSearchQuery={synthesisCtx.nicheSearchQuery}
+                onCompleted={handleSynthesisCompleted}
+                onBackToIgnition={() => {
+                  setSynthesisCtx(null);
+                  setOnboardingStage('ignition');
+                }}
+                onOpenCheckout={openCheckoutRoute}
+              />
+            ) : !isStoreOperationReady || onboardingStage === 'ignition' ? (
+              <OnboardingIgnitionView
+                profile={profile}
+                ownerId={user.id}
+                userEmail={user.email || ''}
+                creditBalance={creditBalance}
+                initialValues={ignitionDraftSnapshot}
+                onStartSynthesis={handleStartSynthesis}
+                onLogout={handleLogout}
+                onOpenLogin={handleLogout}
+                onCancelToStore={
+                  isStoreOperationReady
+                    ? () => {
+                        setOnboardingStage('none');
+                      }
+                    : undefined
+                }
+              />
+            ) : archetypeComposerOpen ? (
               <div className="h-full min-h-[70vh] w-full">
                 <ArchetypeComposerView
                   profile={profile}
@@ -1552,52 +1885,28 @@ function StudioApp({ user }: { user: User }) {
                 />
               </div>
             ) : (
-              <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
-                <GuidedChecklistCard
-                  profile={profile}
-                  maturityState={maturity.maturityState}
-                  connectionPhase={connectionPhaseInfo.phase}
-                  owner={user.id}
-                  hasDraft={hasDraft}
-                  isWizardOpen={wizardOpen}
-                  onOpenExpressWizard={openWizard}
-                  onOpenProductStep={() => openWizard(7)}
-                  onOpenPixStep={() => openWizard(8)}
-                  onPublishStore={handlePublishStore}
-                  onStorePublished={(snap) => {
-                    handleProfileUpdated(snap);
-                    const activeCount = (snap.profile.catalog?.products ?? []).filter(
-                      (p) => p.active !== false,
-                    ).length;
-                    setSuccessModalState({
-                      open: true,
-                      storeName: snap.profile.business.name || 'Minha Loja',
-                      publicSlug: snap.profile.publishedStore?.publicSlug,
-                      productsCount: activeCount,
-                    });
-                  }}
-                  onConnectWhatsapp={() => setActiveTab('whatsapp')}
-                  onOpenStorefront={() => enterPreview('preview')}
-                  onOpenHelp={(topic) => setHelpTopic(topic ?? 'general')}
-                />
-
-                {isStoreOperationReady ? (
-                  <ProductCatalogTable
-                    profile={profile}
-                    revision={revision}
-                    owner={user.id}
-                    runtimeStatus={runtimeStatus}
-                    onProfileUpdated={handleProfileUpdated}
-                    onOpenCustomerPreview={() => enterPreview('preview')}
-                    onOpenSettings={() => setActiveTab('settings')}
-                    onOpenWhatsApp={() => setActiveTab('whatsapp')}
-                    onOpenArchetypeComposer={() => setArchetypeComposerOpen(true)}
-                  />
-                ) : null}
-              </div>
+              <EditorialStoreControlView
+                profile={profile}
+                dashboard={dashboard}
+                ownerId={user.id}
+                whatsappConnected={connectionPhaseInfo.isLiveReady}
+                pendingOrdersCount={pendingOrdersCount}
+                waitingHumanCount={notificationsState.waitingHumanCount}
+                creditBalance={creditBalance}
+                hideTopPill={showSharedFloatingTopPill}
+                isAdmin={isAdmin}
+                onSelectTab={handleSelectTab}
+                onOpenVitrine={() => enterPreview('preview')}
+                onOpenArchetypeComposer={() => setArchetypeComposerOpen(true)}
+                onOpenCheckout={openCheckoutRoute}
+                onRedoOnboarding={() => setOnboardingStage('ignition')}
+                onProfileUpdated={handleProfileUpdated}
+                onLogout={handleLogout}
+              />
             ))}
 
-          {/* TAB 2: WhatsApp (mantido montado permanentemente sem desmontar ao alternar para Vitrine ou outras abas) */}
+          {/* TAB 2: WhatsApp (montado em background apenas no Desktop Electron ou quando aberto no Web) */}
+          {isDesktop || activeTab === 'whatsapp' ? (
           <div
             data-testid="whatsapp-persistent-mount"
             aria-hidden={activeTab !== 'whatsapp' || Boolean(previewKind)}
@@ -1611,6 +1920,8 @@ function StudioApp({ user }: { user: User }) {
                     top: 0,
                     width: '1024px',
                     height: '768px',
+                    visibility: 'hidden',
+                    contain: 'strict',
                     opacity: 0.01,
                     pointerEvents: 'none',
                     zIndex: -1,
@@ -1636,20 +1947,19 @@ function StudioApp({ user }: { user: User }) {
             ) : null}
 
             <div className="flex-1 min-h-0">
-              {isDesktop || activeTab === 'whatsapp' ? (
-                <WhatsAppConnectionView
-                  userId={user.id}
-                  profile={profile}
-                  whatsappData={whatsapp}
-                  onRefresh={refreshWhatsappStatus}
-                  onStatusChange={setWhatsapp}
-                  onBrowserIdentity={setBrowserWhatsapp}
-                  notificationState={notificationsState}
-                  onNavigateOrders={() => handleSelectTab('dashboard')}
-                />
-              ) : null}
+              <WhatsAppConnectionView
+                userId={user.id}
+                profile={profile}
+                whatsappData={whatsapp}
+                onRefresh={refreshWhatsappStatus}
+                onStatusChange={setWhatsapp}
+                onBrowserIdentity={setBrowserWhatsapp}
+                notificationState={notificationsState}
+                onNavigateOrders={() => handleSelectTab('dashboard')}
+              />
             </div>
           </div>
+          ) : null}
 
           {/* TAB 3: Pedidos */}
           {activeTab === 'dashboard' && (
@@ -1659,11 +1969,12 @@ function StudioApp({ user }: { user: User }) {
                   <EmptyStateCard
                     icon={<ShoppingBag className="size-7" />}
                     title="Seus pedidos aparecerão aqui"
-                    description="Complete os dados iniciais da loja e cadastre pelo menos 1 produto em Minha Loja para liberar o painel de pedidos e vendas manuais."
+                    description="Complete os dados iniciais da loja em Minha Loja para liberar o painel de pedidos e vendas."
                     ctaLabel="Completar Minha Loja"
-                    onCta={() => setActiveTab('store')}
-                    secondaryLabel="Abrir Assistente Guiado"
-                    onSecondary={() => openWizard(1)}
+                    onCta={() => {
+                      setActiveTab('store');
+                      setOnboardingStage('ignition');
+                    }}
                   />
                 </div>
               ) : (
@@ -1696,22 +2007,22 @@ function StudioApp({ user }: { user: User }) {
               onStoreReset={() => {
                 setArchetypeComposerOpen(false);
                 setPreviewKind(null);
+                setSynthesisCtx(null);
                 setActiveTab('store');
-                openWizard(1);
+                setOnboardingStage('ignition');
               }}
-              onOpenCheckout={() => {
-                try {
-                  const url = new URL(window.location.href);
-                  url.searchParams.set('route', 'checkout');
-                  window.history.pushState({}, '', url.toString());
-                } catch {}
-                window.dispatchEvent(new CustomEvent('companygen:open-checkout'));
-              }}
+              onOpenCheckout={openCheckoutRoute}
               onLogout={handleLogout}
-              onOpenExpressWizard={openWizard}
+              onOpenExpressWizard={() => {
+                setActiveTab('store');
+                setOnboardingStage('ignition');
+              }}
               onOpenWhatsApp={() => setActiveTab('whatsapp')}
               onOpenPreview={() => enterPreview('preview')}
-              onOpenWelcome={() => setWelcomeOpen(true)}
+              onOpenWelcome={() => {
+                setActiveTab('store');
+                setOnboardingStage('ignition');
+              }}
               onOpenHelp={(topic) => setHelpTopic(topic ?? 'general')}
             />
           )}
@@ -1728,71 +2039,10 @@ function StudioApp({ user }: { user: User }) {
             </div>
           )}
           </Suspense>
+          </RouteErrorBoundary>
         </main>
         </div>
       </div>
-
-      {/* Onboarding & Help Modals (TELA 01..12) */}
-      <WelcomeModal
-        open={welcomeOpen}
-        onOpenChange={dismissWelcomeRemember}
-        storeName={profile.business.name}
-        ownerEmail={user.email}
-        hasDraft={hasDraft}
-        initialTrack={profile.onboarding?.preferredTrack ?? 'full_guided'}
-        onSelectTrack={(track) => {
-          dismissWelcomeRemember(false);
-          const existingDraft = readExpressFichaDraft(user.id) || buildDraftFromProfile(profile, 1);
-          writeExpressFichaDraft({ ...existingDraft, preferredTrack: track }, user.id);
-          void updateBusinessProfile(
-            (draft) => {
-              draft.onboarding.preferredTrack = track;
-            },
-            undefined,
-            user.id,
-          )
-            .then(handleProfileUpdated)
-            .catch(() => {});
-          if (track === 'whatsapp_first') {
-            setActiveTab('whatsapp');
-          } else {
-            setActiveTab('store');
-          }
-        }}
-        onStartExpressWizard={() => {
-          dismissWelcomeRemember(false);
-          setActiveTab('store');
-        }}
-        onContinueDraft={() => {
-          dismissWelcomeRemember(false);
-          setActiveTab('store');
-        }}
-        onExploreFirst={() => dismissWelcomeRemember(false)}
-        onOpenHelp={() => setHelpTopic('general')}
-      />
-
-      <ExpressFichaWizardModal
-        open={wizardOpen}
-        onOpenChange={handleWizardOpenChange}
-        profile={profile}
-        owner={user.id}
-        initialStep={wizardStep}
-        onProfileUpdated={handleProfileUpdated}
-        onCompleted={(snap, meta) => {
-          handleProfileUpdated(snap);
-          if (meta.published) {
-            const activeCount = (snap.profile.catalog?.products ?? []).filter(
-              (p) => p.active !== false,
-            ).length;
-            setSuccessModalState({
-              open: true,
-              storeName: snap.profile.business.name || 'Minha Loja',
-              publicSlug: snap.profile.publishedStore?.publicSlug,
-              productsCount: activeCount,
-            });
-          }
-        }}
-      />
 
       <ContextualHelpModal
         open={helpTopic !== null}
@@ -1802,63 +2052,30 @@ function StudioApp({ user }: { user: User }) {
         topic={helpTopic ?? 'general'}
       />
 
-      <StoreCreatedSuccessModal
-        open={successModalState.open}
-        onOpenChange={(open) =>
-          setSuccessModalState((prev) => ({ ...prev, open }))
-        }
-        storeName={successModalState.storeName}
-        publicSlug={successModalState.publicSlug}
-        ownerId={user.id}
-        whatsappConnected={connectionPhaseInfo.isLiveReady}
-        productsCount={successModalState.productsCount}
-        primaryColor={profile.brand?.primaryColor}
-        accentColor={profile.brand?.accentColor}
-        logoUrl={profile.brand?.logoUrl}
-        onOpenStorefront={() => {
-          setSuccessModalState((prev) => ({ ...prev, open: false }));
-          enterPreview('preview');
-        }}
-        onSimulateFirstOrder={() => {
-          setSuccessModalState((prev) => ({ ...prev, open: false }));
-          enterPreview('preview');
-        }}
-        onConnectWhatsapp={() => {
-          setSuccessModalState((prev) => ({ ...prev, open: false }));
-          setActiveTab('whatsapp');
-        }}
-        onContinueToPanel={() => {
-          setSuccessModalState((prev) => ({ ...prev, open: false }));
-          setActiveTab('store');
-        }}
-      />
-
-      <CommandPaletteModal
-        open={commandPaletteOpen}
-        onOpenChange={setCommandPaletteOpen}
-        isAdmin={isAdmin}
-        isDarkMode={isDarkMode}
-        isCatalogEmpty={isCatalogEmpty}
-        products={(profile.catalog?.products ?? []).map((p) => ({
-          id: p.id,
-          name: p.name,
-          priceCents: p.priceCents,
-        }))}
-        onSelectTab={handleSelectTab}
-        onOpenCheckout={() => {
-          try {
-            const url = new URL(window.location.href);
-            url.searchParams.set('route', 'checkout');
-            window.history.pushState({}, '', url.toString());
-          } catch {}
-          window.dispatchEvent(new CustomEvent('companygen:open-checkout'));
-        }}
-        onOpenPreview={() => enterPreview('preview')}
-        onOpenSupport={() => setSupportModalOpen(true)}
-        onToggleDarkMode={() => setIsDarkMode((v) => !v)}
-        onOpenTour={() => setWelcomeOpen(true)}
-        onLogout={handleLogout}
-      />
+      {!hideLegacyChrome ? (
+        <CommandPaletteModal
+          open={commandPaletteOpen}
+          onOpenChange={setCommandPaletteOpen}
+          isAdmin={isAdmin}
+          isDarkMode={isDarkMode}
+          isCatalogEmpty={isCatalogEmpty}
+          products={(profile.catalog?.products ?? []).map((p) => ({
+            id: p.id,
+            name: p.name,
+            priceCents: p.priceCents,
+          }))}
+          onSelectTab={handleSelectTab}
+          onOpenCheckout={openCheckoutRoute}
+          onOpenPreview={() => enterPreview('preview')}
+          onOpenSupport={() => setSupportModalOpen(true)}
+          onToggleDarkMode={() => setIsDarkMode((v) => !v)}
+          onOpenTour={() => {
+            setActiveTab('store');
+            setOnboardingStage('ignition');
+          }}
+          onLogout={handleLogout}
+        />
+      ) : null}
 
       <SupportTicketModal
         open={supportModalOpen}
@@ -1867,13 +2084,34 @@ function StudioApp({ user }: { user: User }) {
         storeName={storeName}
       />
 
+      {isGuestAccountUser(user) ? (
+        <GuestClaimEmailModal
+          open={claimEmailModalOpen}
+          onOpenChange={setClaimEmailModalOpen}
+          guestToken={readLocalShowcaseSession()?.token || ''}
+          inviteCode={readLocalShowcaseSession()?.code || ''}
+          currentCredits={creditBalance}
+          storeName={storeName !== 'Minha Loja' ? storeName : undefined}
+          onClaimed={({ balance }) => {
+            if (typeof balance === 'number') setCreditBalance(balance);
+            setLoadVersion((v) => v + 1);
+          }}
+        />
+      ) : null}
+
       {!previewKind ? (
         <GlobalAiAssistantWidget
+          userId={user.id}
           activeTab={activeTab}
+          isOnboarding={showFullScreenOnboarding}
           storeName={storeName}
           creditBalance={creditBalance}
           onOpenSupport={() => setSupportModalOpen(true)}
-          onNavigateTab={(tab) => setActiveTab(tab)}
+          onNavigateTab={(tab) => handleSelectTab(tab)}
+          onRefreshData={() => {
+            setLoadVersion((v) => v + 1);
+            void refreshDashboard();
+          }}
         />
       ) : null}
     </div>

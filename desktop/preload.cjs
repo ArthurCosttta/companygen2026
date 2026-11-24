@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('companygenDesktop', Object.freeze({
   readWhatsAppIdentity: () => ipcRenderer.invoke('companygen:whatsapp-identity'),
   pollWhatsAppInbox: () => ipcRenderer.invoke('companygen:whatsapp-poll-inbox'),
   extractWhatsAppAudio: (payload) => ipcRenderer.invoke('companygen:whatsapp-extract-audio', payload),
+  extractWhatsAppImage: (payload) => ipcRenderer.invoke('companygen:whatsapp-extract-image', payload),
   sendWhatsAppReply: (payload) => ipcRenderer.invoke('companygen:whatsapp-send-reply', payload),
   repairWhatsAppWebview: () => ipcRenderer.invoke('companygen:whatsapp-repair'),
   logoutWhatsAppWebview: () => ipcRenderer.invoke('companygen:whatsapp-logout'),

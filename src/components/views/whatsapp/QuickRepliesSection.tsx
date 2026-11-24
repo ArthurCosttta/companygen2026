@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Check, Copy, MessageSquareText, Pencil, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { Check, Copy, MessageSquareText, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import {
   ActionButton,
   EmptyStateCard,
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui';
 import type { BusinessProfile } from '@/schemas/profile.schema';
 import { authenticatedFetch } from '@/services/supabase-client';
+import { WhatsappMessageFlowsPanel } from './WhatsappMessageFlowsPanel';
 
 export interface QuickReplyTemplate {
   id: string;
@@ -472,6 +473,8 @@ export function QuickRepliesSection({
       aria-label="Biblioteca de Respostas Rápidas"
       className="flex flex-col gap-4"
     >
+      <WhatsappMessageFlowsPanel profile={profile} owner={owner} compact={compact} />
+
       <div className={compact ? 'flex flex-col gap-2.5' : 'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'}>
         <div className="relative flex-1 min-w-0">
           <Search
@@ -500,11 +503,9 @@ export function QuickRepliesSection({
       </div>
 
       {!hasCustomTemplates && !loading && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-[#BFDBFE] dark:border-blue-500/30 bg-[#EFF6FF] dark:bg-blue-500/10 px-3.5 py-2.5 text-xs text-[#1D4ED8] dark:text-blue-300">
-          <Sparkles className="mt-0.5 size-4 shrink-0 text-[#F59E0B]" aria-hidden="true" />
+        <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-600">
           <span>
-            Exibindo 3 modelos prontos da loja (Boas-vindas, Chave Pix e Rastreio). Copie em um
-            clique ou crie novas mensagens personalizadas.
+            3 respostas rápidas prontas para copiar (Boas-vindas, Chave Pix e Rastreio).
           </span>
         </div>
       )}

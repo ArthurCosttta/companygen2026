@@ -28,15 +28,6 @@ function escapeHtml(raw: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function escapeJsAttr(raw: string): string {
-  return escapeHtml(
-    String(raw || '')
-      .replace(/\\/g, '\\\\')
-      .replace(/'/g, "\\'")
-      .replace(/\r|\n|\u2028|\u2029/g, ' '),
-  );
-}
-
 function isRealPhoto(url?: string): boolean {
   const s = String(url || '').trim();
   return Boolean(s && !s.startsWith('data:image/svg+xml'));
@@ -258,20 +249,31 @@ async function resolveImageAsUint8Array(
   if (!url) return null;
   if (/^data:image\/svg\+xml/i.test(url)) return null;
   if (url.startsWith('data:image/')) {
-    const match = url.match(/^data:image\/(png|jpe?g|webp|gif|avif);base64,([a-z0-9+/=\s]+)$/i);
-    if (!match) return null;
-    const extRaw = match[1].toLowerCase().replace('jpeg', 'jpg');
-    const binary = atob(match[2].replace(/\s+/g, ''));
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return { ext: extRaw || 'png', bytes };
+    try {
+      const match = url.match(/^data:image\/(png|jpe?g|webp|gif|avif);base64,([a-z0-9+/=\s_-]+)$/i);
+      if (!match) return null;
+      const extRaw = match[1].toLowerCase().replace('jpeg', 'jpg');
+      const normalizedB64 = match[2].replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
+      const binary = atob(normalizedB64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      return { ext: extRaw || 'png', bytes };
+    } catch {
+      return null;
+    }
   }
   if (/\.svg(?:[?#].*)?$/i.test(url)) return null;
   try {
     const fetchUrl = url.startsWith('/media/') && owner ? `/api/whatsapp${url}` : url;
+    const timeoutSignal =
+      typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+        ? AbortSignal.timeout(4500)
+        : undefined;
     const res = fetchUrl.startsWith('/api/') && owner
-      ? await authenticatedFetch(fetchUrl, { method: 'GET' }, owner).catch(() => fetch(fetchUrl))
-      : await fetch(fetchUrl);
+      ? await authenticatedFetch(fetchUrl, { method: 'GET', signal: timeoutSignal }, owner).catch(() =>
+          fetch(fetchUrl, { signal: timeoutSignal }),
+        )
+      : await fetch(fetchUrl, { signal: timeoutSignal });
     if (!res.ok) return null;
     const contentType = (res.headers.get('content-type') || 'image/jpeg').toLowerCase();
     if (contentType.includes('svg')) return null;
@@ -319,7 +321,15 @@ export async function buildFaithfulStorefrontZip({
           const pagePaths: string[] = Array.from(
             new Set([
               ...(hasV9Sections ? ['index.html'] : []),
-              ...(Array.isArray(ir.pages) ? ir.pages.map((p: { filename?: string }) => String(p.filename || 'index.html')) : []),
+              ...(Array.isArray(ir.pages)
+                ? ir.pages.map((p: { filename?: string; slug?: string }) =>
+                    p?.filename
+                      ? String(p.filename)
+                      : p?.slug
+                        ? `pages/${String(p.slug).replace(/^pages\//, '').replace(/\.html$/i, '')}.html`
+                        : 'index.html',
+                  )
+                : []),
             ]),
           );
           const assetPaths: string[] = Array.isArray(stateData.generatedAssets) ? stateData.generatedAssets : [];
@@ -559,8 +569,7 @@ body {
 }
 .header {
   position: sticky; top: 0; z-index: 30;
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  backdrop-filter: blur(10px);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 .header-inner {
@@ -727,25 +736,40 @@ body {
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex:1;max-width:440px">
         <input id="search-input" class="search-input" type="search" placeholder="Buscar no catálogo..." />
-        <button type="button" class="btn btn-accent" onclick="document.getElementById('cart-drawer').classList.add('open')">Sacola (<span id="cart-count">0</span>)</button>
+        <button type="button" class="btn btn-accent" data-cg-open-cart>Sacola (<span id="cart-count">0</span>)</button>
       </div>
     </div>
   </header>`);
     } else if (sec.type === 'HeroSection') {
+      const atomicRole = String((v9Doc as unknown as { atomicBlueprint?: { sections?: Array<{ tuple?: string[] }> } })?.atomicBlueprint?.sections?.find((s) => s?.tuple?.[0] === sec.id)?.tuple?.[1] || '');
+      const isCenteredHero = cfg.variant === 'centered' || atomicRole === 'hero_centered';
       const heroBgInline = customSecBg
         ? `style="background-image:linear-gradient(100deg,${tokens.surfaceAlt}EE,${tokens.surfaceAlt}C8),url('${customSecBg}');background-size:cover;background-position:center;"`
         : '';
       const rightCol = effectiveHeroSrc
         ? `<img class="hero-media" src="${effectiveHeroSrc}" alt="${escapeHtml(storeName)}" />`
         : `<div class="hero-signature-card">
-            <span class="badge">Destaques do Catálogo</span>
+            <strong style="font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-muted)">Destaques do Catálogo</strong>
             ${exportProducts.slice(0, 2).map((sp) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 10px;background:var(--surface-alt);border-radius:10px;font-size:13px"><strong>${escapeHtml(sp.name)}</strong><span>${escapeHtml(sp.priceFormatted)}</span></div>`).join('')}
           </div>`;
-      sectionHtmlParts.push(`
+      if (isCenteredHero) {
+        sectionHtmlParts.push(`
+  <section class="section">
+    <div class="hero-box" ${heroBgInline} style="grid-template-columns:1fr;text-align:center;">
+      <div style="max-width:680px;margin:0 auto">
+        <h1 class="hero-title">${escapeHtml(cfg.title || storeName)}</h1>
+        ${cfg.subtitle ? `<p class="hero-sub" style="margin-inline:auto">${escapeHtml(cfg.subtitle)}</p>` : ''}
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:center">
+          <a href="#catalog-section" class="btn btn-accent">${escapeHtml(cfg.primaryCta?.label || 'Ver catálogo')}</a>
+        </div>
+      </div>
+    </div>
+  </section>`);
+      } else {
+        sectionHtmlParts.push(`
   <section class="section">
     <div class="hero-box" ${heroBgInline}>
       <div>
-        ${cfg.eyebrow ? `<span class="badge">${escapeHtml(cfg.eyebrow)}</span>` : ''}
         <h1 class="hero-title">${escapeHtml(cfg.title || storeName)}</h1>
         ${cfg.subtitle ? `<p class="hero-sub">${escapeHtml(cfg.subtitle)}</p>` : ''}
         <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
@@ -756,6 +780,7 @@ body {
       <div>${rightCol}</div>
     </div>
   </section>`);
+      }
     } else if (sec.type === 'DifferentialsStrip') {
       sectionHtmlParts.push(`
   <section class="section">
@@ -772,13 +797,12 @@ body {
       sectionHtmlParts.push(`
   <section class="section">
     <div class="panel" ${builderBg}>
-      <span class="badge">${escapeHtml(cfg.eyebrow || 'Experiência')}</span>
-      <h2 style="font-family:var(--font-display);margin:8px 0 4px">${escapeHtml(cfg.title || 'Simulador')}</h2>
+      <h2 style="font-family:var(--font-display);margin:4px 0 4px">${escapeHtml(cfg.title || 'Simulador')}</h2>
       <p style="font-size:13px;color:var(--ink-muted);margin:0 0 14px">${escapeHtml(cfg.subtitle || '')}</p>
       <div id="builder-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div>
       <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
         <strong id="builder-summary">Subtotal: R$ 0,00</strong>
-        <button type="button" class="btn btn-accent" onclick="commitBuilder()">${escapeHtml(cfg.primaryAction?.label || 'Adicionar seleção à sacola')}</button>
+        <button type="button" class="btn btn-accent" data-cg-commit-builder>${escapeHtml(cfg.primaryAction?.label || 'Adicionar seleção à sacola')}</button>
       </div>
     </div>
   </section>`);
@@ -796,12 +820,11 @@ body {
       sectionHtmlParts.push(`
   <section class="section" id="booking-panel">
     <div class="panel" style="background:var(--card)">
-      <span class="badge">${escapeHtml(cfg.eyebrow || 'Atendimento')}</span>
-      <h2 style="font-family:var(--font-display);margin:8px 0 12px">${escapeHtml(cfg.title || 'Fale com a loja')}</h2>
+      <h2 style="font-family:var(--font-display);margin:4px 0 12px">${escapeHtml(cfg.title || 'Fale com a loja')}</h2>
       <div class="chips" style="margin-bottom:14px">
-        ${(Array.isArray(cfg.slots) ? cfg.slots : ['Hoje · 17:00', 'Amanhã · 10:00']).map((sl: string) => `<button type="button" class="chip" onclick="selectSlot('${escapeJsAttr(sl)}', this)">${escapeHtml(sl)}</button>`).join('')}
+        ${(Array.isArray(cfg.slots) ? cfg.slots : ['Hoje · 17:00', 'Amanhã · 10:00']).map((sl: string) => `<button type="button" class="chip" data-cg-slot="${escapeHtml(sl)}">${escapeHtml(sl)}</button>`).join('')}
       </div>
-      <button type="button" class="btn btn-accent" onclick="sendBookingWhatsapp()">${escapeHtml(cfg.ctaLabel || 'Confirmar no WhatsApp')}</button>
+      <button type="button" class="btn btn-accent" data-cg-send-booking>${escapeHtml(cfg.ctaLabel || 'Confirmar no WhatsApp')}</button>
     </div>
   </section>`);
     } else if (sec.type === 'RichFooter') {
@@ -848,14 +871,14 @@ function formatBRL(c){ return 'R$ ' + ((Number(c)||0)/100).toFixed(2).replace('.
 
 function renderProductCard(p){
   const mono = escapeHtml(String(p.name||'').slice(0,2).toUpperCase());
-  const pidAttr = escapeJsAttr(p.id);
+  const pidAttr = escapeHtml(p.id);
   const imgSrc = escapeHtml(p.imageSrc);
   if (STORE_DATA.layoutVariant === 'bistro_menu_rows') {
-    const media = p.imageSrc ? '<img class="card-bistro-img" src="' + imgSrc + '" alt="' + escapeHtml(p.name) + '" />' : '<div class="card-bistro-mono">' + mono + '</div>';
-    return '<article class="card-bistro">' + media + '<div style="flex:1;min-width:0"><small style="color:var(--accent);font-weight:700">' + escapeHtml(p.category) + '</small><h3 class="card-title">' + escapeHtml(p.name) + '</h3>' + (p.description ? '<p class="card-desc">' + escapeHtml(p.description) + '</p>' : '') + '<div class="price">' + escapeHtml(p.priceFormatted) + '</div></div><button type="button" class="btn btn-accent" style="border-radius:999px;width:44px;height:44px;padding:0" onclick="addCart(\\'' + pidAttr + '\\')">+</button></article>';
+    const media = p.imageSrc ? '<img class="card-bistro-img" loading="lazy" decoding="async" src="' + imgSrc + '" alt="' + escapeHtml(p.name) + '" />' : '<div class="card-bistro-mono">' + mono + '</div>';
+    return '<article class="card-bistro">' + media + '<div style="flex:1;min-width:0"><small style="color:var(--accent);font-weight:700">' + escapeHtml(p.category) + '</small><h3 class="card-title">' + escapeHtml(p.name) + '</h3>' + (p.description ? '<p class="card-desc">' + escapeHtml(p.description) + '</p>' : '') + '<div class="price">' + escapeHtml(p.priceFormatted) + '</div></div><button type="button" class="btn btn-accent" style="border-radius:999px;width:44px;height:44px;padding:0" data-cg-add-cart="' + pidAttr + '">+</button></article>';
   }
-  const media = p.imageSrc ? '<img class="card-thumb" src="' + imgSrc + '" alt="' + escapeHtml(p.name) + '" />' : '<div class="card-mono">' + mono + '</div>';
-  return '<article class="card"><div><div style="padding:10px 10px 0">' + media + '</div><div class="card-body"><small style="color:var(--ink-muted);text-transform:uppercase;font-weight:700;font-size:10px">' + escapeHtml(p.category) + '</small><h3 class="card-title">' + escapeHtml(p.name) + '</h3>' + (p.description ? '<p class="card-desc">' + escapeHtml(p.description) + '</p>' : '') + '</div></div><div class="card-footer"><span class="price">' + escapeHtml(p.priceFormatted) + '</span><button type="button" class="btn ' + (STORE_DATA.layoutVariant === 'editorial_lookbook' ? 'btn-ink' : 'btn-accent') + '" onclick="addCart(\\'' + pidAttr + '\\')">+ Sacola</button></div></article>';
+  const media = p.imageSrc ? '<img class="card-thumb" loading="lazy" decoding="async" src="' + imgSrc + '" alt="' + escapeHtml(p.name) + '" />' : '<div class="card-mono">' + mono + '</div>';
+  return '<article class="card"><div><div style="padding:10px 10px 0">' + media + '</div><div class="card-body"><small style="color:var(--ink-muted);text-transform:uppercase;font-weight:700;font-size:10px">' + escapeHtml(p.category) + '</small><h3 class="card-title">' + escapeHtml(p.name) + '</h3>' + (p.description ? '<p class="card-desc">' + escapeHtml(p.description) + '</p>' : '') + '</div></div><div class="card-footer"><span class="price">' + escapeHtml(p.priceFormatted) + '</span><button type="button" class="btn ' + (STORE_DATA.layoutVariant === 'editorial_lookbook' ? 'btn-ink' : 'btn-accent') + '" data-cg-add-cart="' + pidAttr + '">+ Sacola</button></div></article>';
 }
 
 function renderCatalog(){
@@ -873,7 +896,7 @@ function renderBuilder(){
   const el = document.getElementById('builder-grid');
   if (!el) return;
   const items = STORE_DATA.products.slice(0, 9);
-  el.innerHTML = items.map(p => '<button type="button" class="chip" style="min-height:52px;border-radius:12px;justify-content:space-between;display:flex;align-items:center;padding:8px 12px" onclick="toggleBuilder(\\'' + escapeJsAttr(p.id) + '\\')"><span>' + escapeHtml(p.name) + '</span><strong>' + escapeHtml(p.priceFormatted) + '</strong></button>').join('');
+  el.innerHTML = items.map(p => '<button type="button" class="chip" style="min-height:52px;border-radius:12px;justify-content:space-between;display:flex;align-items:center;padding:8px 12px" data-cg-toggle-builder="' + escapeHtml(p.id) + '"><span>' + escapeHtml(p.name) + '</span><strong>' + escapeHtml(p.priceFormatted) + '</strong></button>').join('');
 }
 window.toggleBuilder = (id) => {
   builderSelection.push(id);
@@ -922,20 +945,48 @@ function renderCart(){
   if (!cart.length) { list.innerHTML = '<p style="color:var(--ink-muted)">Sua sacola está vazia.</p>'; return; }
   const total = cart.reduce((a, b) => a + b.priceCents * b.qty, 0);
   const msg = 'Olá ' + STORE_DATA.storeName + '! Pedido:\\n' + cart.map(i => '- ' + i.qty + 'x ' + i.name).join('\\n') + '\\nTotal: ' + formatBRL(total);
-  list.innerHTML = cart.map(i => '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding:8px 0"><div><strong>' + Number(i.qty || 1) + 'x ' + escapeHtml(i.name) + '</strong><br><small>' + escapeHtml(i.priceFormatted) + '</small></div><button class="btn btn-outline" onclick="removeCart(\\'' + escapeJsAttr(i.id) + '\\')">Remover</button></div>').join('') + '<div style="margin:12px 0"><strong>Total: ' + escapeHtml(formatBRL(total)) + '</strong></div><a class="btn btn-accent" style="width:100%" target="_blank" rel="noopener noreferrer" href="' + escapeHtml(buildWaUrl(msg)) + '">Enviar Pedido no WhatsApp</a>';
+  list.innerHTML = cart.map(i => '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding:8px 0"><div><strong>' + Number(i.qty || 1) + 'x ' + escapeHtml(i.name) + '</strong><br><small>' + escapeHtml(i.priceFormatted) + '</small></div><button type="button" class="btn btn-outline" data-cg-remove-cart="' + escapeHtml(i.id) + '">Remover</button></div>').join('') + '<div style="margin:12px 0"><strong>Total: ' + escapeHtml(formatBRL(total)) + '</strong></div><a class="btn btn-accent" style="width:100%" target="_blank" rel="noopener noreferrer" href="' + escapeHtml(buildWaUrl(msg)) + '">Enviar Pedido no WhatsApp</a>';
 }
+
+document.addEventListener('click', (ev) => {
+  const target = ev.target && ev.target.closest ? ev.target.closest('[data-cg-open-cart],[data-cg-close-cart],[data-cg-add-cart],[data-cg-remove-cart],[data-cg-cat],[data-cg-service-idx],[data-cg-toggle-builder],[data-cg-commit-builder],[data-cg-slot],[data-cg-send-booking]') : null;
+  if (!target) return;
+  if (target.hasAttribute('data-cg-open-cart')) {
+    document.getElementById('cart-drawer')?.classList.add('open');
+  } else if (target.hasAttribute('data-cg-close-cart')) {
+    document.getElementById('cart-drawer')?.classList.remove('open');
+  } else if (target.hasAttribute('data-cg-add-cart')) {
+    window.addCart(target.getAttribute('data-cg-add-cart'));
+  } else if (target.hasAttribute('data-cg-remove-cart')) {
+    window.removeCart(target.getAttribute('data-cg-remove-cart'));
+  } else if (target.hasAttribute('data-cg-cat')) {
+    window.setCat(target.getAttribute('data-cg-cat'));
+  } else if (target.hasAttribute('data-cg-service-idx')) {
+    selectedServiceIdx = Number(target.getAttribute('data-cg-service-idx')) || 0;
+    document.querySelectorAll('#booking-services .chip').forEach(c => c.classList.remove('active'));
+    target.classList.add('active');
+  } else if (target.hasAttribute('data-cg-toggle-builder')) {
+    window.toggleBuilder(target.getAttribute('data-cg-toggle-builder'));
+  } else if (target.hasAttribute('data-cg-commit-builder')) {
+    window.commitBuilder();
+  } else if (target.hasAttribute('data-cg-slot')) {
+    window.selectSlot(target.getAttribute('data-cg-slot'), target);
+  } else if (target.hasAttribute('data-cg-send-booking')) {
+    window.sendBookingWhatsapp();
+  }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   const cats = ['Todas', ...Array.from(new Set(STORE_DATA.products.map(p => p.category)))];
   const catWrap = document.getElementById('cat-chips');
   if (catWrap) {
-    catWrap.innerHTML = cats.map(c => '<button type="button" class="chip ' + (c==='Todas'?'active':'') + '" onclick="setCat(\\'' + escapeJsAttr(c) + '\\')">' + escapeHtml(c) + '</button>').join('');
+    catWrap.innerHTML = cats.map(c => '<button type="button" class="chip ' + (c==='Todas'?'active':'') + '" data-cg-cat="' + escapeHtml(c) + '">' + escapeHtml(c) + '</button>').join('');
   }
   const sEl = document.getElementById('search-input');
   if (sEl) sEl.addEventListener('input', e => { queryText = e.target.value.trim().toLowerCase(); renderCatalog(); });
   const srvWrap = document.getElementById('booking-services');
   if (srvWrap) {
-    srvWrap.innerHTML = STORE_DATA.products.slice(0, 4).map((s, idx) => '<button type="button" class="chip ' + (idx===0?'active':'') + '" style="border-radius:12px;min-height:46px" onclick="selectedServiceIdx=' + Number(idx) + '">' + escapeHtml(s.name) + ' · ' + escapeHtml(s.priceFormatted) + '</button>').join('');
+    srvWrap.innerHTML = STORE_DATA.products.slice(0, 4).map((s, idx) => '<button type="button" class="chip ' + (idx===0?'active':'') + '" style="border-radius:12px;min-height:46px" data-cg-service-idx="' + Number(idx) + '">' + escapeHtml(s.name) + ' · ' + escapeHtml(s.priceFormatted) + '</button>').join('');
   }
   renderBuilder();
   renderCatalog();
@@ -963,7 +1014,7 @@ ${sectionHtmlParts.join('\n')}
   <aside id="cart-drawer" class="drawer">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <strong>Sua Sacola</strong>
-      <button type="button" class="btn btn-outline" style="min-height:36px;padding:0 12px" onclick="document.getElementById('cart-drawer').classList.remove('open')">Fechar</button>
+      <button type="button" class="btn btn-outline" style="min-height:36px;padding:0 12px" data-cg-close-cart>Fechar</button>
     </div>
     <div id="cart-items" style="flex:1;overflow:auto"></div>
   </aside>

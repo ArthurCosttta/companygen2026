@@ -1,0 +1,37 @@
+{
+  "version": "3.0",
+  "capabilities": [
+    {
+      "id": "CAP_INSTAGRAM_ANALYZE",
+      "method": "POST",
+      "endpoint": "/api/instagram/analyze",
+      "creditCost": 0,
+      "refundOnFallback": false,
+      "screenId": "ONB-01"
+    },
+    {
+      "id": "CAP_CATALOG_IMPORT",
+      "method": "PUT",
+      "endpoint": "/api/profile",
+      "creditCost": 0,
+      "refundOnFallback": false,
+      "screenId": "ONB-02"
+    },
+    {
+      "id": "CAP_GENERATE_STOREFRONT",
+      "method": "POST",
+      "endpoint": "/api/store-molde/generate-full",
+      "creditCost": 4,
+      "refundOnFallback": true,
+      "screenId": "ONB-03"
+    },
+    {
+      "id": "CAP_CREATE_SUBPAGE",
+      "method": "POST",
+      "endpoint": "/api/store-molde/subpages",
+      "creditCost": 2,
+      "refundOnFallback": true,
+      "screenId": "STORE_PREVIEW"
+    }
+  ]
+}

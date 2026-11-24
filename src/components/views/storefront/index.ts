@@ -1,17 +1,19 @@
 export {
-  ProductCatalogTable,
-  type ProductCatalogTableProps,
-} from './ProductCatalogTable';
+  EditorialStoreControlView,
+  type EditorialStoreControlViewProps,
+} from './EditorialStoreControlView';
 
 export {
-  ShippingQuickCard,
-  type ShippingQuickCardProps,
-} from './ShippingQuickCard';
-
-export {
-  MarketingHubTab,
-  type MarketingHubTabProps,
-} from './MarketingHubTab';
+  deriveEditorialMetrics,
+  EDITORIAL_COMMAND_IDS,
+  filterEditorialProducts,
+  fuzzySubsequenceMatch,
+  nextEditorialFilter,
+  normalizeEditorialText,
+  type EditorialCatalogFilter,
+  type EditorialCommandId,
+  type EditorialStoreMetrics,
+} from './editorial-store-helpers';
 
 export {
   ProductEditorDrawer,
@@ -19,16 +21,8 @@ export {
 } from './ProductEditorDrawer';
 
 export {
-  DeleteProductConfirmModal,
   DiscardChangesModal,
-  PublishBlockModal,
-  StorePublishedModal,
-  BatchPriceAdjustModal,
-  type DeleteProductConfirmModalProps,
   type DiscardChangesModalProps,
-  type PublishBlockModalProps,
-  type StorePublishedModalProps,
-  type BatchPriceAdjustModalProps,
 } from './CatalogGuardModals';
 
 export {
@@ -42,6 +36,7 @@ export {
   buildStorePublicUrl,
   getPublishBlockers,
   readImageFileAsDataUrl,
+  resolveBrandedAppOrigin,
   resolveProductImageUrl,
   type PublishBlocker,
 } from './storefront-utils';

@@ -268,7 +268,9 @@ export interface FormulaV9Page {
   slug: string;
   filename: string;
   title: string;
+  campaignTheme?: string;
   isHome: boolean;
+  atomicBlueprint?: FormulaV9Document['atomicBlueprint'];
   sections: SectionNode[];
 }
 
@@ -287,4 +289,11 @@ export interface FormulaV9Document {
   pages?: FormulaV9Page[];
   storeInfo?: Record<string, any>;
   catalog?: Array<Record<string, any>>;
+  atomicBlueprint?: {
+    engineSeed?: Record<string, any>;
+    paletteSystem?: Record<string, any>;
+    brandTokens?: Record<string, any>;
+    imageRequests?: Array<Record<string, any>>;
+    sections?: Array<Record<string, any>>;
+  };
 }

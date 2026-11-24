@@ -2,18 +2,84 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   ArrowRight,
   Check,
+  Download,
   Eye,
   EyeOff,
+  KeyRound,
   Mail,
   MessageSquare,
+  Monitor,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
   Store,
 } from 'lucide-react';
 import { ActionButton, ModalContainer, useToast } from '@/components/ui';
+import { PENDING_GUEST_CLAIM_KEY } from '@/components/auth/GuestClaimEmailModal';
 import { saveLocalShowcaseSession, supabase } from '@/services/supabase-client';
+import { resolveBrandedAppOrigin } from '@/components/views/storefront/storefront-utils';
+import { normalizeInviteCodeInput } from '@/utils/inviteCode';
 import { getBrandHorizontalLogo, useDocumentDarkMode } from '@/utils/themeLogos';
+
+type DesktopOsTarget = 'win64' | 'win32' | 'mac' | 'linux';
+
+const DESKTOP_OS_CATALOG: ReadonlyArray<{
+  id: DesktopOsTarget;
+  label: string;
+  shortLabel: string;
+  extLabel: string;
+  hint: string;
+  downloadName: string;
+}> = [
+  {
+    id: 'win64',
+    label: 'Windows 64-bit',
+    shortLabel: 'Win 64-bit',
+    extLabel: 'Instalador .EXE v1.1.0',
+    hint: 'Windows 10 / 11 padrão (instalador completo com WhatsApp integrado).',
+    downloadName: 'CompanyGen-Windows-64bit-1.1.0.exe',
+  },
+  {
+    id: 'win32',
+    label: 'Windows 32-bit / PC Leve',
+    shortLabel: 'Win 32-bit',
+    extLabel: 'Instalador .EXE Leve v1.1.0',
+    hint: 'Compatível com Windows 7 / 8 / 10 32-bit e computadores de caixa com pouca RAM.',
+    downloadName: 'CompanyGen-Windows-32bit-Leve-1.1.0.exe',
+  },
+  {
+    id: 'mac',
+    label: 'macOS',
+    shortLabel: 'macOS',
+    extLabel: 'App Launcher .ZIP',
+    hint: 'Mac Apple Silicon ou Intel — abre a loja em janela própria sem navegador pesado.',
+    downloadName: 'CompanyGen-macOS-App.zip',
+  },
+  {
+    id: 'linux',
+    label: 'Linux',
+    shortLabel: 'Linux',
+    extLabel: 'Launcher .ZIP (.sh)',
+    hint: 'Ubuntu, Debian, Mint ou Fedora em janela dedicada.',
+    downloadName: 'CompanyGen-Linux-App.zip',
+  },
+];
+
+function detectClientDesktopOs(): DesktopOsTarget {
+  if (typeof navigator === 'undefined') return 'win64';
+  const ua = `${navigator.userAgent || ''} ${navigator.platform || ''}`;
+  if (/Mac|Darwin/i.test(ua) && !/iPhone|iPad|iPod/i.test(ua)) return 'mac';
+  if (/Linux/i.test(ua) && !/Android/i.test(ua)) return 'linux';
+  if (/Windows|Win32|Win64|WOW64/i.test(ua)) {
+    const is64 = /Win64|WOW64|x64|amd64/i.test(ua);
+    const navMem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+    if (!is64 || (typeof navMem === 'number' && navMem <= 4)) {
+      return 'win32';
+    }
+    return 'win64';
+  }
+  return 'win64';
+}
 
 const SIGNUP_DRAFT_KEY = 'cg_signup_draft_v1';
 
@@ -57,6 +123,8 @@ export function AuthFlowView() {
 
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [companyName, setCompanyName] = useState(initialDraft.companyName);
+  const [activationCode, setActivationCode] = useState(validatedInvite?.code || '');
+  const [codeBusy, setCodeBusy] = useState(false);
   const [email, setEmail] = useState(initialDraft.email);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -71,6 +139,25 @@ export function AuthFlowView() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetBusy, setResetBusy] = useState(false);
   const [resetMessage, setResetMessage] = useState('');
+  const [detectedOs] = useState<DesktopOsTarget>(() => detectClientDesktopOs());
+  const [selectedOs, setSelectedOs] = useState<DesktopOsTarget>(() => detectClientDesktopOs());
+  const selectedOsSpec =
+    DESKTOP_OS_CATALOG.find((item) => item.id === selectedOs) || DESKTOP_OS_CATALOG[0];
+
+  const handleDownloadDesktopPackage = () => {
+    const downloadUrl = `/api/desktop/download?os=${encodeURIComponent(selectedOsSpec.id)}`;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = selectedOsSpec.downloadName;
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    showToast({
+      type: 'success',
+      message: `Iniciando download para ${selectedOsSpec.label} (${selectedOsSpec.downloadName})...`,
+    });
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -89,9 +176,118 @@ export function AuthFlowView() {
   const isSignupBlocked =
     companyName.trim().length < 2 || !email.includes('@') || password.length < 6;
 
+  async function handleEnterWithActivationCode() {
+    if (busy || codeBusy) return;
+    const cleanCode = normalizeInviteCodeInput(activationCode).trim();
+    if (!/^AI10-[A-Z0-9]{3,5}-[A-Z0-9]{3,5}$/i.test(cleanCode)) {
+      const el = typeof document !== 'undefined' ? document.getElementById('auth-activation-code') : null;
+      el?.focus();
+      setFeedback({
+        error: true,
+        message: 'Digite o código de ativação completo acima no formato AI10-XXXX-XXXX para entrar sem senha.',
+      });
+      return;
+    }
+
+    setCodeBusy(true);
+    setFeedback(null);
+    try {
+      const valRes = await fetch('/api/access/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: cleanCode }),
+      });
+      const valData = await valRes.json().catch(() => null);
+      if (!valRes.ok || !valData?.valid) {
+        setFeedback({
+          error: true,
+          message: valData?.error || 'Código de acesso inválido, expirado ou já vinculado a um e-mail.',
+        });
+        return;
+      }
+
+      const startRes = await fetch('/api/access/guest-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: cleanCode }),
+      });
+      const guestData = await startRes.json().catch(() => null);
+      if (!startRes.ok || !guestData?.ok || !guestData?.token) {
+        setFeedback({
+          error: true,
+          message: guestData?.error || 'Não foi possível entrar com este código agora.',
+        });
+        return;
+      }
+
+      saveLocalShowcaseSession({
+        token: guestData.token,
+        user: guestData.user,
+        code: cleanCode,
+        credits: Number(guestData.balance ?? guestData.credits) || 0,
+        balance: Number(guestData.balance ?? guestData.credits) || 0,
+        savedAt: new Date().toISOString(),
+      });
+      showToast({
+        type: 'success',
+        message: guestData.resumed
+          ? `Código ${cleanCode} reaberto! Você pode vincular seu e-mail no topo a qualquer momento.`
+          : `Código ${cleanCode} ativado! Monte sua loja agora e vincule seu e-mail quando quiser.`,
+        durationMs: 4000,
+      });
+    } catch {
+      setFeedback({
+        error: true,
+        message: 'Erro de conexão ao validar o código de ativação.',
+      });
+    } finally {
+      setCodeBusy(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || isCoolingDown) return;
+
+    const cleanActivation = normalizeInviteCodeInput(activationCode).trim();
+    if (/^AI10-[A-Z0-9]{3,5}-[A-Z0-9]{3,5}$/i.test(cleanActivation)) {
+      try {
+        const valRes = await fetch('/api/access/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: cleanActivation, dryRun: true }),
+        });
+        const valJson = await valRes.json().catch(() => null);
+        if (valRes.ok && valJson?.valid) {
+          if (valJson.claimedWithoutEmail) {
+            const gs = await fetch('/api/access/guest-start', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code: cleanActivation }),
+            }).then((r) => r.json()).catch(() => null);
+            if (gs?.token) {
+              const pending = JSON.stringify({
+                guestToken: gs.token,
+                code: cleanActivation,
+                email: email.trim().toLowerCase(),
+                savedAt: new Date().toISOString(),
+              });
+              localStorage.setItem(PENDING_GUEST_CLAIM_KEY, pending);
+              sessionStorage.setItem(PENDING_GUEST_CLAIM_KEY, pending);
+            }
+          } else {
+            sessionStorage.setItem(
+              'cg_validated_invite',
+              JSON.stringify({
+                code: cleanActivation,
+                credits: Number(valJson.credits) || 100,
+                validatedAt: new Date().toISOString(),
+              }),
+            );
+          }
+        }
+      } catch {}
+    }
 
     setBusy(true);
     setFeedback(null);
@@ -184,10 +380,11 @@ export function AuthFlowView() {
     setResetBusy(true);
     setResetMessage('');
     try {
+      const origin = resolveBrandedAppOrigin();
       await supabase.auth.resetPasswordForEmail(cleanEmail, {
         redirectTo:
           typeof window !== 'undefined'
-            ? window.location.origin + window.location.pathname
+            ? (origin || window.location.origin) + window.location.pathname
             : undefined,
       });
     } catch {
@@ -206,11 +403,11 @@ export function AuthFlowView() {
   }
 
   return (
-    <main className="min-h-dvh bg-[#F8FAFC] text-[#0F172A] dark:bg-[#090D16] dark:text-slate-100 md:grid md:grid-cols-2 md:items-stretch">
+    <main className="min-h-dvh w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-[#0F172A] dark:bg-[#090D16] dark:text-slate-100 md:grid md:grid-cols-2 md:items-stretch">
       {/* Left Brand Panel (Desktop Royal Blue & Slate Highlight) */}
       <section
         aria-label="Apresentação CompanyGen"
-        className="flex flex-col justify-between bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#1D4ED8] p-6 text-white sm:p-10 md:p-12"
+        className="flex min-w-0 flex-col justify-between bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#1D4ED8] p-6 text-white sm:p-10 md:p-12"
       >
         <div className="flex flex-col gap-1.5">
           <img
@@ -286,7 +483,72 @@ export function AuthFlowView() {
           </ul>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 text-xs text-slate-300">
+        <div
+          data-testid="landing-download-options"
+          className="mt-4 rounded-2xl border border-white/20 bg-white/10 p-4 text-xs text-slate-100 space-y-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Monitor className="size-4 text-emerald-300" aria-hidden="true" />
+              <span className="font-bold text-white">Baixar Aplicativo Desktop (v1.1.0)</span>
+            </div>
+            <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[10px] font-bold text-blue-100">
+              Detectado: {DESKTOP_OS_CATALOG.find((o) => o.id === detectedOs)?.shortLabel}
+            </span>
+          </div>
+
+          <div role="radiogroup" aria-label="Selecione seu sistema operacional" className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            {DESKTOP_OS_CATALOG.map((osOpt) => {
+              const active = selectedOs === osOpt.id;
+              return (
+                <button
+                  key={osOpt.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  data-testid={`landing-os-select-${osOpt.id}`}
+                  onClick={() => setSelectedOs(osOpt.id)}
+                  className={`rounded-xl border px-2.5 py-2 text-left transition ${
+                    active
+                      ? 'border-white bg-white text-[#0F172A] shadow-sm'
+                      : 'border-white/20 bg-white/5 text-slate-100 hover:bg-white/15'
+                  }`}
+                >
+                  <div className="text-[11.5px] font-extrabold leading-tight">{osOpt.shortLabel}</div>
+                  <div className={`mt-0.5 text-[10px] ${active ? 'text-slate-600' : 'text-blue-200'}`}>
+                    {osOpt.id === 'win64'
+                      ? '.exe 64-bit'
+                      : osOpt.id === 'win32'
+                        ? '.exe Leve'
+                        : osOpt.id === 'mac'
+                          ? '.zip Mac'
+                          : '.zip Linux'}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-slate-950/35 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-white">
+                {selectedOsSpec.label} · {selectedOsSpec.extLabel}
+              </p>
+              <p className="text-[10.5px] text-slate-300 leading-snug">{selectedOsSpec.hint}</p>
+            </div>
+            <button
+              type="button"
+              data-testid="landing-download-os-btn"
+              onClick={handleDownloadDesktopPackage}
+              className="inline-flex shrink-0 min-h-[40px] items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 text-xs font-extrabold text-slate-950 shadow-sm transition hover:bg-emerald-300"
+            >
+              <Download className="size-4" aria-hidden="true" />
+              <span>Baixar {selectedOsSpec.shortLabel}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="hidden md:flex items-center gap-2 pt-3 text-xs text-slate-300">
           <ShieldCheck className="size-4 text-emerald-400" aria-hidden="true" />
           <span>Dados isolados por conta e backup automático seguro</span>
         </div>
@@ -295,7 +557,7 @@ export function AuthFlowView() {
       {/* Right Auth Card (TELA 01 Login / TELA 02 Signup) */}
       <section
         aria-labelledby="auth-heading"
-        className="flex items-center justify-center p-4 py-8 sm:p-8 md:p-12"
+        className="flex min-w-0 items-center justify-center p-4 py-8 sm:p-8 md:p-12"
       >
         <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           {validatedInvite ? (
@@ -413,6 +675,38 @@ export function AuthFlowView() {
                 />
               </div>
             ) : null}
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label
+                  htmlFor="auth-activation-code"
+                  className="block text-sm font-semibold text-[#0F172A]"
+                >
+                  Código de ativação / acesso
+                </label>
+                <span className="text-[11px] font-medium text-slate-400">
+                  Opcional se já tiver conta
+                </span>
+              </div>
+              <div className="relative">
+                <KeyRound
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400"
+                  aria-hidden="true"
+                />
+                <input
+                  id="auth-activation-code"
+                  data-testid="auth-activation-code-input"
+                  type="text"
+                  autoComplete="off"
+                  spellCheck="false"
+                  maxLength={16}
+                  value={activationCode}
+                  onChange={(e) => setActivationCode(normalizeInviteCodeInput(e.target.value))}
+                  placeholder="AI10-XXXX-XXXX"
+                  className="min-h-[46px] w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3.5 font-mono text-sm font-bold tracking-wider text-[#0F172A] placeholder:font-sans placeholder:font-normal placeholder:tracking-normal placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                />
+              </div>
+            </div>
 
             <div>
               <label
@@ -538,6 +832,21 @@ export function AuthFlowView() {
                 ? 'Criar Minha Conta e Começar'
                 : 'Entrar no Meu Painel'}
             </ActionButton>
+
+            <button
+              type="button"
+              data-testid="auth-enter-with-code-btn"
+              disabled={busy || codeBusy}
+              onClick={() => void handleEnterWithActivationCode()}
+              className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-60"
+            >
+              <KeyRound className="size-4 shrink-0" aria-hidden="true" />
+              <span>
+                {codeBusy
+                  ? 'Validando código de acesso...'
+                  : 'Entrar com código de acesso (sem senha) →'}
+              </span>
+            </button>
           </form>
 
           <div className="mt-4 text-center">

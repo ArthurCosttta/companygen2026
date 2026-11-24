@@ -110,21 +110,35 @@ def extract_logo_colors_and_data_url(image_path: Path):
         try:
             from PIL import Image
             import io
-            img = Image.open(io.BytesIO(raw)).convert("RGB").resize((48, 48))
+            img = Image.open(io.BytesIO(raw)).convert("RGB").resize((64, 64))
             buckets = {}
-            for r, g, b in img.getdata():
+            vivid_buckets = {}
+            pixels = img.get_flattened_data() if hasattr(img, "get_flattened_data") else list(img.getdata())
+            for r, g, b in pixels:
                 mx, mn = max(r, g, b), min(r, g, b)
-                if mx < 28 or mn > 235 or (mx - mn) < 22:
+                if mx < 24 or mn > 238 or (mx - mn) < 20:
                     continue
                 qr, qg, qb = (r // 24) * 24, (g // 24) * 24, (b // 24) * 24
                 key = f"#{qr:02x}{qg:02x}{qb:02x}"
                 buckets[key] = buckets.get(key, 0) + 1
+                if mx >= 100 and (mx - mn) >= 36:
+                    # Ponderar brilho + saturação para capturar traços/letras luminosas da logo
+                    weight = (mx / 255.0) * ((mx - mn) / 255.0)
+                    vivid_buckets[key] = vivid_buckets.get(key, 0.0) + weight
             ranked = sorted(buckets.items(), key=lambda kv: kv[1], reverse=True)
+            vivid_ranked = sorted(vivid_buckets.items(), key=lambda kv: kv[1], reverse=True)
+            if ranked:
+                colors.append(ranked[0][0])
+            if vivid_ranked:
+                for hx, _ in vivid_ranked:
+                    if hx not in colors:
+                        colors.append(hx)
+                        break
             for hx, _ in ranked:
-                if hx not in colors:
-                    colors.append(hx)
                 if len(colors) >= 2:
                     break
+                if hx not in colors:
+                    colors.append(hx)
         except Exception:
             pass
         return colors, data_url

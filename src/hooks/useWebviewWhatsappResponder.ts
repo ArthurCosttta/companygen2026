@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { authenticatedFetch } from '@/services/supabase-client';
 import {
+  playSharedHumanEscalationAlert,
+  playSharedOrderChime,
+} from '@/utils/audio-alerts';
+import {
   createBurstDebounceAccumulator,
   type BurstDebounceItem,
 } from '../../shared/sofia/debounce-accumulator.mjs';
@@ -49,9 +53,13 @@ export interface DesktopWhatsappBridge {
     msgKey?: string;
     text?: string;
     hasAudio?: boolean;
+    hasImage?: boolean;
+    imgMsgKey?: string;
     items?: Array<{
-      kind: 'text' | 'audio';
+      kind: 'text' | 'audio' | 'image' | 'text_image';
       hasAudio?: boolean;
+      hasImage?: boolean;
+      imgMsgKey?: string;
       durationHint?: string;
       durationSeconds?: number;
       text?: string;
@@ -68,6 +76,15 @@ export interface DesktopWhatsappBridge {
     mimeType?: string;
     sizeBytes?: number;
     durationSeconds?: number;
+    reason?: string;
+  }>;
+  extractWhatsAppImage?: (payload: { msgKey?: string }) => Promise<{
+    ok?: boolean;
+    imageBase64?: string;
+    mimeType?: string;
+    width?: number;
+    height?: number;
+    sizeBytes?: number;
     reason?: string;
   }>;
   repairWhatsAppWebview?: () => Promise<{ ok?: boolean; preservedSession?: boolean; reason?: string }>;
@@ -151,46 +168,14 @@ export function isSoundMuted(): boolean {
   }
 }
 
-function playToneSequence(freqs: Array<{ freq: number; durationMs: number; delayMs: number; type?: OscillatorType; gain?: number }>) {
-  if (isSoundMuted() || typeof window === 'undefined') return;
-  try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const baseTime = ctx.currentTime;
-    for (const step of freqs) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = step.type || 'sine';
-      osc.frequency.setValueAtTime(step.freq, baseTime + step.delayMs / 1000);
-      gain.gain.setValueAtTime(step.gain ?? 0.05, baseTime + step.delayMs / 1000);
-      gain.gain.exponentialRampToValueAtTime(0.0001, baseTime + (step.delayMs + step.durationMs) / 1000);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(baseTime + step.delayMs / 1000);
-      osc.stop(baseTime + (step.delayMs + step.durationMs + 20) / 1000);
-    }
-    setTimeout(() => {
-      void ctx.close().catch(() => {});
-    }, 1200);
-  } catch {
-    // Ignore blocked audio contexts in headless environments
-  }
-}
-
 export function playSoftOrderChime(): void {
-  playToneSequence([
-    { freq: 587.33, durationMs: 140, delayMs: 0, type: 'triangle', gain: 0.04 },
-    { freq: 880, durationMs: 220, delayMs: 110, type: 'triangle', gain: 0.04 },
-  ]);
+  if (isSoundMuted() || typeof window === 'undefined') return;
+  playSharedOrderChime();
 }
 
 export function playHumanEscalationAlert(): void {
-  playToneSequence([
-    { freq: 740, durationMs: 120, delayMs: 0, type: 'sine', gain: 0.06 },
-    { freq: 554.37, durationMs: 140, delayMs: 140, type: 'sine', gain: 0.06 },
-    { freq: 740, durationMs: 160, delayMs: 300, type: 'sine', gain: 0.06 },
-  ]);
+  if (isSoundMuted() || typeof window === 'undefined') return;
+  playSharedHumanEscalationAlert();
 }
 
 const sharedInFlightChatKeys = new Set<string>();
@@ -346,6 +331,9 @@ export function useWebviewWhatsappResponder({
       }
     };
 
+    const pendingBurstImages = new Map<string, string>();
+    const pendingBurstAudioFailed = new Map<string, boolean>();
+
     const processCustomerBurst = async (
       chatDedupKey: string,
       mergedText: string,
@@ -354,6 +342,8 @@ export function useWebviewWhatsappResponder({
         chatPhone: string;
         isSelfChat: boolean;
         lastMsgDedupeKey: string;
+        imageBase64?: string;
+        audioFailed?: boolean;
       },
     ) => {
       if (!live || sharedHumanPausedKeys.has(chatDedupKey)) return;
@@ -361,6 +351,10 @@ export function useWebviewWhatsappResponder({
       sharedInFlightChatKeys.add(chatDedupKey);
 
       const { chatTitle, chatPhone, isSelfChat, lastMsgDedupeKey } = meta;
+      const burstImageBase64 = meta.imageBase64 || pendingBurstImages.get(chatDedupKey) || '';
+      const burstAudioFailed = Boolean(meta.audioFailed || pendingBurstAudioFailed.get(chatDedupKey));
+      pendingBurstImages.delete(chatDedupKey);
+      pendingBurstAudioFailed.delete(chatDedupKey);
 
       try {
         setStatus((prev) => ({
@@ -395,7 +389,7 @@ export function useWebviewWhatsappResponder({
           : `wv:${fallbackTitleSlug}`;
 
         const aiRes = await authenticatedFetch(
-          '/api/whatsapp/ai/classify-and-draft',
+          '/api/whatsapp/ai/simulate-or-reply',
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -405,6 +399,8 @@ export function useWebviewWhatsappResponder({
               customerJid: resolvedCustomerJid,
               isSelfChat: Boolean(isSelfChat),
               messageText: mergedText,
+              ...(burstImageBase64 ? { imageBase64: burstImageBase64 } : {}),
+              ...(burstAudioFailed ? { audioFailed: true } : {}),
               mode: 'live_whatsapp',
               source: 'electron_webview',
             }),
@@ -521,7 +517,7 @@ export function useWebviewWhatsappResponder({
                 etaSeconds,
               },
             }));
-          }, 140);
+          }, 320);
 
           let sent: { ok?: boolean; method?: string; mediaSentCount?: number; error?: string } | undefined;
           try {
@@ -651,7 +647,10 @@ export function useWebviewWhatsappResponder({
             persistRuntime({ phase: 'error', lastError: errText });
           }
         } else {
-          markMessageProcessed(lastMsgDedupeKey);
+          // Não descarta para sempre quando o motivo é cooldown temporário; apenas para pausas explícitas ou filtros definitivos
+          if (aiJson.suppressionReason !== 'anti_ban_cooldown') {
+            markMessageProcessed(lastMsgDedupeKey);
+          }
           const suppressionMessage =
             aiJson.suppressionReason === 'safe_test_mode_third_party'
               ? 'Modo Teste Seguro ativo: resposta a terceiros ignorada.'
@@ -707,6 +706,8 @@ export function useWebviewWhatsappResponder({
           chatPhone: string;
           isSelfChat: boolean;
           lastMsgDedupeKey: string;
+          imageBase64?: string;
+          audioFailed?: boolean;
         };
       }>
     >();
@@ -716,6 +717,8 @@ export function useWebviewWhatsappResponder({
       chatPhone: string;
       isSelfChat: boolean;
       lastMsgDedupeKey: string;
+      imageBase64?: string;
+      audioFailed?: boolean;
     }>({
       debounceMs: 4000,
       maxWaitMs: 12000,
@@ -805,6 +808,35 @@ export function useWebviewWhatsappResponder({
     };
     window.addEventListener('companygen:credits-updated', handleCreditsUpdated);
 
+    const handleResumeAi = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ eventId?: string; customerPhone?: string; customerJid?: string }>).detail || {};
+      const hintId = String(detail.eventId || '').replace(/^paused-/, '').trim();
+      const phoneDigits = String(detail.customerPhone || '').replace(/\D/g, '');
+      const jidDigits = String(detail.customerJid || '').split('@')[0].replace(/\D/g, '');
+      const candidates = [hintId, phoneDigits, jidDigits, normalizeEchoText(hintId)]
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const k of Array.from(sharedHumanPausedKeys)) {
+        const kDigits = k.replace(/\D/g, '');
+        if (
+          candidates.some(
+            (c) => k === c || k.includes(c) || c.includes(k) || (kDigits && c && kDigits === c),
+          )
+        ) {
+          sharedHumanPausedKeys.delete(k);
+        }
+      }
+      if (live) {
+        setStatus((prev) => ({
+          ...prev,
+          humanPausedCustomerKeys: Array.from(sharedHumanPausedKeys),
+          liveTypingPreview:
+            prev.liveTypingPreview?.phase === 'paused_human' ? null : prev.liveTypingPreview,
+        }));
+      }
+    };
+    window.addEventListener('companygen:wa-resume-ai', handleResumeAi);
+
     const runCycle = async () => {
       if (!live || pausedByCredits || inFlightRef.current) {
         if (live && !pausedByCredits) timer = setTimeout(runCycle, 1200);
@@ -845,15 +877,20 @@ export function useWebviewWhatsappResponder({
         const hasIncomingAudio = Boolean(
           poll?.hasAudio || (Array.isArray(poll?.items) && poll.items.some((item) => item.kind === 'audio' || item.hasAudio)),
         );
+        const hasIncomingImage = Boolean(
+          poll?.hasImage ||
+            (Array.isArray(poll?.items) &&
+              poll.items.some((item) => item.kind === 'image' || item.kind === 'text_image' || item.hasImage)),
+        );
 
         if (poll?.action === 'manual_human_takeover') {
           await handleManualTakeoverSignal(poll);
-        } else if (poll?.action === 'incoming' && (poll.text?.trim() || hasIncomingAudio)) {
+        } else if (poll?.action === 'incoming' && (poll.text?.trim() || hasIncomingAudio || hasIncomingImage)) {
           pruneSharedMaps();
           const chatTitle = String(poll.chatTitle || 'Cliente WhatsApp').trim();
           const chatDedupKey = normalizeEchoText(poll.chatPhone || chatTitle || 'chat');
           const rawText = String(poll.text || '').trim();
-          const msgDedupeKey = `${chatDedupKey}::${poll.msgKey || normalizeEchoText(rawText || 'audio')}`;
+          const msgDedupeKey = `${chatDedupKey}::${poll.msgKey || normalizeEchoText(rawText || (hasIncomingImage ? 'image' : 'audio'))}`;
           const incomingEchoKey = rawText ? `${chatDedupKey}::${normalizeEchoText(rawText)}` : '';
 
           if (
@@ -864,11 +901,27 @@ export function useWebviewWhatsappResponder({
           ) {
             markMessageProcessed(msgDedupeKey);
 
-            // Monta o texto final da rajada, transcrevendo balões de áudio se houver
+            // Monta o texto final da rajada, transcrevendo balões de áudio e extraindo imagens se houver
             const parts: string[] = [];
+            let burstImageBase64 = '';
+            let burstAudioFailed = false;
+            const fallbackKind = hasIncomingAudio && !rawText
+              ? ('audio' as const)
+              : hasIncomingImage && rawText
+                ? ('text_image' as const)
+                : hasIncomingImage
+                  ? ('image' as const)
+                  : ('text' as const);
             const pollItems = Array.isArray(poll.items) && poll.items.length > 0
               ? poll.items
-              : [{ kind: hasIncomingAudio && !rawText ? ('audio' as const) : ('text' as const), hasAudio: hasIncomingAudio, text: rawText, msgKey: poll.msgKey || '' }];
+              : [{
+                  kind: fallbackKind,
+                  hasAudio: hasIncomingAudio,
+                  hasImage: hasIncomingImage,
+                  imgMsgKey: poll.imgMsgKey || '',
+                  text: rawText,
+                  msgKey: poll.msgKey || '',
+                }];
 
             for (const item of pollItems) {
               if (item.text?.trim()) {
@@ -903,9 +956,38 @@ export function useWebviewWhatsappResponder({
                 if (transcribed) {
                   parts.push(`[Áudio do cliente]: "${transcribed}"`);
                 } else {
-                  parts.push('[Áudio do cliente não pôde ser transcrito — peça educadamente para mandar por texto]');
+                  burstAudioFailed = true;
+                  parts.push('[Áudio do cliente sem transcrição disponível]');
                 }
               }
+              if (item.kind === 'image' || item.kind === 'text_image' || item.hasImage) {
+                let extractedImg = '';
+                if (bridge.extractWhatsAppImage) {
+                  try {
+                    const imgRes = await bridge.extractWhatsAppImage({
+                      msgKey: item.imgMsgKey || item.msgKey || poll.imgMsgKey || poll.msgKey,
+                    });
+                    if (imgRes?.ok && imgRes.imageBase64) {
+                      extractedImg = imgRes.imageBase64;
+                      burstImageBase64 = imgRes.imageBase64;
+                    }
+                  } catch {}
+                }
+                if (!item.text?.trim()) {
+                  parts.push(
+                    extractedImg
+                      ? '[Cliente enviou uma foto]'
+                      : '[Cliente enviou uma imagem que não pôde ser carregada]',
+                  );
+                }
+              }
+            }
+
+            if (burstImageBase64) {
+              pendingBurstImages.set(chatDedupKey, burstImageBase64);
+            }
+            if (burstAudioFailed) {
+              pendingBurstAudioFailed.set(chatDedupKey, true);
             }
 
             const finalIncomingText = parts.join('\n').trim();
@@ -915,6 +997,8 @@ export function useWebviewWhatsappResponder({
                 chatPhone: String(poll.chatPhone || '').trim(),
                 isSelfChat: Boolean(poll.isSelfChat),
                 lastMsgDedupeKey: msgDedupeKey,
+                ...(burstImageBase64 ? { imageBase64: burstImageBase64 } : {}),
+                ...(burstAudioFailed ? { audioFailed: true } : {}),
               };
               if (sharedInFlightChatKeys.has(chatDedupKey)) {
                 const list = pendingDuringFlight.get(chatDedupKey) || [];
@@ -948,7 +1032,10 @@ export function useWebviewWhatsappResponder({
     return () => {
       live = false;
       burstAccumulator.clearAll();
+      pendingBurstImages.clear();
+      pendingBurstAudioFailed.clear();
       window.removeEventListener('companygen:credits-updated', handleCreditsUpdated);
+      window.removeEventListener('companygen:wa-resume-ai', handleResumeAi);
       if (timer) clearTimeout(timer);
       unsubProgress?.();
       unsubManualHuman?.();

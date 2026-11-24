@@ -1,6 +1,6 @@
 /**
  * GLM-5.3 Product Strategist & Free Compositor Prompt Builder (Formula-IR v9.0)
- * Zero hardcoded niches/presets — feeds verified profile inputs, catalog SKUs,
+ * Zero hardcoded niches/presets. Feeds verified profile inputs, catalog SKUs,
  * and reusable v9.0 building blocks (11 sections + 5 atoms + Sacola/WhatsApp).
  */
 import {
@@ -12,6 +12,11 @@ import {
   buildNeutralFallbackV9Document,
   ensureFormulaV9,
 } from '../shared/formula-ir/neutral-fallback-v9.mjs';
+import {
+  LAYOUT_ARCHETYPES,
+  resolveLayoutArchetype,
+  stripDashesText,
+} from './section-property-prompts.mjs';
 
 export { buildNeutralFallbackV9Document, ensureFormulaV9 };
 
@@ -93,21 +98,23 @@ export function computeCatalogMetricsForPrompt(profile) {
  * Builds [system, user] messages teaching GLM-5.3 to act as product strategist,
  * interaction designer, and art director emitting strictly valid Formula-IR v9.0 JSON.
  */
-export function buildGlmArchitectMessages(profile = {}) {
+export function buildGlmArchitectMessages(profile = {}, options = {}) {
   const business = profile?.business || {};
   const brand = profile?.brand || {};
   const payment = profile?.payment || {};
   const whatsapp = profile?.whatsapp || {};
 
-  const storeName = String(business.name || 'Minha Loja').trim();
-  const segment = String(business.segment || 'Geral').trim();
+  const storeName = stripDashesText(business.name || 'Minha Loja');
+  const segment = stripDashesText(business.segment || 'Geral');
   const businessModel = String(business.businessModel || 'hibrido').trim();
-  const description = String(business.description || '').trim();
-  const experienceGoal = String(business.experienceGoal || '').trim();
-  const campaignTheme = String(business.campaignTheme || '').trim();
-  const differentials = Array.isArray(business.differentials) ? business.differentials.filter(Boolean) : [];
-  const address = String(business.address || '').trim();
-  const hours = String(business.hours || '').trim();
+  const description = stripDashesText(business.description || '');
+  const experienceGoal = stripDashesText(business.experienceGoal || '');
+  const campaignTheme = stripDashesText(business.campaignTheme || '');
+  const differentials = Array.isArray(business.differentials)
+    ? business.differentials.map((d) => stripDashesText(d)).filter(Boolean)
+    : [];
+  const address = stripDashesText(business.address || '');
+  const hours = stripDashesText(business.hours || '');
   const pixDiscountPercent = Math.max(0, Math.min(90, Number(payment.pixDiscountPercent || 0)));
   const primaryColor = String(brand.primaryColor && brand.primaryColor !== '#111827' ? brand.primaryColor : '#0B4DB8').trim();
   const fontStyle = String(brand.fontStyle || 'modern_sans').trim();
@@ -117,6 +124,18 @@ export function buildGlmArchitectMessages(profile = {}) {
   const hasUserStorefront = Boolean(String(brand.storefrontPhotoUrl || '').trim());
   const skus = summarizeCatalogForPrompt(profile);
   const catalogMetrics = computeCatalogMetricsForPrompt(profile);
+  const archetype = resolveLayoutArchetype({
+    layoutArchetype: options?.layoutArchetype,
+    profile,
+    dossier: {
+      brand: { segment },
+      catalogSummary: { totalSkus: catalogMetrics.totalActiveSkus },
+      growthStrategy: { campaignTheme },
+    },
+  });
+  const archetypeChoicesDesc = Object.values(LAYOUT_ARCHETYPES)
+    .map((a) => `${a.id}: ${a.description}`)
+    .join(' | ');
 
   const systemPrompt = `Você é responsável pela estratégia de produto, pelo design de interação e pela direção visual de uma loja ou site de serviços.
 Analise o catálogo e as entradas do lojista e proponha uma experiência específica para esse negócio, emitindo EXCLUSIVAMENTE um JSON válido no formato Formula-IR v9.0 (sem markdown, sem comentários fora do JSON).
@@ -149,38 +168,52 @@ Analise o catálogo e as entradas do lojista e proponha uma experiência especí
 </skill_03_especificar_controles_e_estados>
 
 <skill_04_direcao_visual_e_imagens>
-- Monte ATÉ 7 seções principais em "sections[]" seguindo a REGRA DE ORDENAÇÃO GOAL-DRIVEN:
-  - Se modeloDeVenda === "servicos" e <= 6 itens: abra com HeroSection -> DifferentialsStrip -> InteractiveExperience -> CatalogGrid -> ContextualFaq -> ClosingScheduleSplit.
-  - Se >= 12 produtos físicos: priorize HeroSection -> HighlightsGrid -> ComplementaryBundles -> CatalogGrid -> InteractiveExperience -> ContextualFaq -> ClosingScheduleSplit.
-- REGRA OBRIGATÓRIA 390x844 FOLD BUDGET:
-  - Em HeroSection: "title" DEVE ter no máximo 58 caracteres (<= 58 chars) e "subtitle" no máximo 115 caracteres (<= 115 chars) para que título, foto e CTA caibam na primeira dobra mobile de 390x844px!
+- LIBERDADE CRIATIVA COM GUARDRAILS MINIMALISTAS RÍGIDOS:
+  - Você tem autonomia arquitetural para compor ATÉ 7 seções em "sections[]", escolhendo livremente a cadência visual, o estilo de abertura e a proporção entre espaço em branco, tipografia e interação — sem copiar layouts engessados ou idênticos de outras lojas.
+  - Exemplos de ritmos livres conforme o negócio:
+    • Se modeloDeVenda === "servicos" ou clínica/consultoria: abertura limpa editorial + mapa/simulador interativo + etapas claras + fechamento agendado.
+    • Se >= 12 produtos físicos (farmácia, varejo, empório, autopeças, roupas): abertura direta + destaques curados por linha + combinações inteligentes + catálogo completo + dúvidas objetivas.
+- REGRA DE VARIEDADE E ARQUÉTIPOS (PROIBIDO repetir sempre o mesmo hero full-screen):
+  - Varie livremente o layout de abertura entre "split" (duas colunas assimétricas limpas), "centered" (título tipográfico centralizado minimalista com ar editorial) ou "full_bleed" (apenas quando moda/gastronomia pedir foto atmosférica forte).
+  - Use os componentes especializados certos do sistema para o cliente agir dentro da página:
+    • "InteractiveExperience" (tabs_selector, option_cards, slider_range, checklist_addons, slot_time_picker) para simulação, dosagem, orçamento ou kit rápido antes do WhatsApp.
+    • "ComplementaryBundles" quando houver itens que combinam (kits, rotinas, acompanhamentos, acessórios).
+    • "StepsTimeline" para processos, prazos de entrega, preparação ou consulta passo a passo.
+    • "ClosingScheduleSplit" para horários Seg a Dom, endereço e CTA direto de agendamento/WhatsApp.
+- GUARDRAILS VISUAIS INVIOLÁVEIS (ESTÉTICA MINIMALISTA & LEGIBILIDADE):
+  1. ZERO EYEBROWS / ZERO SELOS ACIMA DE TÍTULOS: PROIBIDO gerar "eyebrow", overline ou badge acima de headlines. Deixe "eyebrow": "" em TODAS as seções e cards (HeroSection, InteractiveExperience, EditorialMediaSplit, HighlightsGrid, ClosingScheduleSplit). Comece direto pela headline forte e objetiva.
+  2. ESTÉTICA MINIMALISTA DE ALTO CONTRASTE: fundo limpo e respirável ("editorial_light" ou "clean_craft" como base preferencial; prefira superfícies claras #FFFFFF / #FAFAFA com texto escuro #09090B para contraste >= 4.5:1), máximo 2 cores funcionais (primária + acento), sem poluição de gradientes neon, sem excesso de bordas ou badges decorativos.
+  3. DOBRA MOBILE 390x844 LIMPA: em HeroSection, "title" DEVE ter no máximo 58 caracteres (<= 58 chars) e "subtitle" no máximo 115 caracteres (<= 115 chars) para evitar quebra no celular.
 - Defina no topo do documento:
-  - "visualDirection": "editorial_light" | "luxury_dark" | "vibrant_retail" | "clean_craft"
-  - "layoutGrid": "bento_asymmetric" | "editorial_split" | "compact_dense"
+  - "layoutArchetype": "${archetype.id}" (arquiteturas disponíveis: ${archetypeChoicesDesc})
+  - "visualDirection": "${archetype.visualDirection}" ("editorial_light" | "luxury_dark" | "vibrant_retail" | "clean_craft")
+  - "layoutGrid": "${archetype.layoutGrid}" ("bento_asymmetric" | "editorial_split" | "compact_dense")
   - "artDirectionBible": { "lighting": "...", "surfaceMaterial": "...", "backdropTone": "...", "cameraFraming": "..." }
-- Tipos permitidos de seção em "sections[]":
-  - HeroSection (imageSlotId opcional) { variant:"split"|"full_bleed", eyebrow, title (<=58 chars), subtitle (<=115 chars), primaryCta:{label,href}, secondaryCta?:{label,action:"whatsapp.send_summary"|"scroll"} }
+- Tipos permitidos de seção em "sections[]" (SEMPRE com eyebrow: ""):
+  - HeroSection (imageSlotId opcional) { variant:"split"|"centered"|"full_bleed", eyebrow:"", title (<=58 chars), subtitle (<=115 chars), primaryCta:{label,href}, secondaryCta?:{label,action:"whatsapp.send_summary"|"scroll"} }
   - DifferentialsStrip { items:[{ icon (use apenas ${WHITELISTED_ICONS.slice(0, 12).join('|')}), title, text }] }
-  - InteractiveExperience (imageSlotId opcional) { eyebrow, title, subtitle, experienceMode:"quiz_recommendation"|"dosage_calculator"|"bundle_builder", recommendedSkus:string[], layoutVariant:"workbench_split"|"stacked_cards"|"compact_panel", stateDefaults, controls, calcRule, primaryAction, secondaryAction? }
+  - InteractiveExperience (imageSlotId opcional) { eyebrow:"", title, subtitle, experienceMode:"quiz_recommendation"|"dosage_calculator"|"bundle_builder", recommendedSkus:string[], layoutVariant:"workbench_split"|"stacked_cards"|"compact_panel", stateDefaults, controls, calcRule, primaryAction, secondaryAction? }
   - ComplementaryBundles { title:"Combine e Economize", subtitle, items:[{ title, description, skuIds:string[] }] }
   - ContextualFaq { title:"Perguntas Frequentes", subtitle, items:[{ q, a }] } (cite APENAS address, hours, pixDiscountPercent e shipping reais)
-  - EditorialMediaSplit (imageSlotId opcional) { variant:"media_left"|"media_right", eyebrow, title, body, bullets[], ctaLabel?, ctaHref? }
+  - EditorialMediaSplit (imageSlotId opcional) { variant:"media_left"|"media_right", eyebrow:"", title, body, bullets[], ctaLabel?, ctaHref? }
   - StepsTimeline { title, subtitle, tabs:[{ id, label, steps:[{ time, title, detail }] }] }
-  - HighlightsGrid { title, subtitle, columns:2|3, cards:[{ eyebrow, title, description, ctaLabel, href, imageSlotId? }] }
+  - HighlightsGrid { title, subtitle, columns:2|3, cards:[{ eyebrow:"", title, description, ctaLabel, href, imageSlotId? }] }
   - FaqAccordion { title, items:[{ q, a }] }
   - CatalogGrid { title, subtitle, itemActionLabel, emptyImageMode:"neutral_gray" }
-  - ClosingScheduleSplit (imageSlotId opcional) { eyebrow, title, subtitle, slots[], whatsappHeading, whatsappSubtext, ctaLabel }
-  - RichFooter { tagline, showNewsletter:true }
-- Planeje "imagePlan[]" com NO MÁXIMO 5 imagens editoriais (hero, ambientação, ilustração da experiência).
-- REGRA CRÍTICA DE ECONOMIA E FIDELIDADE:
-  - NUNCA coloque produtos individuais do catálogo (SKUs) em "imagePlan[]"! Itens do catálogo sem foto ficam em cinza neutro no CatalogGrid para busca gratuita posterior.
-  - Se o lojista JÁ enviou Logo (${hasUserLogo ? 'SIM — JÁ ENVIADA' : wantsAiLogo ? 'NÃO — pediu emblema minimalista' : 'NÃO enviou'}), NÃO gere "brand_logo" no imagePlan${hasUserLogo ? ' em hipótese alguma' : wantsAiLogo ? ' (opcional apenas 1 slot brand_logo se sobrar espaço)' : ''}.
-  - Se o lojista JÁ enviou Foto da Frente da Loja (${hasUserStorefront ? 'SIM — JÁ ENVIADA' : 'NÃO'}), NÃO gere imagem de fachada em "imagePlan[]".
-  - Cada item do imagePlan: { slotId, targetSectionId, role: "hero"|"section_illustration"|"lifestyle_banner"|"detail_card"|"brand_logo", tier: "flux-dev"|"flux-schnell", aspect: "16:9"|"4:3"|"1:1", promptEn: "descrição fotorrealista em inglês coerente com o negócio real, sem texto legível sobreposto" }.
+  - ClosingScheduleSplit (imageSlotId opcional) { eyebrow:"", title, subtitle, slots[], whatsappHeading, whatsappSubtext, ctaLabel }
+  - RichFooter { tagline, showNewsletter:false }
+- Planeje "imagePlan[]" com NO MÁXIMO 3 composições conceituais/minimalistas se realmente agregarem à identidade da marca.
+- REGRA RÍGIDA DE MÍDIA E CATÁLOGO:
+  - PROIBIDO planejar ou gerar fotos realistas de produtos em "imagePlan[]". Para produtos sem foto real da planilha, o frontend exibirá ícones conceituais limpos de categoria.
+  - Se o lojista JÁ enviou Logo (${hasUserLogo ? 'SIM, JÁ ENVIADA' : wantsAiLogo ? 'NÃO, pediu emblema minimalista' : 'NÃO enviou'}), NÃO gere "brand_logo" no imagePlan${hasUserLogo ? ' em hipótese alguma' : wantsAiLogo ? ' (opcional apenas 1 slot brand_logo se sobrar espaço)' : ''}.
+  - Se o lojista JÁ enviou Foto da Frente da Loja (${hasUserStorefront ? 'SIM, JÁ ENVIADA' : 'NÃO'}), NÃO gere imagem de fachada em "imagePlan[]".
+  - Cada item do imagePlan: { slotId, targetSectionId, role: "hero"|"section_illustration"|"lifestyle_banner"|"brand_logo", tier: "flux-dev"|"flux-schnell", aspect: "16:9"|"4:3"|"1:1", promptEn: "minimalist conceptual architectural light composition in English, clean negative space, strictly NO realistic retail products, NO phones, NO pill bottles, NO overlay text" }.
 </skill_04_direcao_visual_e_imagens>
 
 <constraints>
 - Idioma de toda a interface: Português do Brasil natural, claro e específico para o negócio informado.
+- PROIBIDO usar duplo hífen ou travessão longo no texto gerado (isso denuncia escrita robótica). Use vírgula, ponto ou ponto médio ("·").
+- PROIBIDO preencher "eyebrow" com rótulos genéricos ou tags acima de títulos — sempre retorne "eyebrow": "".
 - NUNCA mencionar nomes, categorias, frases ou termos de outros nichos que não pertençam a este catálogo.
 - Toda seção com "imageSlotId" que espera imagem gerada deve ter o slotId correspondente presente em "imagePlan[]".
 </constraints>`;
@@ -224,11 +257,11 @@ Analise o catálogo e as entradas do lojista e proponha uma experiência especí
         },
       ],
       sections: [
-        { id: 'sec_hero', type: 'HeroSection', imageSlotId: 'hero_main', config: { variant: 'split', eyebrow: '...', title: '...', subtitle: '...', primaryCta: { label: '...', href: '#experiencia' } } },
+        { id: 'sec_hero', type: 'HeroSection', imageSlotId: 'hero_main', config: { variant: 'split', eyebrow: '', title: '...', subtitle: '...', primaryCta: { label: '...', href: '#experiencia' } } },
         { id: 'sec_diff', type: 'DifferentialsStrip', config: { items: [{ icon: 'ShieldCheck', title: '...', text: '...' }] } },
-        { id: 'sec_exp', type: 'InteractiveExperience', config: { eyebrow: '...', title: '...', subtitle: '...', layoutVariant: 'workbench_split', stateDefaults: {}, controls: [], calcRule: { mode: 'base_plus_addons', pixDiscountPercent, summaryTitle: '...', limitNote: '...' }, primaryAction: { type: 'cart.add_selected', label: 'Adicionar seleção à sacola' } } },
+        { id: 'sec_exp', type: 'InteractiveExperience', config: { eyebrow: '', title: '...', subtitle: '...', layoutVariant: 'workbench_split', stateDefaults: {}, controls: [], calcRule: { mode: 'base_plus_addons', pixDiscountPercent, summaryTitle: '...', limitNote: '...' }, primaryAction: { type: 'cart.add_selected', label: 'Adicionar seleção à sacola' } } },
         { id: 'sec_cat', type: 'CatalogGrid', config: { title: 'Catálogo completo', subtitle: '...', itemActionLabel: 'Adicionar à sacola', emptyImageMode: 'neutral_gray' } },
-        { id: 'sec_close', type: 'ClosingScheduleSplit', config: { eyebrow: 'Atendimento', title: '...', subtitle: '...', slots: [], whatsappHeading: '...', whatsappSubtext: '...', ctaLabel: 'Enviar no WhatsApp' } },
+        { id: 'sec_close', type: 'ClosingScheduleSplit', config: { eyebrow: '', title: '...', subtitle: '...', slots: [], whatsappHeading: '...', whatsappSubtext: '...', ctaLabel: 'Enviar no WhatsApp' } },
         { id: 'sec_footer', type: 'RichFooter', config: { tagline: '...', showNewsletter: false } },
       ],
     },
@@ -238,7 +271,7 @@ Analise o catálogo e as entradas do lojista e proponha uma experiência especí
 }
 
 /**
- * Onboarding AI Autofill Prompt (`POST /api/onboarding/ai-autofill`) — ~500 tokens, 0 credits.
+ * Onboarding AI Autofill Prompt (`POST /api/onboarding/ai-autofill`), ~500 tokens, 0 credits.
  */
 export function buildDeterministicOnboardingAutofill({
   businessName = 'Minha Loja',

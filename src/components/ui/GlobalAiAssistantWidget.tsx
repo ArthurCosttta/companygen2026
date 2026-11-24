@@ -1,198 +1,373 @@
-import { useMemo, useState } from 'react';
-import { Bot, LifeBuoy, Send, Sparkles, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowLeftRight,
+  LifeBuoy,
+  Loader2,
+  Paperclip,
+  Send,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { authenticatedFetch } from '@/services/supabase-client';
 
 export interface GlobalAiAssistantWidgetProps {
+  userId?: string;
   activeTab: string;
+  isOnboarding?: boolean;
   storeName?: string;
   creditBalance: number;
   onOpenSupport: () => void;
   onNavigateTab: (tab: 'store' | 'whatsapp' | 'dashboard' | 'settings' | 'admin') => void;
+  onRefreshData?: () => void;
+}
+
+interface GlobalChatMessage {
+  role: 'assistant' | 'user';
+  text: string;
+  costNote?: string;
+  steps?: string[];
+  attachmentName?: string;
 }
 
 const CONTEXTUAL_CHIPS: Record<string, string[]> = {
+  onboarding: [
+    'Preencher minha loja de eletrônicos no onboarding',
+    'Subir 3 produtos de exemplo no meu catálogo',
+    'Explicar como funciona o WhatsApp automático',
+  ],
   store: [
-    'Como melhorar minha capa?',
-    'Por que um produto está esgotado?',
-    'Como editar cores e seções?',
+    'Adicionar novo produto iPhone 15 R$ 4.500',
+    'Atualizar endereço e horário da loja',
+    'Ir para Pedidos ou WhatsApp',
   ],
   whatsapp: [
-    'Quanto custa cada resposta?',
-    'A Sofia desconecta ao trocar de aba?',
-    'Como acionar um atendente humano?',
+    'Criar 10 respostas personalizadas dos meus produtos',
+    'Quanto custa cada resposta da Sofia?',
+    'Como devolver uma conversa para a IA?',
   ],
   dashboard: [
+    'Subir 1 pedido para João Silva R$ 120 via Pix',
+    'Excluir pedidos de teste da loja',
     'Como exportar pedidos (.xlsx)?',
-    'Como ver lucro e DRE dos pedidos?',
-    'O que é conversão D1?',
   ],
   settings: [
-    'Como ver meu gasto de créditos?',
-    'Onde recarregar créditos?',
+    'Atualizar minha chave Pix e horário de atendimento',
+    'Quanto custa cada alteração no Editor?',
     'Abrir chamado de suporte',
   ],
 };
 
-function resolveStudioHelp(question: string, storeName?: string): { answer: string; actionLabel?: string; actionType?: 'support' | 'whatsapp' | 'store' | 'dashboard' } {
-  const q = question.toLowerCase();
-  if (/cr[eé]dito|gasto|quanto custa|saldo|0,1|recarreg/.test(q)) {
-    return {
-      answer:
-        'Cada resposta automática da Sofia no WhatsApp consome 0,1 cr; criar subpáginas custa 2 cr; gerar vitrine completa custa 4 cr. Edições manuais de texto/imagem são gratuitas (0 cr). O último gasto aparece no topo da tela.',
-    };
-  }
-  if (/whatsapp|desconect|sofia|atendente|paus/.test(q)) {
-    return {
-      answer:
-        'O WhatsApp Web permanece ativo em segundo plano mesmo quando você muda para Minha Loja ou Pedidos. Se precisar assumir uma conversa, basta responder manualmente ou usar o gatilho de atendente.',
-      actionLabel: 'Ir para WhatsApp',
-      actionType: 'whatsapp',
-    };
-  }
-  if (/esgotado|capa|cor|se[cç][aã]o|vitrine|editor/.test(q)) {
-    return {
-      answer: `Na aba Minha Loja (${storeName || 'sua vitrine'}), abra o Editor Visual para ajustar cores, biblioteca de blocos e imagens sem gastar créditos. Produtos só ficam esgotados se o controle de estoque estiver ligado com saldo 0.`,
-      actionLabel: 'Ver Minha Loja',
-      actionType: 'store',
-    };
-  }
-  if (/pedido|xlsx|planilha|lucro|dre|d1|cont[aá]bil/.test(q)) {
-    return {
-      answer:
-        'Em Pedidos você pode catalogar vendas WhatsApp D1 vs Balcão Manual, registrar custos/taxas/prejuízos e baixar a planilha .XLSX com aba DRE_Financeiro.',
-      actionLabel: 'Ir para Pedidos',
-      actionType: 'dashboard',
-    };
-  }
-  return {
-    answer:
-      'Posso te ajudar a navegar pelo painel sem gastar créditos (0 cr). Se for um bug ou dúvida específica da sua conta, abra um chamado direto com nossa equipe.',
-    actionLabel: 'Abrir Chamado de Suporte',
-    actionType: 'support',
-  };
-}
-
 export function GlobalAiAssistantWidget({
+  userId,
   activeTab,
+  isOnboarding = false,
   storeName,
   creditBalance,
   onOpenSupport,
   onNavigateTab,
+  onRefreshData,
 }: GlobalAiAssistantWidgetProps) {
+  const storageKey = `cg_global_ai_msgs_${userId || 'anon'}`;
   const [open, setOpen] = useState(false);
+  const [dockSide, setDockSide] = useState<'left' | 'right'>('left');
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: 'assistant' | 'user'; text: string; actionLabel?: string; actionType?: 'support' | 'whatsapp' | 'store' | 'dashboard' }>>([
-    {
-      role: 'assistant',
-      text: `Olá! Sou o Assistente CompanyGen (0 cr para dúvidas do painel). Seu saldo atual é ${creditBalance.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} cr.`,
-    },
-  ]);
+  const [busy, setBusy] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<{ name: string; textSnippet: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const chips = useMemo(() => CONTEXTUAL_CHIPS[activeTab] || CONTEXTUAL_CHIPS.store, [activeTab]);
+  const [messages, setMessages] = useState<GlobalChatMessage[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.slice(-12) : [];
+    } catch {
+      return [];
+    }
+  });
 
-  const handleAsk = (raw: string) => {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(messages.slice(-12)));
+    } catch {
+      // Ignore storage quota restrictions
+    }
+  }, [messages, storageKey]);
+
+  // Ctrl+J toggle global em qualquer tela
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const greetingText = `IA Unificada ativa em todas as telas${storeName ? ` (${storeName})` : ''}. Posso preencher onboarding, cadastrar itens, subir ou limpar pedidos e gerar mensagens no WhatsApp (0 cr dúvidas · 0,5 cr ações). Saldo: ${creditBalance.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} cr.`;
+
+  const chipKey = isOnboarding ? 'onboarding' : activeTab;
+  const chips = useMemo(() => CONTEXTUAL_CHIPS[chipKey] || CONTEXTUAL_CHIPS.store, [chipKey]);
+
+  const handleAttachFile = async (file: File | null | undefined) => {
+    if (!file) return;
+    try {
+      const isTextLike = /\.(csv|txt|json|md|tsv|xml|html)$/i.test(file.name) || file.type.startsWith('text/');
+      const snippet = isTextLike
+        ? (await file.text()).slice(0, 1200)
+        : `Arquivo ${file.name} (${Math.round(file.size / 1024)} KB, tipo ${file.type || 'binário'})`;
+      setAttachedFile({ name: file.name, textSnippet: snippet });
+    } catch {
+      setAttachedFile({ name: file.name, textSnippet: `Arquivo ${file.name}` });
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleAsk = async (raw: string) => {
     const q = raw.trim();
-    if (!q) return;
-    if (/chamado|suporte/.test(q.toLowerCase())) {
+    if ((!q && !attachedFile) || busy) return;
+    if (/^(?:abrir\s+)?(?:chamado|suporte)$/i.test(q)) {
       setOpen(false);
       onOpenSupport();
       return;
     }
-    const res = resolveStudioHelp(q, storeName);
+
+    const currentAttachment = attachedFile;
     setMessages((prev) => [
-      ...prev.slice(-6),
-      { role: 'user', text: q },
-      { role: 'assistant', text: res.answer, actionLabel: res.actionLabel, actionType: res.actionType },
+      ...prev.slice(-11),
+      { role: 'user', text: q || `Analisar arquivo: ${currentAttachment?.name}`, attachmentName: currentAttachment?.name },
     ]);
     setInput('');
+    setAttachedFile(null);
+    setBusy(true);
+    try {
+      const res = await authenticatedFetch(
+        '/api/ai/global-command',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: q || `Analisar anexo ${currentAttachment?.name}`,
+            activeTab: chipKey,
+            ...(currentAttachment ? { attachments: [currentAttachment] } : {}),
+          }),
+        },
+        userId,
+      );
+      const data = await res.json().catch(() => null);
+      if (typeof data?.balanceAfter === 'number') {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('companygen:credits-updated', { detail: { balance: data.balanceAfter } }),
+          );
+        } catch {}
+      }
+      if (!res.ok || !data?.ok) {
+        throw new Error(String(data?.message || data?.error || 'A IA não conseguiu executar agora.'));
+      }
+
+      const events = Array.isArray(data.clientEvents) ? data.clientEvents : [];
+      for (const ev of events) {
+        if (ev?.type === 'onboarding-fill' && ev.payload) {
+          window.dispatchEvent(new CustomEvent('companygen:onboarding-fill', { detail: ev.payload }));
+        } else if (ev?.type === 'navigate-tab' && ev.tab) {
+          onNavigateTab(ev.tab);
+        } else if (ev?.type === 'refresh-profile' || ev?.type === 'refresh-orders') {
+          onRefreshData?.();
+        }
+      }
+
+      const costLabel =
+        Number(data.debited || 0) > 0
+          ? `-${data.debited} cr${typeof data.balanceAfter === 'number' ? ` · Saldo: ${data.balanceAfter} cr` : ''}`
+          : '0 cr (grátis)';
+      const steps = Array.isArray(data.stepsExecuted) ? (data.stepsExecuted as string[]) : undefined;
+      setMessages((prev) => [
+        ...prev.slice(-11),
+        {
+          role: 'assistant',
+          text: String(data.assistantMessage || 'Ação concluída!'),
+          costNote: costLabel,
+          ...(steps && steps.length > 0 ? { steps } : {}),
+        },
+      ]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev.slice(-11),
+        {
+          role: 'assistant',
+          text: err instanceof Error ? err.message : 'Erro ao executar comando (0 cr cobrados).',
+          costNote: '0 cr',
+        },
+      ]);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <div className="fixed bottom-20 right-4 z-40 md:bottom-5 md:right-5">
+    <div
+      className={cn(
+        'fixed bottom-20 z-40 md:bottom-5',
+        dockSide === 'right' ? 'right-4 md:right-5' : 'left-4 md:left-5',
+      )}
+    >
       {open ? (
         <div
           data-testid="global-ai-assistant-panel"
-          className="mb-3 flex w-[320px] sm:w-[360px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-[#111726]"
+          className="mb-3 flex w-[340px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white text-[#09090B] shadow-2xl sm:w-[390px]"
         >
-          <div className="flex items-center justify-between border-b border-slate-200 bg-[#0B4DB8] px-4 py-3 text-white dark:border-slate-700">
+          <div className="flex items-center justify-between border-b border-[#E2E8F0] bg-[#FFFFFF] px-3.5 py-2.5">
             <div className="flex items-center gap-2">
-              <Bot className="size-4" />
-              <span className="text-xs font-extrabold">Assistente IA · Painel (0 cr)</span>
+              <Sparkles className="size-4 text-[#09090B]" aria-hidden="true" />
+              <span className="text-xs font-extrabold tracking-tight text-[#09090B]">
+                IA Global · Ctrl+J
+              </span>
             </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Fechar assistente IA"
-              className="rounded-lg p-1 hover:bg-white/15"
-            >
-              <X className="size-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <span className="rounded-md border border-[#E2E8F0] bg-[#F8FAFC] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#475569]">
+                {creditBalance.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} cr
+              </span>
+              <button
+                type="button"
+                data-testid="global-ai-flip-side-btn"
+                title="Mudar IA de lado na tela"
+                onClick={() => setDockSide((s) => (s === 'left' ? 'right' : 'left'))}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#09090B]"
+              >
+                <ArrowLeftRight className="size-3.5" />
+              </button>
+              {messages.length > 0 ? (
+                <button
+                  type="button"
+                  title="Limpar histórico da conversa"
+                  onClick={() => setMessages([])}
+                  className="rounded-lg p-1 text-[#64748B] hover:bg-[#F1F5F9] hover:text-red-600"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Minimizar IA Global"
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#09090B]"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
           </div>
 
-          <div className="max-h-64 space-y-2.5 overflow-y-auto p-3 text-xs">
+          <div className="max-h-64 space-y-2.5 overflow-y-auto bg-[#F8FAFC] p-3 text-xs">
+            <div className="mr-4 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 leading-relaxed text-[#09090B]">
+              <p>{greetingText}</p>
+            </div>
             {messages.map((m, idx) => (
               <div
                 key={idx}
                 className={cn(
-                  'rounded-xl px-3 py-2 leading-relaxed',
+                  'rounded-xl px-3 py-2.5 leading-relaxed',
                   m.role === 'user'
-                    ? 'ml-6 bg-[#EFF6FF] text-[#0F172A] dark:bg-blue-950/60 dark:text-slate-100'
-                    : 'mr-4 border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200',
+                    ? 'ml-6 bg-[#09090B] text-white'
+                    : 'mr-4 border border-[#E2E8F0] bg-white text-[#09090B]',
                 )}
               >
+                {m.attachmentName ? (
+                  <span className="mb-1 inline-flex items-center gap-1 rounded bg-white/15 px-1.5 py-0.5 text-[10px]">
+                    <Paperclip className="size-2.5" />
+                    {m.attachmentName}
+                  </span>
+                ) : null}
                 <p>{m.text}</p>
-                {m.actionLabel && m.actionType ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (m.actionType === 'support') {
-                        setOpen(false);
-                        onOpenSupport();
-                      } else {
-                        onNavigateTab(m.actionType!);
-                        setOpen(false);
-                      }
-                    }}
-                    className="mt-2 inline-flex items-center gap-1 rounded-lg bg-[#0B4DB8] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#083B9A]"
-                  >
-                    <span>{m.actionLabel}</span>
-                  </button>
+                {m.steps && m.steps.length > 0 ? (
+                  <ul className="mt-1.5 space-y-0.5 border-t border-slate-100 pt-1 text-[10.5px] text-emerald-700">
+                    {m.steps.map((st, sIdx) => (
+                      <li key={sIdx}>✓ {st}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {m.costNote ? (
+                  <span className="mt-1 inline-block text-[10px] font-semibold text-[#64748B]">
+                    {m.costNote}
+                  </span>
                 ) : null}
               </div>
             ))}
+            {busy ? (
+              <div
+                data-testid="global-ai-running-log"
+                className="mr-4 flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs text-[#64748B]"
+              >
+                <Loader2 className="size-3.5 animate-spin text-[#09090B]" />
+                <span>Executando comando na tela ({chipKey})...</span>
+              </div>
+            ) : null}
           </div>
 
-          <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-3 py-2 dark:border-slate-800">
+          <div className="flex flex-wrap gap-1.5 border-t border-[#E2E8F0] bg-white px-3 py-2">
             {chips.map((chip) => (
               <button
                 key={chip}
                 type="button"
-                onClick={() => handleAsk(chip)}
-                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-700 hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                disabled={busy}
+                onClick={() => void handleAsk(chip)}
+                className="rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1 text-[10.5px] font-medium text-[#475569] hover:border-[#09090B]/30 hover:text-[#09090B]"
               >
                 {chip}
               </button>
             ))}
           </div>
 
+          {attachedFile ? (
+            <div className="flex items-center justify-between border-t border-[#E2E8F0] bg-[#EFF6FF] px-3 py-1.5 text-[11px] font-semibold text-[#1D4ED8]">
+              <span className="truncate">Anexo: {attachedFile.name}</span>
+              <button type="button" onClick={() => setAttachedFile(null)} className="ml-2 text-xs font-bold">
+                Remover
+              </button>
+            </div>
+          ) : null}
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              handleAsk(input);
+              void handleAsk(input);
             }}
-            className="flex items-center gap-2 border-t border-slate-200 p-2.5 dark:border-slate-700"
+            className="flex items-center gap-1.5 border-t border-[#E2E8F0] bg-white p-2.5"
           >
             <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => void handleAttachFile(e.target.files?.[0])}
+            />
+            <button
+              type="button"
+              data-testid="global-ai-attach-btn"
+              title="Anexar planilha ou arquivo para a IA ler"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-[#E2E8F0] text-[#475569] hover:bg-[#F8FAFC] hover:text-[#09090B]"
+            >
+              <Paperclip className="size-3.5" />
+            </button>
+            <input
               type="text"
+              data-testid="global-ai-input"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Pergunte sobre qualquer tela..."
-              className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              placeholder="Peça qualquer ação nesta tela..."
+              className="min-w-0 flex-1 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#09090B] placeholder:text-[#94A3B8] focus:border-[#09090B] focus:bg-white focus:outline-none"
             />
             <button
               type="submit"
-              aria-label="Enviar pergunta"
-              className="inline-flex size-9 items-center justify-center rounded-xl bg-[#0B4DB8] text-white hover:bg-[#083B9A]"
+              disabled={busy}
+              aria-label="Executar comando na IA Global"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#09090B] text-white hover:bg-[#18181B] disabled:opacity-50"
             >
               <Send className="size-3.5" />
             </button>
@@ -203,7 +378,7 @@ export function GlobalAiAssistantWidget({
                 setOpen(false);
                 onOpenSupport();
               }}
-              className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-[#E2E8F0] text-[#475569] hover:bg-[#F8FAFC] hover:text-[#09090B]"
             >
               <LifeBuoy className="size-3.5" />
             </button>
@@ -215,10 +390,10 @@ export function GlobalAiAssistantWidget({
         type="button"
         data-testid="global-ai-assistant-btn"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-[#0B4DB8] px-4 py-2.5 text-xs font-extrabold text-white shadow-lg shadow-blue-900/25 transition hover:bg-[#083B9A]"
+        className="inline-flex min-h-[42px] items-center gap-2 rounded-full border border-[#09090B] bg-[#09090B] px-4 py-2 text-xs font-semibold text-white shadow-lg transition hover:bg-[#18181B]"
       >
-        <Sparkles className="size-4" />
-        <span>Assistente IA</span>
+        <Sparkles className="size-3.5" aria-hidden="true" />
+        <span>IA Global</span>
       </button>
     </div>
   );

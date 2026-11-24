@@ -1,19 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazyNamed } from '@/utils/chunk-recovery';
 import {
   CheckCircle2,
   Copy,
   Eye,
   FileSpreadsheet,
+  Loader2,
   MessageCircle,
   MousePointerClick,
   PlusCircle,
   RefreshCw,
   Search,
+  Sparkles,
+  Undo2,
+  Upload,
   Users,
   X,
 } from 'lucide-react';
 import type { D1FunnelMetrics } from '@/schemas/ai-whatsapp-intent.schema';
 import { authenticatedFetch } from '@/services/supabase-client';
+import { resolveBrandedAppOrigin } from '@/components/views/storefront/storefront-utils';
 import {
   formatCurrencyBRL,
   type BusinessOrder,
@@ -23,6 +29,7 @@ import {
 import {
   ORDER_STATUS_META,
   ORDER_STATUS_UI_MAP,
+  deleteOrdersByRef,
   loadDashboardMetrics,
   updateOrderStatus,
   type BackendOrderStatus,
@@ -35,9 +42,21 @@ import {
   SkeletonTableRows,
   useToast,
 } from '@/components/ui';
-import { ManualSaleModal } from './ManualSaleModal';
-import { OrderDetailsModal } from './OrderDetailsModal';
-import { OrderSpreadsheetCatalogModal } from './OrderSpreadsheetCatalogModal';
+const ImportOrdersSpreadsheetModal = lazyNamed(
+  () => import('./ImportOrdersSpreadsheetModal'),
+  'ImportOrdersSpreadsheetModal',
+);
+const ManualSaleModal = lazyNamed(() => import('./ManualSaleModal'), 'ManualSaleModal');
+const OrderDetailsModal = lazyNamed(() => import('./OrderDetailsModal'), 'OrderDetailsModal');
+const OrderSpreadsheetCatalogModal = lazyNamed(
+  () => import('./OrderSpreadsheetCatalogModal'),
+  'OrderSpreadsheetCatalogModal',
+);
+import {
+  buildOptimisticBusinessOrderFromRow,
+  sanitizeOrderPhoneDigits,
+  type ParsedOrderRow,
+} from './orders-spreadsheet-import';
 import {
   ORDER_STATUS_LIST,
   extractCustomerPhone,
@@ -106,9 +125,59 @@ export function OrdersKanbanView({
 
   const [manualSaleOpen, setManualSaleOpen] = useState(false);
   const [ordersXlsOpen, setOrdersXlsOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [lastImportedBatch, setLastImportedBatch] = useState<{
+    orderRefs: string[];
+    totalCents: number;
+    count: number;
+  } | null>(null);
+  const [isUndoingImport, setIsUndoingImport] = useState(false);
   const [eventsFunnel, setEventsFunnel] = useState<Partial<D1FunnelMetrics> | null>(null);
   const [selectedOrderRef, setSelectedOrderRef] = useState<string | null>(null);
   const [updatingRefs, setUpdatingRefs] = useState<Record<string, boolean>>({});
+  const [colLimitMap, setColLimitMap] = useState<Record<string, number>>({});
+  const [aiModifyInstruction, setAiModifyInstruction] = useState('');
+  const [aiModifyBusy, setAiModifyBusy] = useState(false);
+
+  const handleAiModifyOrders = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const cmd = aiModifyInstruction.trim();
+    if (!cmd || aiModifyBusy) return;
+    setAiModifyBusy(true);
+    try {
+      const res = await authenticatedFetch(
+        '/api/orders/ai-modify',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ instruction: cmd }),
+        },
+        owner,
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(String(json?.error || json?.message || 'Não foi possível aplicar comando nos pedidos.'));
+      }
+      if (Array.isArray(json.orders)) {
+        setOrders(json.orders as BusinessOrder[]);
+      }
+      setAiModifyInstruction('');
+      showToast({
+        type: 'success',
+        message: String(json.summary || 'Pedidos atualizados!'),
+        durationMs: 3600,
+      });
+      void fetchMetrics(periodDays);
+      void onRefresh?.();
+    } catch (err) {
+      showToast({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Erro ao modificar pedidos.',
+      });
+    } finally {
+      setAiModifyBusy(false);
+    }
+  };
 
   const fetchEventsFunnel = useCallback(async () => {
     try {
@@ -409,12 +478,13 @@ export function OrdersKanbanView({
 
   const resolvedStoreUrl = useMemo(() => {
     if (storeUrl) return storeUrl;
-    if (typeof window === 'undefined') return '';
+    const origin = resolveBrandedAppOrigin();
+    if (!origin) return '';
     const slugOrOwner =
       owner ||
       profile.publishedStore.publicSlug ||
       profile.business.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    return `${window.location.origin}/?view=store&u=${encodeURIComponent(slugOrOwner)}`;
+    return `${origin}/?view=store&u=${encodeURIComponent(slugOrOwner)}`;
   }, [storeUrl, owner, profile.publishedStore.publicSlug, profile.business.name]);
 
   async function handleCopyStoreLink() {
@@ -523,6 +593,86 @@ export function OrdersKanbanView({
     void onRefresh?.();
   }
 
+  async function handleImportOrdersBatch(validRows: ParsedOrderRow[]) {
+    if (validRows.length === 0) return;
+    const payloadRows = validRows.map((row, i) => ({
+      orderRef: buildOptimisticBusinessOrderFromRow(row, i).order_ref,
+      customerName: row.customerName,
+      customerPhone: sanitizeOrderPhoneDigits(row.customerPhone) || undefined,
+      customItemName: row.itemsSummary || 'Pedido Planilha',
+      totalCents: row.totalCents,
+      paymentMethod:
+        row.status === 'confirmado' || row.status === 'concluido' ? 'Pix' : 'A combinar',
+      status: row.status,
+    }));
+
+    const batchRes = await authenticatedFetch(
+      '/api/orders/import-batch',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: payloadRows }),
+      },
+      owner,
+    );
+    const batchJson = (await batchRes.json().catch(() => null)) as {
+      ok?: boolean;
+      error?: string;
+      orders?: BusinessOrder[];
+    } | null;
+
+    if (!batchRes.ok || !batchJson?.ok || !Array.isArray(batchJson.orders)) {
+      throw new Error(String(batchJson?.error || 'Falha ao importar lote de pedidos.'));
+    }
+
+    const createdOrders = batchJson.orders;
+
+    const createdRefs = createdOrders.map(o => o.order_ref);
+    const totalImportedCents = createdOrders.reduce(
+      (sum, o) => sum + (Number(o.total_cents) || 0),
+      0,
+    );
+
+    setOrders(prev => {
+      const refSet = new Set(createdRefs);
+      return [...createdOrders, ...prev.filter(o => !refSet.has(o.order_ref))];
+    });
+
+    setLastImportedBatch({
+      orderRefs: createdRefs,
+      totalCents: totalImportedCents,
+      count: createdOrders.length,
+    });
+
+    showToast({
+      type: 'success',
+      message: `${createdOrders.length} pedido(s) importado(s) · ${formatCurrencyBRL(totalImportedCents)} adicionados`,
+      durationMs: 6000,
+    });
+
+    void onRefresh?.();
+  }
+
+  async function handleUndoLastImport() {
+    if (!lastImportedBatch || isUndoingImport) return;
+    const batch = lastImportedBatch;
+    setIsUndoingImport(true);
+    try {
+      await deleteOrdersByRef(batch.orderRefs, owner).catch(() => null);
+      const removeSet = new Set(batch.orderRefs);
+      setOrders(prev => prev.filter(o => !removeSet.has(o.order_ref)));
+      setLastImportedBatch(null);
+      showToast({
+        type: 'neutral',
+        message: `Importação de ${batch.count} pedido(s) desfeita.`,
+        durationMs: 3500,
+      });
+      void onRefresh?.();
+    } finally {
+      setIsUndoingImport(false);
+    }
+  }
+
   return (
     <div
       data-testid="orders-kanban-view"
@@ -576,6 +726,17 @@ export function OrdersKanbanView({
             <ActionButton
               variant="secondary"
               size={44}
+              data-testid="orders-import-spreadsheet-btn"
+              leftIcon={<Upload className="size-4 text-[#2563EB]" />}
+              onClick={() => setImportModalOpen(true)}
+              className="max-w-full flex-1 whitespace-nowrap sm:flex-none"
+            >
+              Importar Planilha (.xlsx / .csv)
+            </ActionButton>
+
+            <ActionButton
+              variant="secondary"
+              size={44}
               data-testid="open-tela-27-xls-orders"
               leftIcon={<FileSpreadsheet className="size-4 text-[#A855F7]" />}
               onClick={() => setOrdersXlsOpen(true)}
@@ -596,6 +757,41 @@ export function OrdersKanbanView({
             </ActionButton>
           </div>
         </header>
+
+        {lastImportedBatch ? (
+          <div
+            data-testid="orders-import-audit-banner"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-xs font-semibold text-emerald-950 shadow-2xs dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-200"
+          >
+            <span className="cg-tabular flex items-center gap-2">
+              <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <span>
+                {lastImportedBatch.count} pedido(s) importado(s) ·{' '}
+                <strong>{formatCurrencyBRL(lastImportedBatch.totalCents)}</strong> adicionados ao Kanban
+              </span>
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="orders-undo-import-btn"
+                disabled={isUndoingImport}
+                onClick={() => void handleUndoLastImport()}
+                className="inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border border-emerald-600/30 bg-white px-3 text-xs font-bold text-emerald-900 hover:bg-emerald-100 transition disabled:opacity-50 dark:bg-[#090D16] dark:text-emerald-200"
+              >
+                <Undo2 className="size-3.5" />
+                <span>{isUndoingImport ? 'Desfazendo...' : 'Desfazer'}</span>
+              </button>
+              <button
+                type="button"
+                aria-label="Fechar resumo de importação"
+                onClick={() => setLastImportedBatch(null)}
+                className="inline-flex size-8 items-center justify-center rounded-lg text-emerald-700 hover:bg-emerald-100 dark:text-emerald-300"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {/* TELA 39 — Radar de Tráfego da Vitrine & Conversão Estrita D1 */}
         <section
@@ -729,6 +925,29 @@ export function OrdersKanbanView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:justify-end">
+            <form
+              onSubmit={(e) => void handleAiModifyOrders(e)}
+              className="flex flex-1 items-center gap-1.5 sm:flex-none"
+            >
+              <input
+                type="text"
+                data-testid="orders-ai-modify-input"
+                value={aiModifyInstruction}
+                onChange={(e) => setAiModifyInstruction(e.target.value)}
+                placeholder="Comando nos pedidos (ex: limpar simulações)"
+                className="min-h-[38px] w-full min-w-[210px] rounded-xl border border-slate-200 bg-white px-3 text-xs text-[#0F172A] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none sm:w-[250px]"
+              />
+              <button
+                type="submit"
+                data-testid="orders-ai-modify-btn"
+                disabled={aiModifyBusy || !aiModifyInstruction.trim()}
+                className="inline-flex min-h-[38px] shrink-0 items-center gap-1 rounded-xl bg-[#09090B] px-3 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                {aiModifyBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                <span>Aplicar</span>
+              </button>
+            </form>
+
             <span className="text-xs font-bold text-slate-500 dark:text-[#94A3B8]">Período:</span>
             <div
               role="group"
@@ -815,7 +1034,7 @@ export function OrdersKanbanView({
                   {formatCurrencyBRL(crmAnalytics.avgTicketCents)}
                 </div>
                 <p className="cg-tabular mt-1 text-xs text-slate-500 dark:text-[#94A3B8]">
-                  Vitrine {crmAnalytics.byChannel.storefront} · Sofia {crmAnalytics.byChannel.whatsapp} · Balcão {crmAnalytics.byChannel.counter}
+                  Vitrine {crmAnalytics.byChannel.storefront} · WhatsApp {crmAnalytics.byChannel.whatsapp} · Balcão {crmAnalytics.byChannel.counter}
                 </p>
               </article>
 
@@ -899,10 +1118,10 @@ export function OrdersKanbanView({
             })()}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {/* Top 5 Produtos (Vitrine vs. Sofia WhatsApp vs. Balcão) */}
+              {/* Top 5 Produtos (Vitrine vs. WhatsApp vs. Balcão) */}
               <div className="rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4 shadow-xs space-y-3">
                 <h2 className="text-sm font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-                  Top 5 Produtos (Vitrine vs. Sofia WhatsApp)
+                  Top 5 Produtos (Vitrine vs. WhatsApp)
                 </h2>
                 {crmAnalytics.topProducts.length === 0 ? (
                   <p className="text-xs text-slate-500 dark:text-[#94A3B8]">
@@ -915,7 +1134,7 @@ export function OrdersKanbanView({
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-[#0F172A] dark:text-[#F8FAFC]">{prod.name}</p>
                           <p className="cg-tabular text-[11px] text-slate-500 dark:text-[#94A3B8]">
-                            Vitrine: {prod.storefrontQty} · Sofia: {prod.whatsappQty} · Balcão: {prod.counterQty}
+                            Vitrine: {prod.storefrontQty} · WhatsApp: {prod.whatsappQty} · Balcão: {prod.counterQty}
                           </p>
                         </div>
                         <div className="cg-tabular shrink-0 text-right">
@@ -1075,11 +1294,9 @@ export function OrdersKanbanView({
             ) : orders.length === 0 ? (
               <EmptyStateCard
                 icon={
-                  <img
-                    src="/brand/illustrations/illustration-request-tracking.svg"
-                    alt="Acompanhamento de pedidos"
-                    className="h-14 w-16 object-contain"
-                  />
+                  <div className="flex size-14 items-center justify-center rounded-2xl border border-slate-200/80 bg-slate-100 text-slate-500">
+                    <FileSpreadsheet className="size-7" aria-hidden="true" />
+                  </div>
                 }
                 title="Nenhum pedido recebido neste período"
                 description="Divulgue o link da sua vitrine no WhatsApp e Instagram ou registre uma venda presencial do balcão."
@@ -1142,7 +1359,7 @@ export function OrdersKanbanView({
                             Sem pedidos nesta etapa
                           </div>
                         ) : (
-                          colOrders.map(order => {
+                          colOrders.slice(0, colLimitMap[col.key] || 50).map(order => {
                             const delayed = isOrderDelayedOver2Hours(order);
                             const isSim = isSimulationOrder(order);
                             const firstItem = order.items[0]?.name || 'Pedido';
@@ -1153,6 +1370,7 @@ export function OrdersKanbanView({
                               <article
                                 key={order.order_ref}
                                 data-testid={`kanban-card-${order.order_ref}`}
+                                style={{ contentVisibility: 'auto', containIntrinsicSize: '150px' }}
                                 onClick={() => setSelectedOrderRef(order.order_ref)}
                                 className="cursor-pointer rounded-2xl border border-[var(--cg-border)] bg-[var(--cg-surface)] p-4 shadow-2xs space-y-2 hover:border-[#2563EB]/50 transition"
                               >
@@ -1223,6 +1441,20 @@ export function OrdersKanbanView({
                             );
                           })
                         )}
+                        {colOrders.length > (colLimitMap[col.key] || 50) ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setColLimitMap((prev) => ({
+                                ...prev,
+                                [col.key]: (prev[col.key] || 50) + 50,
+                              }))
+                            }
+                            className="w-full rounded-xl border border-dashed border-slate-300 bg-white/80 py-2 text-xs font-bold text-slate-700 hover:bg-white"
+                          >
+                            Ver +50 pedidos ({colOrders.length - (colLimitMap[col.key] || 50)} restantes)
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -1234,37 +1466,61 @@ export function OrdersKanbanView({
       </div>
 
       {/* TELA 28: Registrar Venda Manual */}
-      <ManualSaleModal
-        open={manualSaleOpen}
-        onOpenChange={setManualSaleOpen}
-        profile={profile}
-        owner={owner}
-        onCreated={handleManualSaleCreated}
-      />
+      {manualSaleOpen ? (
+        <Suspense fallback={null}>
+          <ManualSaleModal
+            open={manualSaleOpen}
+            onOpenChange={setManualSaleOpen}
+            profile={profile}
+            owner={owner}
+            onCreated={handleManualSaleCreated}
+          />
+        </Suspense>
+      ) : null}
 
       {/* TELA 29: Detalhes do Pedido */}
-      <OrderDetailsModal
-        open={Boolean(selectedOrder)}
-        onOpenChange={nextOpen => {
-          if (!nextOpen) setSelectedOrderRef(null);
-        }}
-        order={selectedOrder}
-        profile={profile}
-        owner={owner}
-        onStatusUpdated={updatedOrder => {
-          applyLocalOrderUpdate(updatedOrder);
-          void onRefresh?.();
-        }}
-        onContactWhatsApp={onOpenWhatsApp}
-      />
+      {selectedOrder ? (
+        <Suspense fallback={null}>
+          <OrderDetailsModal
+            open={Boolean(selectedOrder)}
+            onOpenChange={nextOpen => {
+              if (!nextOpen) setSelectedOrderRef(null);
+            }}
+            order={selectedOrder}
+            profile={profile}
+            owner={owner}
+            onStatusUpdated={updatedOrder => {
+              applyLocalOrderUpdate(updatedOrder);
+              void onRefresh?.();
+            }}
+            onContactWhatsApp={onOpenWhatsApp}
+          />
+        </Suspense>
+      ) : null}
+
+      {/* TELA 05: Importar Pedidos via Planilha (.XLSX / .CSV / Colagem Excel) */}
+      {importModalOpen ? (
+        <Suspense fallback={null}>
+          <ImportOrdersSpreadsheetModal
+            open={importModalOpen}
+            onOpenChange={setImportModalOpen}
+            existingOrders={orders}
+            onImportOrders={handleImportOrdersBatch}
+          />
+        </Suspense>
+      ) : null}
 
       {/* TELA 27-XLS: Catalogar & Exportar Pedidos (.XLSX com IA) */}
-      <OrderSpreadsheetCatalogModal
-        open={ordersXlsOpen}
-        onOpenChange={setOrdersXlsOpen}
-        orders={orders}
-        ownerUser={owner}
-      />
+      {ordersXlsOpen ? (
+        <Suspense fallback={null}>
+          <OrderSpreadsheetCatalogModal
+            open={ordersXlsOpen}
+            onOpenChange={setOrdersXlsOpen}
+            orders={orders}
+            ownerUser={owner}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

@@ -73,6 +73,9 @@ test.describe('FILA 07 Word-Class QA: Admin 360°, Support Read-Only, Kiwify DLQ
         openTicketsCount: 2,
         qrCount: 4,
         incidentsCount: 1,
+        openCrashesCount: 1,
+        normalUserOpenCrashes: 1,
+        criticalCrashes24h: 1,
         onboardingFeedbackCount: 6,
         grossRevenueCents: 24980,
         kiwifyFeeCents: 2246,
@@ -267,6 +270,70 @@ test.describe('FILA 07 Word-Class QA: Admin 360°, Support Read-Only, Kiwify DLQ
       if (pathname === '/api/admin/overview') {
         return route.fulfill({ json: buildOverview() });
       }
+      if (pathname === '/api/admin/logs/crashes') {
+        return route.fulfill({
+          json: {
+            ok: true,
+            summary: {
+              totalGrouped: 1,
+              openCount: 1,
+              criticalOpen24h: 1,
+              normalUserOpenCount: 1,
+              totalOccurrences: 3,
+              affectedUsersCount: 1,
+              latestCrashAt: new Date().toISOString(),
+              topRoutes: [{ route: '/api/profile', count: 3 }],
+              topSuspectedFiles: [{ file: 'src/utils/chunk-recovery.ts', count: 3 }],
+            },
+            logs: [
+              {
+                id: 'crash-demo-1',
+                fingerprint: 'a1b2c3d4e5f6',
+                title: 'Crash em Painel Principal (Usuário Normal)',
+                severity: 'critical',
+                source: 'client_react',
+                category: 'REACT_CHUNK_ERROR',
+                message: "Cannot read properties of undefined (reading 'default')",
+                stack: "TypeError: Cannot read properties of undefined (reading 'default')\n at src/app/App.tsx:90:5",
+                endpoint: '/api/profile',
+                method: 'PUT',
+                statusCode: 422,
+                userId: '22222222-2222-4222-8222-222222222222',
+                userRole: 'normal_user',
+                appContext: {
+                  route: '/?theme=light',
+                  activeTab: 'store',
+                  onboardingStep: 'synthesis',
+                  storeName: 'Botânica Lume',
+                  segment: 'Cosméticos',
+                  productsCount: 15,
+                  published: false,
+                  lowSpec: true,
+                  deviceMemoryGB: 4,
+                  hardwareConcurrency: 4,
+                  viewport: '1440x900',
+                  theme: 'light',
+                },
+                breadcrumbs: [
+                  { at: new Date().toISOString(), kind: 'navigation', summary: 'Onboarding Passo 5' },
+                  { at: new Date().toISOString(), kind: 'network', summary: 'PUT /api/profile -> 422', endpoint: '/api/profile', statusCode: 422, durationMs: 95 },
+                ],
+                correlatedServerErrors: [
+                  { at: new Date().toISOString(), method: 'PUT', endpoint: '/api/profile', statusCode: 422, message: 'Confirme ou revise o item antes de publicar.' },
+                ],
+                suspectedFiles: ['src/utils/chunk-recovery.ts', 'src/app/App.tsx', 'server/workspace.mjs'],
+                autoDiagnosisPt: 'Falha de carregamento de chunk JS após deploy (cache de asset antigo ou exportação lazy ausente).',
+                affectedUsersCount: 1,
+                occurrences: 3,
+                status: 'open',
+                firstSeenAt: new Date().toISOString(),
+                lastSeenAt: new Date().toISOString(),
+                aiContextPrompt: '# Relatório Contextual de Crash\n- Arquivo provável: src/utils/chunk-recovery.ts',
+              },
+            ],
+          },
+        });
+      }
       if (pathname.endsWith('/support-snapshot')) {
         return route.fulfill({
           json: {
@@ -336,7 +403,7 @@ test.describe('FILA 07 Word-Class QA: Admin 360°, Support Read-Only, Kiwify DLQ
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     // Navega para Admin
-    await page.getByTestId('nav-tab-admin').click();
+    await page.getByTestId('top-pill-tab-admin').or(page.getByTestId('nav-tab-admin')).first().click();
     await expect(page.getByTestId('desktop-admin-console')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('admin-onboarding-thermometer')).toBeVisible();
     await dismissAllToasts(page);
@@ -389,6 +456,15 @@ test.describe('FILA 07 Word-Class QA: Admin 360°, Support Read-Only, Kiwify DLQ
     await expect(page.getByTestId('admin-canary-dom-banner')).toContainText('WHATSAPP_DOM_CANARY');
     await dismissAllToasts(page);
     await page.screenshot({ path: `${ARTIFACT_DIR}/fila07_admin_frota_canary_flags.png` });
+
+    // F07-P07B: Logs & Crashs Contextual Telemetry Panel (White Theme)
+    await expect(page.getByTestId('admin-normal-user-crash-banner')).toBeVisible();
+    await page.getByTestId('admin-subtab-logs').click();
+    await expect(page.getByTestId('admin-crash-logs-panel')).toBeVisible();
+    await expect(page.getByTestId('admin-crash-inspector')).toContainText('src/utils/chunk-recovery.ts');
+    await expect(page.getByTestId('admin-copy-ai-context-btn')).toBeVisible();
+    await dismissAllToasts(page);
+    await page.screenshot({ path: `${ARTIFACT_DIR}/fila07_admin_logs_crashs_white.png` });
 
     // F07-P07: QR & Lotes (Gerar Lote Gráfico A4/ZIP)
     await page.getByTestId('admin-subtab-qr').click();

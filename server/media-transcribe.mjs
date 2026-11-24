@@ -3,11 +3,283 @@
  * Nunca inventa texto quando áudio é >4MB, >60s, corrompido ou STT indisponível.
  */
 
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 export const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 export const MAX_AUDIO_DURATION_SECONDS = 60;
 export const DEFAULT_STT_TIMEOUT_MS = 8000;
 export const AUDIO_FALLBACK_MESSAGE =
-  'Não consegui ouvir seu áudio agora — pode mandar rapidinho por texto?';
+  'Não consegui ouvir seu áudio agora, pode mandar rapidinho por texto?';
+
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const LOCAL_WHISPER_SCRIPT = path.resolve(SCRIPT_DIR, '..', 'scripts', 'transcribe_audio.py');
+let localServerProcess = null;
+let localServerStartingPromise = null;
+let localServerUnsupported = false;
+
+function readDotEnvSttKeys() {
+  const keys = {};
+  try {
+    const localEnvPath = path.resolve(process.cwd(), '.env');
+    const repoEnvPath = path.resolve(SCRIPT_DIR, '..', '.env');
+    const envPath = existsSync(localEnvPath) ? localEnvPath : repoEnvPath;
+    if (!existsSync(envPath)) return keys;
+    const raw = readFileSync(envPath, 'utf8');
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq <= 0) continue;
+      const k = trimmed.slice(0, eq).trim();
+      const v = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, '');
+      keys[k] = v;
+    }
+  } catch {}
+  return keys;
+}
+
+function getPythonCandidates() {
+  const explicit = String(process.env.PYTHON_BIN || '').trim();
+  const base = process.platform === 'win32' ? ['python', 'py', 'python3'] : ['python3', 'python'];
+  return explicit ? [explicit, ...base.filter((c) => c !== explicit)] : base;
+}
+
+function runPythonWhisperOnce({ tmpPath, timeoutMs = 15000 }) {
+  const candidates = getPythonCandidates();
+  return new Promise((resolve) => {
+    let idx = 0;
+    const tryNext = () => {
+      if (idx >= candidates.length) {
+        resolve({ ok: false, reason: 'python_not_found' });
+        return;
+      }
+      const bin = candidates[idx++];
+      const args = bin === 'py'
+        ? ['-3', LOCAL_WHISPER_SCRIPT, tmpPath, '--json', '--language', 'pt']
+        : [LOCAL_WHISPER_SCRIPT, tmpPath, '--json', '--language', 'pt'];
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+      let child;
+      try {
+        child = spawn(bin, args, {
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      } catch {
+        tryNext();
+        return;
+      }
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        try { child.kill(); } catch {}
+        resolve({ ok: false, reason: 'stt_timeout' });
+      }, Math.min(25000, Math.max(4000, Number(timeoutMs) || 15000)));
+
+      child.stdout?.on('data', (chunk) => {
+        stdout += String(chunk);
+      });
+      child.stderr?.on('data', (chunk) => {
+        stderr += String(chunk);
+      });
+      child.on('error', (err) => {
+        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        if (err?.code === 'ENOENT') {
+          tryNext();
+        } else {
+          resolve({ ok: false, reason: 'python_spawn_error' });
+        }
+      });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        if (code !== 0) {
+          resolve({ ok: false, reason: `python_exit_${code}`, stderr: stderr.slice(0, 200) });
+          return;
+        }
+        const lines = stdout.trim().split(/\r?\n/).reverse();
+        for (const line of lines) {
+          const clean = line.trim();
+          if (!clean.startsWith('{')) continue;
+          try {
+            const parsed = JSON.parse(clean);
+            const text = String(parsed?.text || '').replace(/\s+/g, ' ').trim();
+            if (text) {
+              resolve({ ok: true, transcript: text });
+              return;
+            }
+          } catch {}
+        }
+        resolve({ ok: false, reason: 'empty_transcript' });
+      });
+    };
+    tryNext();
+  });
+}
+
+let activeLocalSttBaseUrl = '';
+
+async function isOurWhisperHealth(fetchImpl, baseUrl) {
+  try {
+    const ping = await fetchImpl(`${baseUrl}/health`, { signal: AbortSignal.timeout(450) });
+    if (!ping.ok) return false;
+    const body = await ping.json().catch(() => null);
+    return Boolean(body && body.ok === true && (body.service === 'companygen_stt' || typeof body.model === 'string'));
+  } catch {
+    return false;
+  }
+}
+
+async function ensureLocalWhisperServer(fetchImpl) {
+  if (!existsSync(LOCAL_WHISPER_SCRIPT)) return '';
+  if (activeLocalSttBaseUrl && (await isOurWhisperHealth(fetchImpl, activeLocalSttBaseUrl))) {
+    return `${activeLocalSttBaseUrl}/v1/audio/transcriptions`;
+  }
+
+  const preferredPort = Number(process.env.LOCAL_STT_PORT || 8785);
+  const candidatePorts = [...new Set([preferredPort, 8785, 8786, 8787])];
+  for (const p of candidatePorts) {
+    if (await isOurWhisperHealth(fetchImpl, `http://127.0.0.1:${p}`)) {
+      activeLocalSttBaseUrl = `http://127.0.0.1:${p}`;
+      return `${activeLocalSttBaseUrl}/v1/audio/transcriptions`;
+    }
+  }
+
+  if (localServerUnsupported) return '';
+  if (localServerStartingPromise) return localServerStartingPromise;
+
+  localServerStartingPromise = (async () => {
+    for (const port of candidatePorts) {
+      const baseUrl = `http://127.0.0.1:${port}`;
+      for (const bin of getPythonCandidates()) {
+        const args = bin === 'py'
+          ? ['-3', LOCAL_WHISPER_SCRIPT, '--serve', '--host', '127.0.0.1', '--port', String(port)]
+          : [LOCAL_WHISPER_SCRIPT, '--serve', '--host', '127.0.0.1', '--port', String(port)];
+        let exitedEarly = false;
+        try {
+          localServerProcess = spawn(bin, args, {
+            windowsHide: true,
+            stdio: 'ignore',
+            detached: false,
+          });
+          localServerProcess.unref?.();
+          localServerProcess.on('exit', () => {
+            exitedEarly = true;
+            localServerProcess = null;
+          });
+          localServerProcess.on('error', () => {
+            exitedEarly = true;
+            localServerProcess = null;
+          });
+        } catch {
+          continue;
+        }
+
+        const deadline = Date.now() + 25000;
+        while (Date.now() < deadline && !exitedEarly) {
+          await new Promise((r) => setTimeout(r, 350));
+          if (await isOurWhisperHealth(fetchImpl, baseUrl)) {
+            activeLocalSttBaseUrl = baseUrl;
+            return `${baseUrl}/v1/audio/transcriptions`;
+          }
+        }
+        if (exitedEarly) break;
+      }
+    }
+    return '';
+  })().finally(() => {
+    localServerStartingPromise = null;
+  });
+
+  return localServerStartingPromise;
+}
+
+export async function describeWhatsappImage({
+  imageBase64 = '',
+  question = '',
+  timeoutMs = 45000,
+  fetchImpl = fetch,
+} = {}) {
+  const rawImg = String(imageBase64 || '').trim();
+  if (!rawImg || !existsSync(LOCAL_WHISPER_SCRIPT)) {
+    return { ok: false, reason: 'vision_local_unavailable', description: '' };
+  }
+  const cleanB64 = rawImg.replace(/^data:image\/[^;]+;base64,/i, '').trim();
+  const buf = Buffer.from(cleanB64, 'base64');
+  if (!buf || buf.length < 32) {
+    return { ok: false, reason: 'empty_image', description: '' };
+  }
+  const sttEndpoint = await ensureLocalWhisperServer(fetchImpl);
+  if (!sttEndpoint) {
+    return { ok: false, reason: 'local_vision_server_down', description: '' };
+  }
+  const visionUrl = sttEndpoint.replace(/\/v1\/audio\/transcriptions$/i, '/v1/vision/describe');
+  try {
+    const formData = new FormData();
+    formData.append('file', new Blob([buf], { type: 'image/jpeg' }), 'whatsapp_photo.jpg');
+    if (question) formData.append('question', String(question).slice(0, 120));
+    const res = await fetchImpl(visionUrl, {
+      method: 'POST',
+      body: formData,
+      signal: AbortSignal.timeout(Math.max(10000, Number(timeoutMs) || 28000)),
+    });
+    if (!res.ok) return { ok: false, reason: `local_vision_${res.status}`, description: '' };
+    const payload = await res.json().catch(() => null);
+    const description = String(payload?.description || '').replace(/\s+/g, ' ').trim();
+    if (!description) return { ok: false, reason: 'empty_caption', description: '' };
+    return { ok: true, description, model: String(payload?.model || 'blip-local') };
+  } catch (err) {
+    return { ok: false, reason: err?.message || 'local_vision_failed', description: '' };
+  }
+}
+
+async function transcribeWithLocalPython({ buf, ext, mimeType, timeoutMs, fetchImpl }) {
+  if (!existsSync(LOCAL_WHISPER_SCRIPT)) {
+    return { ok: false, reason: 'stt_not_configured' };
+  }
+
+  const localEndpoint = await ensureLocalWhisperServer(fetchImpl);
+  if (localEndpoint) {
+    try {
+      const formData = new FormData();
+      formData.append('file', new Blob([buf], { type: mimeType }), `whatsapp_voice.${ext}`);
+      formData.append('model', 'whisper-1');
+      formData.append('language', 'pt');
+      const res = await fetchImpl(localEndpoint, {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(Math.min(18000, Math.max(4000, Number(timeoutMs) || 12000))),
+      });
+      if (res.ok) {
+        const payload = await res.json().catch(() => null);
+        const text = String(payload?.text || '').replace(/\s+/g, ' ').trim();
+        if (text) return { ok: true, transcript: text, provider: 'local_python_server' };
+      }
+    } catch {}
+  }
+
+  const tmpPath = path.join(os.tmpdir(), `cg-wa-stt-${randomUUID()}.${ext}`);
+  try {
+    await writeFile(tmpPath, buf);
+    const cliRes = await runPythonWhisperOnce({ tmpPath, timeoutMs });
+    if (cliRes.ok && cliRes.transcript) {
+      return { ok: true, transcript: cliRes.transcript, provider: 'local_python_cli' };
+    }
+    return { ok: false, reason: cliRes.reason || 'stt_not_configured' };
+  } finally {
+    await rm(tmpPath, { force: true }).catch(() => {});
+  }
+}
 
 /**
  * Checks magic bytes for common WhatsApp/browser audio formats (.ogg/.opus, .mp3, .wav, .m4a/.mp4/.webm).
@@ -95,8 +367,48 @@ export async function transcribeWhatsappAudio({
     };
   }
 
-  const cleanEndpoint = String(sttEndpointUrl || '').trim();
+  let cleanEndpoint = String(sttEndpointUrl || '').trim();
+  let effectiveApiKey = String(sttApiKey || '').trim();
+  let sttModel = 'whisper-1';
+
   if (!cleanEndpoint) {
+    const envKeys = fetchImpl === fetch ? readDotEnvSttKeys() : {};
+    const envWhisperUrl = String(process.env.WHISPER_ENDPOINT_URL || envKeys.WHISPER_ENDPOINT_URL || '').trim();
+    const groqKey = String(process.env.GROQ_API_KEY || envKeys.GROQ_API_KEY || '').trim();
+    const openaiKey = String(process.env.OPENAI_API_KEY || envKeys.OPENAI_API_KEY || '').trim();
+    if (envWhisperUrl) {
+      cleanEndpoint = envWhisperUrl;
+      effectiveApiKey = effectiveApiKey || String(process.env.WHISPER_API_KEY || envKeys.WHISPER_API_KEY || '').trim();
+    } else if (groqKey) {
+      cleanEndpoint = 'https://api.groq.com/openai/v1/audio/transcriptions';
+      effectiveApiKey = groqKey;
+      sttModel = 'whisper-large-v3-turbo';
+    } else if (openaiKey) {
+      cleanEndpoint = 'https://api.openai.com/v1/audio/transcriptions';
+      effectiveApiKey = openaiKey;
+      sttModel = 'whisper-1';
+    }
+  }
+
+  if (!cleanEndpoint) {
+    if (fetchImpl === fetch) {
+      const localRes = await transcribeWithLocalPython({
+        buf,
+        ext: magic.ext,
+        mimeType: mimeType || magic.mime,
+        timeoutMs,
+        fetchImpl,
+      });
+      if (localRes.ok && localRes.transcript) {
+        return {
+          ok: true,
+          transcript: localRes.transcript,
+          format: magic.ext,
+          sizeBytes: buf.length,
+          provider: localRes.provider || 'local_python',
+        };
+      }
+    }
     return {
       ok: false,
       reason: 'stt_not_configured',
@@ -109,12 +421,12 @@ export async function transcribeWhatsappAudio({
     const formData = new FormData();
     const blob = new Blob([buf], { type: mimeType || magic.mime });
     formData.append('file', blob, `whatsapp_voice.${magic.ext}`);
-    formData.append('model', 'whisper-1');
+    formData.append('model', sttModel);
     formData.append('language', 'pt');
 
     const headers = {};
-    if (sttApiKey) {
-      headers.Authorization = `Bearer ${sttApiKey}`;
+    if (effectiveApiKey) {
+      headers.Authorization = `Bearer ${effectiveApiKey}`;
     }
 
     const res = await fetchImpl(cleanEndpoint, {

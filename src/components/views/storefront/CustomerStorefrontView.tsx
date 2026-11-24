@@ -9,7 +9,6 @@ import {
   Plus,
   Send,
   ShoppingBag,
-  Sparkles,
   Tag,
   Trash2,
   X,
@@ -27,6 +26,9 @@ import {
 } from '@/schemas/profile.schema';
 import type { WhatsappRuntimeStatus } from '@/hooks/useConnectionPhase';
 import { FormulaTreeRenderer } from './FormulaTreeRenderer';
+import { StorefrontAiInspector } from './StorefrontAiInspector';
+import { StorePagesExpansionModal } from './StorePagesExpansionModal';
+import { StorefrontPostGenWhatsappModal } from './StorefrontPostGenWhatsappModal';
 import {
   sanitizeFormulaV9Document,
   type FormulaV9Document,
@@ -51,6 +53,7 @@ import {
   resolveProductImageUrl,
   sanitizeProductForCustomerDisplay,
 } from './storefront-utils';
+import { ensureVitrineFontLoaded } from '@/utils/dynamic-vitrine-fonts';
 
 export interface StoreCartItem {
   productId: string;
@@ -165,10 +168,101 @@ export function CustomerStorefrontView({
     }
   }, [cart, storageKey]);
 
-  const activeFormulaV9 = React.useMemo<FormulaV9Document>(
-    () => sanitizeFormulaV9Document(ensureFormulaV9(profile), profile) as FormulaV9Document,
-    [profile],
+  const [aiInspectorOpen, setAiInspectorOpen] = React.useState(false);
+  const [expansionModalOpen, setExpansionModalOpen] = React.useState(false);
+  const [previewViewport, setPreviewViewport] = React.useState<'desktop' | 'mobile'>('desktop');
+  const [whatsappFlowsModalOpen, setWhatsappFlowsModalOpen] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const q = new URLSearchParams(window.location.search);
+    return q.get('modal') === 'whatsapp' || q.get('postgen') === 'whatsapp';
+  });
+  const [creditBalance, setCreditBalance] = React.useState<number | null>(null);
+  const [activePageSlug, setActivePageSlug] = React.useState<string>(() => {
+    if (typeof window === 'undefined') return 'home';
+    const q = new URLSearchParams(window.location.search).get('page');
+    return q ? q.trim().toLowerCase() : 'home';
+  });
+  const [patchedFormulaOverride, setPatchedFormulaOverride] = React.useState<FormulaV9Document | null>(null);
+  const storefrontMainRef = React.useRef<HTMLElement | null>(null);
+  const canUseAiModify = mode === 'preview' || Boolean(onBackToAdmin);
+
+  React.useEffect(() => {
+    if (!canUseAiModify) return;
+    let active = true;
+    authenticatedFetch('/api/credits/balance')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (active && d && typeof d.balance === 'number') setCreditBalance(d.balance);
+      })
+      .catch(() => null);
+
+    const onCreditsUpdated = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ balanceAfter?: number; balance?: number }>).detail;
+      const nextBal =
+        typeof detail?.balanceAfter === 'number'
+          ? detail.balanceAfter
+          : typeof detail?.balance === 'number'
+            ? detail.balance
+            : null;
+      if (nextBal !== null && active) {
+        setCreditBalance(nextBal);
+      }
+    };
+    window.addEventListener('companygen:credits-updated', onCreditsUpdated);
+    return () => {
+      active = false;
+      window.removeEventListener('companygen:credits-updated', onCreditsUpdated);
+    };
+  }, [canUseAiModify, expansionModalOpen, aiInspectorOpen]);
+
+  const baseFormulaStamp = String(
+    (profile as unknown as { storefrontFormula?: { updatedAt?: string } })?.storefrontFormula?.updatedAt ||
+      profile.business?.name ||
+      '',
   );
+
+  React.useEffect(() => {
+    setPatchedFormulaOverride(null);
+  }, [baseFormulaStamp]);
+
+  const activeFormulaV9 = React.useMemo<FormulaV9Document>(
+    () =>
+      sanitizeFormulaV9Document(
+        patchedFormulaOverride || ensureFormulaV9(profile),
+        profile,
+      ) as FormulaV9Document,
+    [patchedFormulaOverride, profile],
+  );
+
+  React.useEffect(() => {
+    const f =
+      activeFormulaV9?.designTokens?.fontStyle ||
+      String(activeFormulaV9?.atomicBlueprint?.brandTokens?.headingFont || '') ||
+      String(activeFormulaV9?.atomicBlueprint?.brandTokens?.fontFamily || '');
+    if (f) {
+      void ensureVitrineFontLoaded(f);
+    }
+  }, [activeFormulaV9]);
+
+  const subpagesList = React.useMemo(
+    () => (Array.isArray(activeFormulaV9.pages) ? activeFormulaV9.pages.filter((p) => p && !p.isHome) : []),
+    [activeFormulaV9.pages],
+  );
+
+  const activeSubpage = React.useMemo(
+    () => (activePageSlug === 'home' ? null : subpagesList.find((p) => p.slug === activePageSlug) || null),
+    [activePageSlug, subpagesList],
+  );
+
+  const visibleFormulaV9 = React.useMemo<FormulaV9Document>(() => {
+    if (!activeSubpage) return activeFormulaV9;
+    const { atomicBlueprint: _homeBlueprint, ...restActive } = activeFormulaV9;
+    return {
+      ...restActive,
+      sections: Array.isArray(activeSubpage.sections) && activeSubpage.sections.length > 0 ? activeSubpage.sections : activeFormulaV9.sections,
+      ...(activeSubpage.atomicBlueprint ? { atomicBlueprint: activeSubpage.atomicBlueprint } : {}),
+    };
+  }, [activeFormulaV9, activeSubpage]);
 
   const brandName = profile.business?.name?.trim() || 'Minha Loja';
   const brandColor = profile.brand?.primaryColor || '#0B4DB8';
@@ -580,8 +674,11 @@ export function CustomerStorefrontView({
     else if (profile.publishedStore?.publicSlug) {
       u.searchParams.set('loja', profile.publishedStore.publicSlug);
     }
+    if (activePageSlug && activePageSlug !== 'home') {
+      u.searchParams.set('page', activePageSlug);
+    }
     return u.toString();
-  }, [ownerId, profile.publishedStore?.publicSlug]);
+  }, [activePageSlug, ownerId, profile.publishedStore?.publicSlug]);
 
   const handleSimulateFirstOrder = async () => {
     if (simulatingOrder) return;
@@ -660,24 +757,50 @@ export function CustomerStorefrontView({
           : undefined
       }
     >
-      {/* Faixa Modo Preview do Lojista (40px+ compacta com copiar link + simular 1º pedido) */}
+      {/* Faixa Modo Preview do Lojista (sticky no topo com Desktop/Celular + copiar link + simular 1º pedido) */}
       {showOwnerPreviewBar ? (
         <div
           data-testid="storefront-owner-preview-bar"
           className={
             isCarbonDark
-              ? 'relative z-40 min-h-[40px] border-b border-[#27272A] bg-[#121215] px-4 py-1.5 text-white'
-              : 'relative z-40 min-h-[40px] border-b border-blue-200 bg-[#EFF6FF] px-4 py-1.5'
+              ? 'sticky top-0 z-40 min-h-[40px] border-b border-[#27272A] bg-[#121215] px-4 py-1.5 text-white'
+              : 'sticky top-0 z-40 min-h-[40px] border-b border-blue-200 bg-[#EFF6FF] px-4 py-1.5'
           }
         >
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
             <div
               className={`flex flex-wrap items-center gap-2 text-xs font-semibold ${
-                isCarbonDark ? 'text-[#F4F4F5]' : 'text-[#1D4ED8]'
+                isCarbonDark ? 'text-[#F4F4F5]' : 'text-[#0F172A]'
               }`}
             >
-              <Sparkles className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
               <span>Prévia da sua loja</span>
+              <div
+                role="group"
+                aria-label="Alternar visualização Desktop ou Celular"
+                className="ml-2 inline-flex items-center rounded-lg border border-slate-300/80 bg-white/90 p-0.5 text-[11px] font-bold text-slate-700"
+              >
+                <button
+                  type="button"
+                  data-testid="preview-viewport-desktop"
+                  onClick={() => setPreviewViewport('desktop')}
+                  className={`rounded-md px-2 py-0.5 transition ${
+                    previewViewport === 'desktop' ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
+                  }`}
+                >
+                  Desktop
+                </button>
+                <button
+                  type="button"
+                  data-testid="preview-viewport-mobile"
+                  onClick={() => setPreviewViewport('mobile')}
+                  className={`rounded-md px-2 py-0.5 transition ${
+                    previewViewport === 'mobile' ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
+                  }`}
+                >
+                  Celular (390px)
+                </button>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {publicStoreLink ? (
@@ -702,6 +825,36 @@ export function CustomerStorefrontView({
               >
                 Simular 1º Pedido (Teste)
               </ActionButton>
+              {canUseAiModify ? (
+                <>
+                  <button
+                    type="button"
+                    data-testid="open-whatsapp-flows-btn"
+                    onClick={() => setWhatsappFlowsModalOpen(true)}
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-800 shadow-2xs transition-colors hover:bg-slate-50"
+                  >
+                    <MessageCircle className="size-3.5 text-emerald-600" aria-hidden="true" />
+                    <span>Mensagens WhatsApp</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="open-expansion-modal-btn"
+                    onClick={() => setExpansionModalOpen(true)}
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-800 shadow-2xs transition-colors hover:bg-slate-50"
+                  >
+                    <Plus className="size-3.5" aria-hidden="true" />
+                    <span>Nova Tela</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="open-ai-inspector-btn"
+                    onClick={() => setAiInspectorOpen((v) => !v)}
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-slate-950 px-4 text-xs font-semibold text-white transition-all hover:bg-slate-800"
+                  >
+                    <span>Modificar com a Inteligência Artificial</span>
+                  </button>
+                </>
+              ) : null}
               {lastSimulatedOrderRef ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <span
@@ -767,10 +920,74 @@ export function CustomerStorefrontView({
         </div>
       ) : null}
 
+      {/* Faixa Navegador Multi-Telas (Page Switcher Strip: Home + Subpaginas geradas) */}
+      {(showOwnerPreviewBar || subpagesList.length > 0) && (subpagesList.length > 0 || canUseAiModify) ? (
+        <div
+          data-testid="store-pages-switcher-strip"
+          className={`border-b px-4 py-2 ${
+            isCarbonDark ? 'border-[#27272A] bg-[#0B0A09] text-zinc-200' : 'border-slate-200 bg-white text-slate-800'
+          }`}
+        >
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider opacity-60">Telas da Loja:</span>
+            <button
+              type="button"
+              data-testid="page-switch-home"
+              onClick={() => setActivePageSlug('home')}
+              className={`rounded-full px-3 py-1 text-xs font-bold transition-colors ${
+                activePageSlug === 'home'
+                  ? 'bg-[#7E22CE] text-white'
+                  : isCarbonDark
+                    ? 'bg-white/10 text-zinc-200 hover:bg-white/20'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              Principal
+            </button>
+            {subpagesList.map((pg) => (
+              <button
+                key={pg.slug}
+                type="button"
+                data-testid={`page-switch-${pg.slug}`}
+                onClick={() => setActivePageSlug(pg.slug)}
+                className={`rounded-full px-3 py-1 text-xs font-bold transition-colors ${
+                  activePageSlug === pg.slug
+                    ? 'bg-[#7E22CE] text-white'
+                    : isCarbonDark
+                      ? 'bg-white/10 text-zinc-200 hover:bg-white/20'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {pg.title}
+              </button>
+            ))}
+            {canUseAiModify ? (
+              <button
+                type="button"
+                onClick={() => setExpansionModalOpen(true)}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-purple-400/55 px-3 py-1 text-xs font-bold text-purple-600 hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-950/40"
+              >
+                <Plus className="size-3" />
+                <span>Adicionar Tela</span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {/* Grade de Produtos & Seções Modulares v9.0 */}
-      <main role="region" aria-label="Catálogo da Vitrine" className="w-full pb-24">
+      <main
+        ref={storefrontMainRef}
+        role="region"
+        aria-label="Catálogo da Vitrine"
+        className={
+          previewViewport === 'mobile' && showOwnerPreviewBar
+            ? 'mx-auto my-4 w-full max-w-[390px] overflow-hidden rounded-[28px] border-4 border-slate-900/80 pb-24 shadow-2xl'
+            : 'w-full pb-24'
+        }
+      >
         <FormulaTreeRenderer
-          formulaV9={activeFormulaV9}
+          formulaV9={visibleFormulaV9}
           profile={profile}
           products={activeProducts}
           cartCount={totalItemsCount}
@@ -797,9 +1014,12 @@ export function CustomerStorefrontView({
         />
       </main>
 
-      {/* Barra Flutuante Mobile da Sacola */}
+      {/* Barra Flutuante da Sacola (Mobile + Desktop) */}
       {totalItemsCount > 0 ? (
-        <div className="fixed inset-x-4 bottom-4 z-20 mx-auto max-w-md md:hidden">
+        <div
+          data-testid="storefront-floating-bag-bar"
+          className="fixed inset-x-4 bottom-4 z-30 mx-auto max-w-md md:left-auto md:right-6 md:w-auto md:min-w-[290px]"
+        >
           <ActionButton
             variant="success"
             size={50}
@@ -1273,6 +1493,110 @@ export function CustomerStorefrontView({
           </div>
         )}
       </DrawerContainer>
+
+      {canUseAiModify && !aiInspectorOpen ? (
+        <button
+          type="button"
+          data-testid="floating-ai-inspector-btn"
+          onClick={() => setAiInspectorOpen(true)}
+          className="fixed bottom-5 right-5 z-[70] inline-flex min-h-[44px] items-center gap-2 rounded-full bg-slate-950 px-4 text-xs font-semibold text-white shadow-lg transition-transform hover:-translate-y-0.5"
+        >
+          <span>Modificar com a Inteligência Artificial</span>
+        </button>
+      ) : null}
+
+      {canUseAiModify ? (
+        <>
+          <StorefrontAiInspector
+            menuOpen={aiInspectorOpen}
+            onCloseMenu={() => setAiInspectorOpen(false)}
+            containerRef={storefrontMainRef}
+            profile={profile}
+            formulaV9={visibleFormulaV9}
+            pageFilename={activeSubpage?.filename}
+            creditBalance={creditBalance}
+            onCreditsChanged={(balanceAfter) => {
+              setCreditBalance(balanceAfter);
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(
+                  new CustomEvent('companygen:credits-updated', {
+                    detail: { balanceAfter, balance: balanceAfter },
+                  }),
+                );
+              }
+            }}
+            onFormulaUpdated={(nextDoc) => {
+              if (!activeSubpage) {
+                setPatchedFormulaOverride(sanitizeFormulaV9Document(nextDoc, profile) as FormulaV9Document);
+                return;
+              }
+              // Encontra a subpágina atualizada em nextDoc.pages por filename/slug sem sobrescrever com a Home
+              const matchedPage = Array.isArray(nextDoc.pages)
+                ? nextDoc.pages.find(
+                    (pg) =>
+                      (activeSubpage.filename && pg.filename === activeSubpage.filename) ||
+                      pg.slug === activeSubpage.slug,
+                  )
+                : undefined;
+
+              const nextPages = (activeFormulaV9.pages || []).map((pg) => {
+                const isTarget =
+                  (activeSubpage.filename && pg.filename === activeSubpage.filename) ||
+                  pg.slug === activeSubpage.slug;
+                if (!isTarget) return pg;
+                if (matchedPage) {
+                  return {
+                    ...pg,
+                    ...matchedPage,
+                    sections:
+                      Array.isArray(matchedPage.sections) && matchedPage.sections.length > 0
+                        ? matchedPage.sections
+                        : pg.sections,
+                    ...(matchedPage.atomicBlueprint
+                      ? { atomicBlueprint: matchedPage.atomicBlueprint }
+                      : pg.atomicBlueprint
+                        ? { atomicBlueprint: pg.atomicBlueprint }
+                        : {}),
+                  };
+                }
+                return pg;
+              });
+
+              setPatchedFormulaOverride(
+                sanitizeFormulaV9Document(
+                  {
+                    ...activeFormulaV9,
+                    pages: nextPages,
+                  },
+                  profile,
+                ) as FormulaV9Document,
+              );
+            }}
+          />
+          <StorePagesExpansionModal
+            open={expansionModalOpen}
+            profile={profile}
+            creditBalance={creditBalance}
+            onClose={() => setExpansionModalOpen(false)}
+            onPageCreated={(nextIr, createdSlug) => {
+              if (nextIr && typeof nextIr === 'object') {
+                setPatchedFormulaOverride(sanitizeFormulaV9Document(nextIr, profile) as FormulaV9Document);
+              }
+              if (createdSlug) setActivePageSlug(createdSlug);
+            }}
+            onNeedCredits={() => {
+              setExpansionModalOpen(false);
+              onBackToAdmin?.();
+            }}
+          />
+          <StorefrontPostGenWhatsappModal
+            isOpen={whatsappFlowsModalOpen}
+            onClose={() => setWhatsappFlowsModalOpen(false)}
+            profile={profile}
+            owner={ownerId}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

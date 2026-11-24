@@ -309,6 +309,30 @@ export function buildWebviewPollScript() {
       return { isAudio: true, durationHint, durationSeconds };
     };
 
+    const detectImageBubble = (msgEl) => {
+      const imgs = Array.from(msgEl.querySelectorAll('img'));
+      for (const img of imgs) {
+        const src = String(img.currentSrc || img.getAttribute('src') || img.src || '').trim();
+        if (!src || (!src.startsWith('blob:') && !src.startsWith('data:image/'))) continue;
+        if (img.classList.contains('emoji') || img.hasAttribute('data-plain-text')) continue;
+        if (img.closest('[data-testid="quoted-message"], [data-testid="avatar"], [data-testid="author"], header')) {
+          continue;
+        }
+        const natW = Number(img.naturalWidth || 0);
+        const natH = Number(img.naturalHeight || 0);
+        const rect = img.getBoundingClientRect();
+        const dispW = Math.max(Number(rect.width || 0), Number(img.width || 0));
+        const dispH = Math.max(Number(rect.height || 0), Number(img.height || 0));
+        if (natW > 0 && natW < 48) continue;
+        if (natH > 0 && natH < 48) continue;
+        const maxW = Math.max(natW, dispW);
+        const maxH = Math.max(natH, dispH);
+        if (maxW < 48 || maxH < 48) continue;
+        return { isImage: true, imgSrc: src, width: maxW, height: maxH };
+      }
+      return { isImage: false, imgSrc: '', width: 0, height: 0 };
+    };
+
     const extractMessageText = (msgEl) => {
       const textEls = Array.from(
         msgEl.querySelectorAll('span.selectable-text, [data-testid="selectable-text"]'),
@@ -402,7 +426,13 @@ export function buildWebviewPollScript() {
         const m = msgs[i];
         const txt = extractMessageText(m);
         const audio = detectAudioBubble(m);
-        const key = buildMsgKey(m, chatTitle, i, txt || (audio.isAudio ? 'audio:' + audio.durationHint : ''));
+        const img = detectImageBubble(m);
+        const key = buildMsgKey(
+          m,
+          chatTitle,
+          i,
+          txt || (audio.isAudio ? 'audio:' + audio.durationHint : img.isImage ? 'image' : ''),
+        );
         if (key) st.processedMsgIds[key] = Date.now();
       }
       return msgs;
@@ -460,8 +490,27 @@ export function buildWebviewPollScript() {
           if (switchedChats) {
             st.lastMainChatKey = chatKey;
             if (!wasPendingUnreadSwitch) {
-              // Conversa aberta manualmente pelo lojista: absorve histórico para nunca responder mensagens antigas
-              seedMainMessages(mainEl, chatTitle);
+              // Conversa aberta manualmente pelo lojista: absorve histórico antigo,
+              // mas em self-chat de teste ("Meu numero:") preserva a última bolha recente se ainda não foi respondida pelo bot
+              const allMsgs = collectMainMessages(mainEl);
+              const lastBubble = allMsgs[allMsgs.length - 1];
+              const lastText = lastBubble ? extractMessageText(lastBubble) : '';
+              const preserveTailSelfTest =
+                Boolean(isSelfChat && lastBubble && lastText && !isBotSentMatch(lastText));
+              const limitCount = preserveTailSelfTest ? Math.max(0, allMsgs.length - 1) : allMsgs.length;
+              for (let si = 0; si < limitCount; si += 1) {
+                const m = allMsgs[si];
+                const txt = extractMessageText(m);
+                const audio = detectAudioBubble(m);
+                const img = detectImageBubble(m);
+                const key = buildMsgKey(
+                  m,
+                  chatTitle,
+                  si,
+                  txt || (audio.isAudio ? 'audio:' + audio.durationHint : img.isImage ? 'image' : ''),
+                );
+                if (key) st.processedMsgIds[key] = Date.now();
+              }
               st.pendingOpenedTitle = '';
               st.pendingUnreadCount = 0;
             }
@@ -477,11 +526,12 @@ export function buildWebviewPollScript() {
           const lastDir = classifyDirection(lastEl, mainEl, chatTitle, isSelfChat, lastPrePlain);
           const lastTxt = extractMessageText(lastEl);
           const lastAudio = detectAudioBubble(lastEl);
+          const lastImage = detectImageBubble(lastEl);
           const lastKey = buildMsgKey(
             lastEl,
             chatTitle,
             msgs.length - 1,
-            lastTxt || (lastAudio.isAudio ? 'audio:' + lastAudio.durationHint : ''),
+            lastTxt || (lastAudio.isAudio ? 'audio:' + lastAudio.durationHint : lastImage.isImage ? 'image' : ''),
           );
 
           if (lastDir.isOutgoing && !isSelfChat && lastTxt && !st.processedMsgIds[lastKey] && !isBotSentMatch(lastTxt)) {
@@ -502,7 +552,7 @@ export function buildWebviewPollScript() {
             };
           }
 
-          // Caminha de trás para frente coletando TODOS os balões novos consecutivos da rajada (texto + áudio)
+          // Caminha de trás para frente coletando TODOS os balões novos consecutivos da rajada (texto + áudio + imagem)
           const batchReversed = [];
           const lowerBound = Math.max(0, msgs.length - 25);
           for (let i = msgs.length - 1; i >= lowerBound; i -= 1) {
@@ -510,11 +560,12 @@ export function buildWebviewPollScript() {
             const prePlain = el.querySelector('[data-pre-plain-text]')?.getAttribute('data-pre-plain-text') || '';
             const txt = extractMessageText(el);
             const audio = detectAudioBubble(el);
+            const image = detectImageBubble(el);
             const itemKey = buildMsgKey(
               el,
               chatTitle,
               i,
-              txt || (audio.isAudio ? 'audio:' + audio.durationHint : ''),
+              txt || (audio.isAudio ? 'audio:' + audio.durationHint : image.isImage ? 'image' : ''),
             );
 
             if (st.processedMsgIds[itemKey]) {
@@ -534,10 +585,19 @@ export function buildWebviewPollScript() {
             const eligibleIncoming = (dir.isIncoming || isSelfChat) && (!dir.isOutgoing || isSelfChat);
             if (!eligibleIncoming) continue;
 
-            if (audio.isAudio || txt) {
+            if (audio.isAudio || image.isImage || txt) {
+              const kind = audio.isAudio && !txt
+                ? 'audio'
+                : image.isImage && txt
+                  ? 'text_image'
+                  : image.isImage
+                    ? 'image'
+                    : 'text';
               batchReversed.push({
-                kind: audio.isAudio && !txt ? 'audio' : 'text',
+                kind,
                 hasAudio: audio.isAudio,
+                hasImage: image.isImage,
+                imgMsgKey: image.isImage ? itemKey : '',
                 durationHint: audio.durationHint,
                 durationSeconds: audio.durationSeconds,
                 text: txt,
@@ -558,7 +618,7 @@ export function buildWebviewPollScript() {
             const freshItems = [];
             for (const item of batch) {
               st.processedMsgIds[item.msgKey] = nowTs;
-              if (item.kind === 'text' && item.text && !item.hasAudio) {
+              if (item.kind === 'text' && item.text && !item.hasAudio && !item.hasImage) {
                 const textNormKey = chatKey + '::' + normalizeText(item.text);
                 const recentlySeen =
                   st.processedTextHashes[textNormKey] &&
@@ -579,6 +639,7 @@ export function buildWebviewPollScript() {
               }
               const mergedText = freshItems.map((it) => it.text).filter(Boolean).join('\\n');
               const tailItem = freshItems[freshItems.length - 1];
+              const firstImageItem = freshItems.find((it) => it.hasImage && it.imgMsgKey);
               return {
                 loggedIn: true,
                 connected: true,
@@ -592,6 +653,8 @@ export function buildWebviewPollScript() {
                 text: mergedText,
                 items: freshItems,
                 hasAudio: freshItems.some((it) => it.kind === 'audio' || it.hasAudio),
+                hasImage: freshItems.some((it) => it.kind === 'image' || it.kind === 'text_image' || it.hasImage),
+                imgMsgKey: firstImageItem ? firstImageItem.imgMsgKey : '',
               };
             }
           }
@@ -724,7 +787,7 @@ export function buildWebviewAudioExtractScript({ msgKey = '' } = {}) {
         try { pauseBtn.click(); } catch {}
       }
     }
-    muteAll(false);
+    muteAll(true);
 
     if (!audioEl || !audioEl.src) {
       return { ok: false, reason: 'audio_src_unavailable' };
@@ -755,6 +818,132 @@ export function buildWebviewAudioExtractScript({ msgKey = '' } = {}) {
       };
     } catch (err) {
       return { ok: false, reason: err?.message || 'audio_extract_error' };
+    }
+  })()`;
+}
+
+export function buildWebviewImageExtractScript({ msgKey = '' } = {}) {
+  const safeMsgKey = JSON.stringify(String(msgKey || ''));
+  return `(async () => {
+    const targetMsgKey = ${safeMsgKey};
+    const MAX_DIM = 960;
+    const MAX_BYTES = Math.floor(1.2 * 1024 * 1024);
+    const mainEl = document.querySelector('#main');
+    if (!mainEl) return { ok: false, reason: 'main_not_found' };
+
+    const isPhotoImg = (img) => {
+      if (!img) return false;
+      const src = String(img.currentSrc || img.getAttribute('src') || img.src || '').trim();
+      if (!src || (!src.startsWith('blob:') && !src.startsWith('data:image/'))) return false;
+      if (img.classList.contains('emoji') || img.hasAttribute('data-plain-text')) return false;
+      if (img.closest('[data-testid="quoted-message"], [data-testid="avatar"], [data-testid="author"], header')) {
+        return false;
+      }
+      const natW = Number(img.naturalWidth || 0);
+      const natH = Number(img.naturalHeight || 0);
+      const rect = img.getBoundingClientRect();
+      const dispW = Math.max(Number(rect.width || 0), Number(img.width || 0));
+      const dispH = Math.max(Number(rect.height || 0), Number(img.height || 0));
+      if (natW > 0 && natW < 48) return false;
+      if (natH > 0 && natH < 48) return false;
+      return Math.max(natW, dispW) >= 48 && Math.max(natH, dispH) >= 48;
+    };
+
+    const findBubble = () => {
+      const all = Array.from(mainEl.querySelectorAll('div[data-id], [data-testid^="conv-msg-"], .message-in'));
+      if (targetMsgKey) {
+        const exact = all.find(
+          (el) => el.getAttribute('data-id') === targetMsgKey || el.getAttribute('data-testid') === targetMsgKey,
+        );
+        if (exact) return exact;
+        const parts = targetMsgKey.split('|');
+        const preHint = parts.length >= 3 ? parts[2] : '';
+        if (preHint) {
+          const byPre = all.find(
+            (el) => el.querySelector('[data-pre-plain-text]')?.getAttribute('data-pre-plain-text') === preHint,
+          );
+          if (byPre) return byPre;
+        }
+      }
+      const imgs = Array.from(mainEl.querySelectorAll('img')).filter(isPhotoImg);
+      const lastImg = imgs[imgs.length - 1];
+      return lastImg ? lastImg.closest('div[data-id], [data-testid^="conv-msg-"], .message-in') || lastImg.parentElement : null;
+    };
+
+    const bubble = findBubble();
+    if (!bubble) return { ok: false, reason: 'image_bubble_not_found' };
+
+    const imgEl = Array.from(bubble.querySelectorAll('img')).find(isPhotoImg) || null;
+    if (!imgEl) return { ok: false, reason: 'image_element_not_found' };
+
+    if (!imgEl.complete || !imgEl.naturalWidth) {
+      const deadline = Date.now() + 2500;
+      while (Date.now() < deadline && (!imgEl.complete || !imgEl.naturalWidth)) {
+        await new Promise((r) => setTimeout(r, 80));
+      }
+    }
+
+    const encodeSourceToJpeg = (source, srcW, srcH, maxDim) => {
+      const scale = Math.min(1, maxDim / Math.max(srcW, srcH));
+      const targetW = Math.max(1, Math.round(srcW * scale));
+      const targetH = Math.max(1, Math.round(srcH * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, targetW, targetH);
+      ctx.drawImage(source, 0, 0, targetW, targetH);
+      for (const quality of [0.84, 0.72, 0.58, 0.45]) {
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        const commaIdx = dataUrl.indexOf(',');
+        const b64Len = commaIdx >= 0 ? dataUrl.length - commaIdx - 1 : dataUrl.length;
+        const approxBytes = Math.floor((b64Len * 3) / 4);
+        if (approxBytes <= MAX_BYTES) {
+          return { dataUrl, width: targetW, height: targetH, sizeBytes: approxBytes };
+        }
+      }
+      return null;
+    };
+
+    try {
+      let srcW = Number(imgEl.naturalWidth || imgEl.width || 0);
+      let srcH = Number(imgEl.naturalHeight || imgEl.height || 0);
+      if (srcW < 48 || srcH < 48) {
+        return { ok: false, reason: 'image_too_small' };
+      }
+      let encoded = null;
+      try {
+        encoded = encodeSourceToJpeg(imgEl, srcW, srcH, MAX_DIM);
+        if (!encoded) encoded = encodeSourceToJpeg(imgEl, srcW, srcH, 640);
+      } catch {
+        const srcUrl = String(imgEl.currentSrc || imgEl.src || '').trim();
+        if (srcUrl) {
+          const res = await fetch(srcUrl);
+          if (res.ok) {
+            const blob = await res.blob();
+            const bitmap = await createImageBitmap(blob);
+            srcW = bitmap.width || srcW;
+            srcH = bitmap.height || srcH;
+            encoded = encodeSourceToJpeg(bitmap, srcW, srcH, MAX_DIM) || encodeSourceToJpeg(bitmap, srcW, srcH, 640);
+            try { bitmap.close(); } catch {}
+          }
+        }
+      }
+      if (!encoded || !encoded.dataUrl || encoded.sizeBytes > MAX_BYTES) {
+        return { ok: false, reason: 'image_encode_or_size_failed' };
+      }
+      return {
+        ok: true,
+        imageBase64: encoded.dataUrl,
+        mimeType: 'image/jpeg',
+        width: encoded.width,
+        height: encoded.height,
+        sizeBytes: encoded.sizeBytes,
+      };
+    } catch (err) {
+      return { ok: false, reason: err?.message || 'image_extract_error' };
     }
   })()`;
 }

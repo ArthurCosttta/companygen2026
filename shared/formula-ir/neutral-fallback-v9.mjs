@@ -175,7 +175,7 @@ export function buildNeutralFallbackV9Document(profile = {}) {
     imageSlotId: 'hero_main',
     config: {
       variant: 'split',
-      eyebrow: (campaignTheme || segment).slice(0, 58),
+      eyebrow: '',
       title: storeName.slice(0, 58),
       subtitle: description.slice(0, 115),
       primaryCta: {
@@ -196,7 +196,7 @@ export function buildNeutralFallbackV9Document(profile = {}) {
     id: 'sec_experiencia',
     type: 'InteractiveExperience',
     config: {
-      eyebrow: campaignTheme ? `Destaque: ${campaignTheme}` : 'Simulador da Loja',
+      eyebrow: '',
       title: businessModel === 'servicos' ? 'Monte sua solicitação' : 'Monte sua seleção',
       subtitle: String(
         business.experienceGoal ||
@@ -288,7 +288,7 @@ export function buildNeutralFallbackV9Document(profile = {}) {
       subtitle: 'Navegue pelas linhas mais procuradas do catálogo.',
       columns: 2,
       cards: activeItems.slice(0, 2).map((p) => ({
-        eyebrow: String(p.category || segment).slice(0, 40),
+        eyebrow: '',
         title: String(p.name || 'Destaque').slice(0, 75),
         description: String(p.description || `${p.name} disponível no catálogo.`).slice(0, 180),
         ctaLabel: 'Ver no catálogo',
@@ -322,7 +322,7 @@ export function buildNeutralFallbackV9Document(profile = {}) {
     id: 'sec_closing',
     type: 'ClosingScheduleSplit',
     config: {
-      eyebrow: 'Atendimento',
+      eyebrow: '',
       title: String(business.hours || 'Atendimento ágil e organizado'),
       subtitle: String(
         business.address || 'Combine entrega ou retirada diretamente com nossa equipe.',
@@ -408,7 +408,11 @@ export function buildNeutralFallbackV9Document(profile = {}) {
  */
 export function ensureFormulaV9(profile = {}) {
   const savedIr = profile?.storeLayout?.formulasIr;
-  if (savedIr?.version === FORMULA_V9_VERSION && Array.isArray(savedIr.sections) && savedIr.sections.length > 0) {
+  if (
+    savedIr?.version === FORMULA_V9_VERSION &&
+    ((Array.isArray(savedIr.sections) && savedIr.sections.length > 0) ||
+      (Array.isArray(savedIr.atomicBlueprint?.sections) && savedIr.atomicBlueprint.sections.length > 0))
+  ) {
     return savedIr;
   }
   return buildNeutralFallbackV9Document(profile);

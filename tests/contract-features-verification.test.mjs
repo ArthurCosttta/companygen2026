@@ -110,11 +110,11 @@ test('Triple Fallback Cascade: Falls back to Level 3 RAG router when document ma
   assert.ok(outcome.replyText.includes('Estapar'));
 });
 
-test('Checkout Plans: Main tier is R$ 100,00 for 2,500 credits and popular is true', () => {
+test('Checkout Plans: Main tier is R$ 100,00 for 250 credits (~2,500 msgs) and popular is true', () => {
   const mainPlan = CREDIT_PLANS.find((p) => p.id === 'plan_100_brl');
   assert.ok(mainPlan, 'Main plan should exist');
   assert.equal(mainPlan.priceCents, 10000, 'Should be 10000 cents (R$ 100,00)');
-  assert.equal(mainPlan.credits, 2500, 'Should provide 2,500 credits');
+  assert.equal(mainPlan.credits, 250, 'Should provide 250 credits (~2,500 WhatsApp messages)');
   assert.equal(mainPlan.popular, true, 'Should be highlighted as popular');
   assert.equal(mainPlan.priceFormatted, 'R$ 100,00');
 

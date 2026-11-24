@@ -35,6 +35,13 @@ import {
 import { matchesProductQuery } from '@/utils/fuzzySearch';
 import { cn } from '@/lib/utils';
 import { safeHref } from './storefront-utils';
+import { resolveFontVoices } from './AtomicGrammarCompiler';
+import {
+  AtomicSectionRenderer,
+  SafeCatalogImage,
+  resolveNodeStyle,
+  type NodeStylesConfig,
+} from './AtomicSectionRenderers';
 import * as composerSchema from '../../../../shared/formula-ir/composer-schema.mjs';
 
 const sanitizeSafeAssetUrl: (raw: unknown, fallback?: string) => string =
@@ -799,6 +806,7 @@ export function FormulaTreeRenderer({
   const [timelineTabIndex, setTimelineTabIndex] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number } | null>(null);
   const addedTimersRef = React.useRef<Record<string, number>>({});
 
   React.useEffect(() => {
@@ -849,27 +857,83 @@ export function FormulaTreeRenderer({
     }, 1200);
   };
 
+  const atomicPrimaryColor = (
+    formulaV9.atomicBlueprint?.brandTokens as { colors?: { primary?: string; accent?: string } } | undefined
+  )?.colors?.primary;
+  const atomicPaletteSys = formulaV9.atomicBlueprint?.paletteSystem as Record<string, string> | undefined;
+  const atomicSeed = formulaV9.atomicBlueprint?.engineSeed as Record<string, any> | undefined;
+  const { bodyFontFamily } = resolveFontVoices(atomicSeed);
+  const resolvedHeaderAccent = atomicPaletteSys?.anchorDarkBg || atomicPrimaryColor || profile.brand?.primaryColor || tokens.accent || '#18181B';
+  const hasAtomicBlueprint =
+    Array.isArray(formulaV9.atomicBlueprint?.sections) &&
+    formulaV9.atomicBlueprint.sections.length >= 1;
+
   const styleVars = {
-    '--cg-accent': tokens.accent || '#0B4DB8',
-    '--cg-accent-deep': tokens.accentDeep || '#073B91',
-    '--cg-surface': tokens.surface || '#F8FAFC',
+    '--cg-accent': resolvedHeaderAccent,
+    '--cg-accent-deep': atomicPaletteSys?.anchorDarkBg || atomicPrimaryColor || profile.brand?.primaryColor || tokens.accentDeep || '#09090B',
+    '--cg-surface': hasAtomicBlueprint && atomicPaletteSys?.groundBg ? atomicPaletteSys.groundBg : (tokens.surface || '#FFFFFF'),
     '--cg-surface-alt': tokens.surfaceAlt || '#EFF6FF',
     '--cg-card': tokens.card || '#FFFFFF',
     '--cg-ink': tokens.ink || '#0F172A',
     '--cg-ink-muted': tokens.inkMuted || '#475569',
     '--cg-footer-bg': tokens.footerBg || '#0F172A',
     '--cg-heading-font': getHeadingFontFamily(tokens.fontStyle),
+    ...(hasAtomicBlueprint ? { fontFamily: bodyFontFamily } : {}),
   } as React.CSSProperties;
 
+  const getSecNodeStyles = (sec: SectionNode): NodeStylesConfig | undefined =>
+    (sec.config as { nodeStyles?: NodeStylesConfig } | undefined)?.nodeStyles;
+
+  const getSectionWrapperStyle = (sec: SectionNode): React.CSSProperties | undefined => {
+    const secOverride = resolveNodeStyle(getSecNodeStyles(sec), 'section');
+    const bg = secOverride.style.backgroundColor ? String(secOverride.style.backgroundColor) : undefined;
+    const fg = secOverride.style.color ? String(secOverride.style.color) : undefined;
+    const isDarkBg = Boolean(bg && /^#(?:18181b|0f172a|09090b|111827|121215)/i.test(bg));
+    if (!bg && !fg && !secOverride.style.textAlign) return undefined;
+    return {
+      ...secOverride.style,
+      ...(isDarkBg
+        ? ({
+            '--cg-ink': fg || '#F8FAFC',
+            '--cg-ink-muted': '#CBD5E1',
+            '--cg-card': '#27272A',
+            '--cg-surface': bg,
+            '--cg-surface-alt': '#27272A',
+            color: fg || '#F8FAFC',
+          } as React.CSSProperties)
+        : {}),
+    };
+  };
+
+  const resolveClassicGridCols = (columns: number | undefined, fallback: string) => {
+    if (columns === 1) return 'grid-cols-1';
+    if (columns === 2) return 'grid-cols-1 @min-[640px]/formula:grid-cols-2';
+    if (columns === 3) return 'grid-cols-1 @min-[640px]/formula:grid-cols-2 @min-[900px]/formula:grid-cols-3';
+    if (columns === 4) return 'grid-cols-2 @min-[640px]/formula:grid-cols-2 @min-[900px]/formula:grid-cols-4';
+    return fallback;
+  };
+
   const wrapEditable = (sec: SectionNode, content: React.ReactNode) => {
-    if (!editable) return <React.Fragment key={sec.id}>{content}</React.Fragment>;
+    const wrapperStyle = getSectionWrapperStyle(sec);
+    const cvClass = sec.type === 'HeaderNav' ? 'sticky top-0 z-30' : 'cg-cv-auto';
+    if (!editable) {
+      return (
+        <div key={sec.id} data-inspect-section={sec.id} data-inspect-type={sec.type} className={cvClass} style={wrapperStyle}>
+          {content}
+        </div>
+      );
+    }
     const isSelected = selectedSectionId === sec.id;
     return (
       <div
         key={sec.id}
+        data-inspect-section={sec.id}
+        data-inspect-type={sec.type}
+        style={wrapperStyle}
         onClick={() => onSelectSection?.(sec.id)}
         className={cn(
-          'group relative transition-all',
+          'group relative',
+          cvClass,
           isSelected ? 'ring-2 ring-[#2563EB] ring-offset-2' : 'hover:ring-1 hover:ring-[#93C5FD]',
         )}
       >
@@ -902,10 +966,100 @@ export function FormulaTreeRenderer({
       data-formula-version="9.0"
     >
       {sectionsToRender.map((sec) => {
+        if (hasAtomicBlueprint && sec.type !== 'HeaderNav') {
+          return null;
+        }
         if (sec.type === 'HeaderNav') {
+          if (hasAtomicBlueprint) {
+            const isLightDivided = atomicSeed?.headerMode === 'light_divided_bar';
+            const hdrBg = isLightDivided ? '#FFFFFF' : (atomicPaletteSys?.anchorDarkBg || '#0D1B2A');
+            const hdrInk = isLightDivided ? (atomicPaletteSys?.inkOnLight || '#111827') : '#FFFFFF';
+            const hdrAccent = isLightDivided
+              ? (atomicPaletteSys?.anchorDarkBg || '#18181B')
+              : (atomicPaletteSys?.accentOnDark || '#D8A848');
+            const ctaBg = isLightDivided
+              ? (atomicPaletteSys?.anchorDarkBg || '#18181B')
+              : (atomicPaletteSys?.accentFill || '#D8A848');
+            const ctaInk = isLightDivided ? '#FFFFFF' : (atomicPaletteSys?.accentInk || '#111827');
+            const topCats = catalogCategories.filter((c) => c !== 'Todas').slice(0, 3);
+
+            return wrapEditable(
+              sec,
+              <header
+                className="sticky top-0 z-30 border-b"
+                style={{
+                  backgroundColor: hdrBg,
+                  color: hdrInk,
+                  borderColor: isLightDivided ? 'rgba(15,23,42,0.09)' : 'rgba(255,255,255,0.1)',
+                }}
+              >
+                <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 @min-[640px]/formula:px-6">
+                  <div className="flex items-center gap-3">
+                    {logoUrl ? (
+                      <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/95 p-0.5 ring-1 ring-black/10 shadow-2xs">
+                        <img
+                          src={logoUrl}
+                          alt={storeName}
+                          className="size-full rounded-lg object-contain"
+                        />
+                      </span>
+                    ) : (
+                      <span
+                        className="inline-flex size-9 items-center justify-center rounded-xl text-sm font-black shadow-xs"
+                        style={{ backgroundColor: ctaBg, color: ctaInk }}
+                      >
+                        {storeName.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="text-base font-extrabold tracking-tight">{storeName}</span>
+                    {isLightDivided && profile.business?.address ? (
+                      <span className="hidden border-l border-slate-300 pl-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 @min-[700px]/formula:inline">
+                        {profile.business.address}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <nav className="hidden items-center gap-5 text-xs font-semibold @min-[700px]/formula:flex">
+                    <a
+                      href="#workbench"
+                      className="border-b-2 pb-0.5 transition-opacity hover:opacity-100"
+                      style={{ borderColor: hdrAccent }}
+                    >
+                      Seleção
+                    </a>
+                    {topCats.map((cat) => (
+                      <a
+                        key={cat}
+                        href="#catalogo"
+                        onClick={() => setSelectedCategory(cat)}
+                        className="opacity-85 transition-opacity hover:opacity-100"
+                      >
+                        {cat}
+                      </a>
+                    ))}
+                  </nav>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      data-testid="v9-header-bag-btn"
+                      onClick={onOpenCart}
+                      className="inline-flex min-h-[40px] items-center gap-2 rounded-full px-4 text-xs font-bold shadow-xs transition-transform active:scale-[0.97]"
+                      style={{ backgroundColor: ctaBg, color: ctaInk }}
+                    >
+                      <ShoppingBag className="size-4" />
+                      <span>{sec.config.ctaLabel || 'Sacola'}</span>
+                      <span className="rounded-full bg-black/15 px-1.5 py-0.5 text-[11px] tabular-nums">{cartCount}</span>
+                    </button>
+                  </div>
+                </div>
+              </header>,
+            );
+          }
+
           return wrapEditable(
             sec,
-            <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
+            <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95">
               <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 @min-[640px]/formula:px-6">
                 <div className="flex items-center gap-3">
                   {logoUrl ? (
@@ -948,32 +1102,67 @@ export function FormulaTreeRenderer({
         }
 
         if (sec.type === 'HeroSection') {
+          const ns = getSecNodeStyles(sec);
           const heroImg = sanitizeSafeAssetUrl(sec.config.imageUrl, '');
+          const heroTitleOvr = resolveNodeStyle(ns, 'hero.title');
+          const heroSubOvr = resolveNodeStyle(ns, 'hero.subtitle');
+          const heroCtaOvr = resolveNodeStyle(ns, 'hero.cta');
+          const heroSecCtaOvr = resolveNodeStyle(ns, 'hero.secondaryCta');
+          const heroImgOvr = resolveNodeStyle(ns, 'hero.image');
           const isBleed = sec.config.variant === 'full_bleed' && Boolean(heroImg);
           if (isBleed) {
             return wrapEditable(
               sec,
               <section className="mx-auto max-w-6xl px-4 pt-6 @min-[640px]/formula:px-6">
-                <div className="relative flex min-h-[380px] items-end overflow-hidden rounded-3xl bg-slate-900 text-white">
-                  <img src={heroImg} alt={sec.config.title} className="absolute inset-0 size-full object-cover opacity-55" />
+                <div className="relative flex min-h-[72vh] items-end overflow-hidden rounded-3xl bg-slate-950 text-white">
+                  {!heroImgOvr.hidden ? (
+                    <img
+                      data-node-path="hero.image"
+                      data-node-label="Imagem da capa"
+                      data-edit-props="image,visibility"
+                      src={heroImg}
+                      alt={sec.config.title}
+                      className="absolute inset-0 size-full object-cover opacity-65"
+                    />
+                  ) : null}
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/45 to-transparent" />
                   <div className="relative z-10 max-w-2xl p-8 @min-[640px]/formula:p-10">
-                    {sec.config.eyebrow ? (
-                      <span className="mb-2 inline-block text-xs font-bold uppercase tracking-wider text-slate-200">
-                        {sec.config.eyebrow}
-                      </span>
-                    ) : null}
-                    <h1 className="text-3xl font-black leading-tight @min-[640px]/formula:text-5xl" style={{ fontFamily: 'var(--cg-heading-font)' }}>
-                      {sec.config.title}
-                    </h1>
-                    {sec.config.subtitle ? <p className="mt-3 text-base text-slate-100">{sec.config.subtitle}</p> : null}
-                    <div className="mt-6 flex flex-wrap gap-3">
-                      <a
-                        href={safeHref(sec.config.primaryCta?.href, '#experiencia')}
-                        className="inline-flex min-h-[44px] items-center rounded-full bg-[var(--cg-accent)] px-6 text-sm font-bold text-white"
+                    {!heroTitleOvr.hidden ? (
+                      <h1
+                        data-node-path="hero.title"
+                        data-node-label="Título principal"
+                        data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                        className="text-3xl font-black leading-[1.04] tracking-tight @min-[640px]/formula:text-5xl"
+                        style={{ fontFamily: 'var(--cg-heading-font)', textWrap: 'balance', ...heroTitleOvr.style }}
                       >
-                        {sec.config.primaryCta?.label || 'Começar'}
-                      </a>
-                    </div>
+                        {sec.config.title}
+                      </h1>
+                    ) : null}
+                    {sec.config.subtitle && !heroSubOvr.hidden ? (
+                      <p
+                        data-node-path="hero.subtitle"
+                        data-node-label="Subtítulo"
+                        data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                        className="mt-3 max-w-[46ch] text-base text-slate-100"
+                        style={heroSubOvr.style}
+                      >
+                        {sec.config.subtitle}
+                      </p>
+                    ) : null}
+                    {!heroCtaOvr.hidden ? (
+                      <div className="mt-6 flex flex-wrap gap-3">
+                        <a
+                          href={safeHref(sec.config.primaryCta?.href, '#experiencia')}
+                          data-node-path="hero.cta"
+                          data-node-label="Botão CTA"
+                          data-edit-props="text,bgColor,textColor,visibility"
+                          className="inline-flex min-h-[46px] items-center rounded-xl bg-[var(--cg-accent)] px-6 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] transition-all hover:-translate-y-0.5 hover:brightness-105"
+                          style={heroCtaOvr.style}
+                        >
+                          {sec.config.primaryCta?.label || 'Explorar'}
+                        </a>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </section>,
@@ -982,36 +1171,54 @@ export function FormulaTreeRenderer({
 
           return wrapEditable(
             sec,
-            <section className="mx-auto max-w-6xl px-4 py-4 @min-[640px]/formula:px-6 @min-[700px]/formula:py-10">
-              <div className="grid grid-cols-1 items-center gap-5 @min-[640px]/formula:gap-8 @min-[700px]/formula:grid-cols-12">
-                <div className="space-y-3 @min-[640px]/formula:space-y-4 @min-[700px]/formula:col-span-6">
-                  {sec.config.eyebrow ? (
-                    <span className="inline-block rounded-full bg-[var(--cg-surface-alt)] px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-[var(--cg-accent)]">
-                      {sec.config.eyebrow}
-                    </span>
+            <section className="mx-auto max-w-6xl px-4 py-6 @min-[640px]/formula:px-6 @min-[700px]/formula:py-12">
+              <div className="grid grid-cols-1 items-center gap-6 @min-[640px]/formula:gap-8 @min-[700px]/formula:grid-cols-12">
+                <div className="space-y-4 @min-[700px]/formula:col-span-6">
+                  {!heroTitleOvr.hidden ? (
+                    <h1
+                      data-node-path="hero.title"
+                      data-node-label="Título principal"
+                      data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                      className="text-[clamp(1.75rem,4.5vw,3.1rem)] font-black leading-[1.05] tracking-[-0.03em] text-[var(--cg-ink)]"
+                      style={{ fontFamily: 'var(--cg-heading-font)', textWrap: 'balance', ...heroTitleOvr.style }}
+                    >
+                      {sec.config.title}
+                    </h1>
                   ) : null}
-                  <h1
-                    className="text-[clamp(1.65rem,4.5vw,3rem)] font-black leading-[1.08] tracking-tight text-[var(--cg-ink)]"
-                    style={{ fontFamily: 'var(--cg-heading-font)' }}
-                  >
-                    {sec.config.title}
-                  </h1>
-                  {sec.config.subtitle ? (
-                    <p className="max-w-xl text-sm leading-relaxed text-[var(--cg-ink-muted)] @min-[640px]/formula:text-base">{sec.config.subtitle}</p>
+                  {sec.config.subtitle && !heroSubOvr.hidden ? (
+                    <p
+                      data-node-path="hero.subtitle"
+                      data-node-label="Subtítulo"
+                      data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                      className="max-w-[48ch] text-sm leading-relaxed text-[var(--cg-ink-muted)] @min-[640px]/formula:text-base"
+                      style={heroSubOvr.style}
+                    >
+                      {sec.config.subtitle}
+                    </p>
                   ) : null}
                   <div className="flex flex-wrap gap-3 pt-1 @min-[640px]/formula:pt-2">
-                    <a
-                      href={safeHref(sec.config.primaryCta?.href, '#experiencia')}
-                      data-testid="v9-hero-primary-cta"
-                      className="inline-flex min-h-[44px] items-center rounded-full bg-[var(--cg-accent)] px-6 text-sm font-bold text-white hover:bg-[var(--cg-accent-deep)]"
-                    >
-                      {sec.config.primaryCta?.label || 'Simular agora'}
-                    </a>
-                    {sec.config.secondaryCta ? (
+                    {!heroCtaOvr.hidden ? (
+                      <a
+                        href={safeHref(sec.config.primaryCta?.href, '#experiencia')}
+                        data-testid="v9-hero-primary-cta"
+                        data-node-path="hero.cta"
+                        data-node-label="Botão CTA"
+                        data-edit-props="text,bgColor,textColor,visibility"
+                        className="inline-flex min-h-[46px] items-center rounded-xl bg-[var(--cg-accent)] px-6 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] transition-all hover:-translate-y-0.5 hover:bg-[var(--cg-accent-deep)]"
+                        style={heroCtaOvr.style}
+                      >
+                        {sec.config.primaryCta?.label || 'Ver coleção'}
+                      </a>
+                    ) : null}
+                    {sec.config.secondaryCta && !heroSecCtaOvr.hidden ? (
                       <button
                         type="button"
+                        data-node-path="hero.secondaryCta"
+                        data-node-label="Botão WhatsApp"
+                        data-edit-props="text,visibility"
                         onClick={() => onDirectWhatsappSend?.(`Olá ${storeName}! Vim pela vitrine.`)}
-                        className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-slate-300 bg-white px-5 text-sm font-bold text-[var(--cg-ink)] hover:bg-slate-50"
+                        className="inline-flex min-h-[46px] items-center gap-2 rounded-xl border border-slate-900/15 bg-white px-5 text-sm font-bold text-[var(--cg-ink)] shadow-2xs transition-all hover:-translate-y-0.5 hover:bg-slate-50"
+                        style={heroSecCtaOvr.style}
                       >
                         <MessageCircle className="size-4 text-emerald-600" />
                         <span>{sec.config.secondaryCta.label}</span>
@@ -1020,78 +1227,130 @@ export function FormulaTreeRenderer({
                   </div>
                 </div>
 
-                <div className="@min-[700px]/formula:col-span-6">
-                  <div className="aspect-[16/10] max-h-[240px] w-full overflow-hidden rounded-3xl border border-slate-200/80 bg-[#F1F5F9] @min-[640px]/formula:aspect-[4/3] @min-[640px]/formula:max-h-[340px]">
-                    {heroImg ? (
-                      <img
-                        src={heroImg}
-                        alt={sec.config.title}
-                        className={cn(
-                          'size-full',
-                          sec.config.imageFit === 'cover' ? 'object-cover' : 'object-contain',
-                        )}
-                      />
-                    ) : (() => {
-                      const featured = products
-                        .filter((p) => {
-                          const u = sanitizeSafeAssetUrl(p.imageUrl, '');
-                          return Boolean(u && !u.startsWith('data:image/svg+xml'));
-                        })
-                        .slice(0, 4);
-                      if (featured.length > 0) {
+                {!heroImgOvr.hidden ? (
+                  <div className="@min-[700px]/formula:col-span-6">
+                    <div
+                      data-node-path="hero.image"
+                      data-node-label="Imagem da capa"
+                      data-edit-props="image,visibility"
+                      className="aspect-[16/10] max-h-[240px] w-full overflow-hidden rounded-3xl border border-slate-200/80 bg-[#F1F5F9] @min-[640px]/formula:aspect-[4/3] @min-[640px]/formula:max-h-[340px]"
+                    >
+                      {heroImg ? (
+                        <img
+                          src={heroImg}
+                          alt={sec.config.title}
+                          className={cn(
+                            'size-full',
+                            sec.config.imageFit === 'cover' ? 'object-cover' : 'object-contain',
+                          )}
+                        />
+                      ) : (() => {
+                        const featured = products
+                          .filter((p) => {
+                            const u = sanitizeSafeAssetUrl(p.imageUrl, '');
+                            return Boolean(u && !u.startsWith('data:image/svg+xml'));
+                          })
+                          .slice(0, 4);
+                        if (featured.length > 0) {
+                          return (
+                            <div
+                              data-testid="v9-hero-bento-collage"
+                              className="grid size-full grid-cols-2 gap-2 p-2.5 bg-white/80"
+                            >
+                              {featured.map((item) => (
+                                <div
+                                  key={item.id}
+                                  onClick={() => onSelectProductDetail?.(item)}
+                                  className="group relative flex cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-1.5"
+                                >
+                                  <SafeCatalogImage
+                                    src={sanitizeSafeAssetUrl(item.imageUrl, '')}
+                                    alt={item.name}
+                                    category={item.category}
+                                    primaryColor={profile.brand?.primaryColor || '#0B4DB8'}
+                                    className="size-full object-contain transition-transform duration-200 group-hover:scale-105"
+                                  />
+                                  <span className="absolute bottom-1.5 left-1.5 right-1.5 truncate rounded-lg bg-slate-900/80 px-2 py-0.5 text-[10px] font-bold text-white">
+                                    {formatCurrencyBRL(item.priceCents)} · {item.name}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }
                         return (
-                          <div
-                            data-testid="v9-hero-bento-collage"
-                            className="grid size-full grid-cols-2 gap-2 p-2.5 bg-white/80"
-                          >
-                            {featured.map((item) => (
-                              <div
-                                key={item.id}
-                                onClick={() => onSelectProductDetail?.(item)}
-                                className="group relative flex cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-1.5"
-                              >
-                                <img
-                                  src={sanitizeSafeAssetUrl(item.imageUrl, '')}
-                                  alt={item.name}
-                                  className="size-full object-contain transition-transform duration-200 group-hover:scale-105"
-                                />
-                                <span className="absolute bottom-1.5 left-1.5 right-1.5 truncate rounded-lg bg-slate-900/80 px-2 py-0.5 text-[10px] font-bold text-white">
-                                  {formatCurrencyBRL(item.priceCents)} · {item.name}
-                                </span>
-                              </div>
-                            ))}
+                          <div className="flex size-full items-center justify-center text-sm font-semibold text-slate-400">
+                            {storeName}
                           </div>
                         );
-                      }
-                      return (
-                        <div className="flex size-full items-center justify-center text-sm font-semibold text-slate-400">
-                          {storeName}
-                        </div>
-                      );
-                    })()}
+                      })()}
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </div>
             </section>,
           );
         }
 
         if (sec.type === 'DifferentialsStrip') {
+          const ns = getSecNodeStyles(sec);
+          const diffGridOvr = resolveNodeStyle(ns, 'differentials.grid');
           return wrapEditable(
             sec,
             <section className="mx-auto max-w-6xl px-4 py-4 @min-[640px]/formula:px-6">
-              <div className="grid grid-cols-1 gap-3 @min-[640px]/formula:grid-cols-2 @min-[900px]/formula:grid-cols-4">
-                {sec.config.items.map((item, idx) => (
-                  <div key={idx} className="flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-[var(--cg-card)] p-4">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[var(--cg-surface-alt)] text-[var(--cg-accent)]">
-                      {renderWhitelistedIcon(item.icon)}
+              <div
+                data-node-path="differentials.grid"
+                data-node-label="Grade de diferenciais"
+                data-edit-props="columns,bgColor"
+                className={cn(
+                  'grid gap-3',
+                  resolveClassicGridCols(diffGridOvr.columns, 'grid-cols-1 @min-[640px]/formula:grid-cols-2 @min-[900px]/formula:grid-cols-4'),
+                )}
+                style={diffGridOvr.style}
+              >
+                {sec.config.items.map((item, idx) => {
+                  const itemPath = `differentials.item.${idx}`;
+                  const itemOvr = resolveNodeStyle(ns, itemPath);
+                  if (itemOvr.hidden) return null;
+                  const titleOvr = resolveNodeStyle(ns, `${itemPath}.title`);
+                  const textOvr = resolveNodeStyle(ns, `${itemPath}.text`);
+                  return (
+                    <div
+                      key={idx}
+                      data-node-path={itemPath}
+                      data-node-label={`Diferencial ${idx + 1}`}
+                      data-edit-props="bgColor,visibility"
+                      className="flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-[var(--cg-card)] p-4"
+                      style={itemOvr.style}
+                    >
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[var(--cg-surface-alt)] text-[var(--cg-accent)]">
+                        {renderWhitelistedIcon(item.icon)}
+                      </div>
+                      <div>
+                        <p
+                          data-node-path={`${itemPath}.title`}
+                          data-node-label={`Título · ${item.title}`}
+                          data-edit-props="text,fontSize,textColor"
+                          className="text-sm font-bold text-[var(--cg-ink)]"
+                          style={titleOvr.style}
+                        >
+                          {item.title}
+                        </p>
+                        {item.text ? (
+                          <p
+                            data-node-path={`${itemPath}.text`}
+                            data-node-label={`Descrição · ${item.title}`}
+                            data-edit-props="text,fontSize,textColor"
+                            className="mt-0.5 text-xs text-[var(--cg-ink-muted)]"
+                            style={textOvr.style}
+                          >
+                            {item.text}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-[var(--cg-ink)]">{item.title}</p>
-                      {item.text ? <p className="mt-0.5 text-xs text-[var(--cg-ink-muted)]">{item.text}</p> : null}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>,
           );
@@ -1112,14 +1371,23 @@ export function FormulaTreeRenderer({
         }
 
         if (sec.type === 'EditorialMediaSplit') {
+          const ns = getSecNodeStyles(sec);
           const mediaUrl = sanitizeSafeAssetUrl(sec.config.imageUrl, '');
-          const mediaSide = (
-            <div className="aspect-[4/3] w-full overflow-hidden rounded-3xl border border-slate-200/80 bg-[#F1F5F9]">
+          const imgOvr = resolveNodeStyle(ns, 'editorial.image');
+          const titleOvr = resolveNodeStyle(ns, 'editorial.title');
+          const bodyOvr = resolveNodeStyle(ns, 'editorial.body');
+          const mediaSide = !imgOvr.hidden ? (
+            <div
+              data-node-path="editorial.image"
+              data-node-label="Imagem editorial"
+              data-edit-props="image,visibility"
+              className="aspect-[4/3] w-full overflow-hidden rounded-3xl border border-slate-200/80 bg-[#F1F5F9]"
+            >
               {mediaUrl ? (
                 <img src={mediaUrl} alt={sec.config.title} className="size-full object-cover" />
               ) : null}
             </div>
-          );
+          ) : null;
           const textSide = (
             <div className="space-y-4">
               {sec.config.eyebrow ? (
@@ -1127,10 +1395,28 @@ export function FormulaTreeRenderer({
                   {sec.config.eyebrow}
                 </span>
               ) : null}
-              <h2 className="text-2xl font-extrabold text-[var(--cg-ink)] @min-[640px]/formula:text-3xl" style={{ fontFamily: 'var(--cg-heading-font)' }}>
-                {sec.config.title}
-              </h2>
-              <p className="text-sm leading-relaxed text-[var(--cg-ink-muted)] @min-[640px]/formula:text-base">{sec.config.body}</p>
+              {!titleOvr.hidden ? (
+                <h2
+                  data-node-path="editorial.title"
+                  data-node-label="Título da história"
+                  data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                  className="text-2xl font-extrabold text-[var(--cg-ink)] @min-[640px]/formula:text-3xl"
+                  style={{ fontFamily: 'var(--cg-heading-font)', ...titleOvr.style }}
+                >
+                  {sec.config.title}
+                </h2>
+              ) : null}
+              {!bodyOvr.hidden ? (
+                <p
+                  data-node-path="editorial.body"
+                  data-node-label="Texto da história"
+                  data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                  className="text-sm leading-relaxed text-[var(--cg-ink-muted)] @min-[640px]/formula:text-base"
+                  style={bodyOvr.style}
+                >
+                  {sec.config.body}
+                </p>
+              ) : null}
               {sec.config.bullets?.length ? (
                 <ul className="space-y-1.5 text-sm text-[var(--cg-ink)]">
                   {sec.config.bullets.map((b, i) => (
@@ -1204,36 +1490,104 @@ export function FormulaTreeRenderer({
         }
 
         if (sec.type === 'HighlightsGrid') {
+          const ns = getSecNodeStyles(sec);
+          const hlTitleOvr = resolveNodeStyle(ns, 'highlights.title');
+          const hlSubOvr = resolveNodeStyle(ns, 'highlights.subtitle');
+          const hlGridOvr = resolveNodeStyle(ns, 'highlights.grid');
           return wrapEditable(
             sec,
             <section className="mx-auto max-w-6xl px-4 py-10 @min-[640px]/formula:px-6">
-              <h2 className="text-2xl font-extrabold text-[var(--cg-ink)]" style={{ fontFamily: 'var(--cg-heading-font)' }}>
-                {sec.config.title}
-              </h2>
-              {sec.config.subtitle ? <p className="mt-1 text-sm text-[var(--cg-ink-muted)]">{sec.config.subtitle}</p> : null}
-              <div className={cn('mt-6 grid grid-cols-1 gap-4', sec.config.columns === 3 ? '@min-[640px]/formula:grid-cols-3' : '@min-[640px]/formula:grid-cols-2')}>
+              {!hlTitleOvr.hidden ? (
+                <h2
+                  data-node-path="highlights.title"
+                  data-node-label="Título dos destaques"
+                  data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                  className="text-2xl font-extrabold text-[var(--cg-ink)]"
+                  style={{ fontFamily: 'var(--cg-heading-font)', ...hlTitleOvr.style }}
+                >
+                  {sec.config.title}
+                </h2>
+              ) : null}
+              {sec.config.subtitle && !hlSubOvr.hidden ? (
+                <p
+                  data-node-path="highlights.subtitle"
+                  data-node-label="Subtítulo dos destaques"
+                  data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                  className="mt-1 text-sm text-[var(--cg-ink-muted)]"
+                  style={hlSubOvr.style}
+                >
+                  {sec.config.subtitle}
+                </p>
+              ) : null}
+              <div
+                data-node-path="highlights.grid"
+                data-node-label="Grade de destaques"
+                data-edit-props="columns,bgColor"
+                className={cn(
+                  'mt-6 grid gap-4',
+                  resolveClassicGridCols(
+                    hlGridOvr.columns,
+                    cn('grid-cols-1', sec.config.columns === 3 ? '@min-[640px]/formula:grid-cols-3' : '@min-[640px]/formula:grid-cols-2'),
+                  ),
+                )}
+                style={hlGridOvr.style}
+              >
                 {sec.config.cards.map((c, idx) => {
+                  const cardPath = `highlights.card.${idx}`;
+                  const cardOvr = resolveNodeStyle(ns, cardPath);
+                  if (cardOvr.hidden) return null;
+                  const cardImgOvr = resolveNodeStyle(ns, `${cardPath}.image`);
+                  const cardTitleOvr = resolveNodeStyle(ns, `${cardPath}.title`);
+                  const cardCtaOvr = resolveNodeStyle(ns, `${cardPath}.cta`);
                   const cardImg = sanitizeSafeAssetUrl(c.imageUrl, '');
                   return (
-                  <div key={idx} className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-[var(--cg-card)] p-5">
+                  <div
+                    key={idx}
+                    data-node-path={cardPath}
+                    data-node-label={`Card ${idx + 1} · ${c.title}`}
+                    data-edit-props="bgColor,visibility"
+                    className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-[var(--cg-card)] p-5"
+                    style={cardOvr.style}
+                  >
                     <div>
-                      {cardImg ? (
-                        <div className="mb-3 aspect-[4/3] overflow-hidden rounded-xl bg-[#F1F5F9]">
+                      {cardImg && !cardImgOvr.hidden ? (
+                        <div
+                          data-node-path={`${cardPath}.image`}
+                          data-node-label={`Imagem Card ${idx + 1}`}
+                          data-edit-props="image,visibility"
+                          className="mb-3 aspect-[4/3] overflow-hidden rounded-xl bg-[#F1F5F9]"
+                        >
                           <img src={cardImg} alt={c.title} className="size-full object-cover" />
                         </div>
                       ) : null}
                       {c.eyebrow ? (
                         <span className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--cg-accent)]">{c.eyebrow}</span>
                       ) : null}
-                      <h3 className="mt-1 text-lg font-bold text-[var(--cg-ink)]">{c.title}</h3>
+                      {!cardTitleOvr.hidden ? (
+                        <h3
+                          data-node-path={`${cardPath}.title`}
+                          data-node-label={`Título Card ${idx + 1}`}
+                          data-edit-props="text,fontSize,textColor,visibility"
+                          className="mt-1 text-lg font-bold text-[var(--cg-ink)]"
+                          style={cardTitleOvr.style}
+                        >
+                          {c.title}
+                        </h3>
+                      ) : null}
                       {c.description ? <p className="mt-1 text-sm text-[var(--cg-ink-muted)]">{c.description}</p> : null}
                     </div>
-                    <a
-                      href={safeHref(c.href, '#catalogo')}
-                      className="mt-4 inline-flex w-fit items-center rounded-full border border-slate-300 px-4 py-1.5 text-xs font-bold text-[var(--cg-ink)] hover:bg-slate-50"
-                    >
-                      {c.ctaLabel || 'Ver detalhes'}
-                    </a>
+                    {!cardCtaOvr.hidden ? (
+                      <a
+                        href={safeHref(c.href, '#catalogo')}
+                        data-node-path={`${cardPath}.cta`}
+                        data-node-label={`Botão Card ${idx + 1}`}
+                        data-edit-props="text,bgColor,textColor,visibility"
+                        className="mt-4 inline-flex w-fit items-center rounded-full border border-slate-300 px-4 py-1.5 text-xs font-bold text-[var(--cg-ink)] hover:bg-slate-50"
+                        style={cardCtaOvr.style}
+                      >
+                        {c.ctaLabel || 'Ver detalhes'}
+                      </a>
+                    ) : null}
                   </div>
                   );
                 })}
@@ -1268,24 +1622,62 @@ export function FormulaTreeRenderer({
         }
 
         if (sec.type === 'CatalogGrid') {
+          const ns = getSecNodeStyles(sec);
+          const catTitleOvr = resolveNodeStyle(ns, 'catalog.title');
+          const catSubOvr = resolveNodeStyle(ns, 'catalog.subtitle');
+          const catGridOvr = resolveNodeStyle(ns, 'catalog.grid');
           const activeCategory = catalogCategories.includes(selectedCategory)
             ? selectedCategory
             : 'Todas';
-          const filtered = products.filter((p) => {
+          const rawSelectedSkuIds = (sec.config as { selectedSkuIds?: string[] }).selectedSkuIds;
+          const groupDisplayMode = (sec.config as { groupDisplayMode?: 'only_selected' | 'prioritize' }).groupDisplayMode || 'prioritize';
+          const selectedSkuSet = new Set(
+            Array.isArray(rawSelectedSkuIds)
+              ? rawSelectedSkuIds.map((id: string) => String(id).trim()).filter(Boolean)
+              : [],
+          );
+          const filteredRaw = products.filter((p) => {
             const cat = (p.category || 'Geral').trim() || 'Geral';
             if (activeCategory !== 'Todas' && cat !== activeCategory) return false;
             return matchesProductQuery(p, searchQuery);
           });
+          const filtered =
+            selectedSkuSet.size > 0
+              ? groupDisplayMode === 'only_selected'
+                ? filteredRaw.filter((p) => selectedSkuSet.has(String(p.id)) || selectedSkuSet.has(String(p.sku)))
+                : [
+                    ...filteredRaw.filter((p) => selectedSkuSet.has(String(p.id)) || selectedSkuSet.has(String(p.sku))),
+                    ...filteredRaw.filter((p) => !selectedSkuSet.has(String(p.id)) && !selectedSkuSet.has(String(p.sku))),
+                  ]
+              : filteredRaw;
 
           return wrapEditable(
             sec,
             <section id="catalogo" data-testid="v9-catalog-grid" className="mx-auto max-w-6xl px-4 py-10 @min-[640px]/formula:px-6">
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-extrabold text-[var(--cg-ink)] @min-[640px]/formula:text-3xl" style={{ fontFamily: 'var(--cg-heading-font)' }}>
-                    {sec.config.title || 'Catálogo'}
-                  </h2>
-                  {sec.config.subtitle ? <p className="mt-1 text-sm text-[var(--cg-ink-muted)]">{sec.config.subtitle}</p> : null}
+                  {!catTitleOvr.hidden ? (
+                    <h2
+                      data-node-path="catalog.title"
+                      data-node-label="Título do catálogo"
+                      data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                      className="text-2xl font-extrabold text-[var(--cg-ink)] @min-[640px]/formula:text-3xl"
+                      style={{ fontFamily: 'var(--cg-heading-font)', ...catTitleOvr.style }}
+                    >
+                      {sec.config.title || 'Catálogo'}
+                    </h2>
+                  ) : null}
+                  {sec.config.subtitle && !catSubOvr.hidden ? (
+                    <p
+                      data-node-path="catalog.subtitle"
+                      data-node-label="Subtítulo do catálogo"
+                      data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                      className="mt-1 text-sm text-[var(--cg-ink-muted)]"
+                      style={catSubOvr.style}
+                    >
+                      {sec.config.subtitle}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="relative">
@@ -1341,8 +1733,26 @@ export function FormulaTreeRenderer({
                 </div>
               ) : null}
 
-              <div className="mt-6 grid grid-cols-2 gap-2.5 @min-[640px]/formula:grid-cols-2 @min-[640px]/formula:gap-4 @min-[900px]/formula:grid-cols-4">
+              <div
+                data-node-path="catalog.grid"
+                data-node-label="Grade do catálogo"
+                data-edit-props="columns,groupFilter,bgColor"
+                className={cn(
+                  'mt-6 grid gap-2.5 @min-[640px]/formula:gap-4',
+                  resolveClassicGridCols(catGridOvr.columns, 'grid-cols-2 @min-[640px]/formula:grid-cols-2 @min-[900px]/formula:grid-cols-4'),
+                )}
+                style={catGridOvr.style}
+              >
                 {filtered.map((prod) => {
+                  const skuKey = prod.sku || prod.id;
+                  const cardPath = `catalog.card.${skuKey}`;
+                  const cardOvr = resolveNodeStyle(ns, cardPath);
+                  if (cardOvr.hidden) return null;
+                  const imgOvr = resolveNodeStyle(ns, `${cardPath}.image`);
+                  const titleOvr = resolveNodeStyle(ns, `${cardPath}.title`);
+                  const priceOvr = resolveNodeStyle(ns, `${cardPath}.price`);
+                  const ctaOvr = resolveNodeStyle(ns, `${cardPath}.cta`);
+
                   const isAdded = Boolean(addedIds[prod.id]);
                   const safeProdImg = sanitizeSafeAssetUrl(prod.imageUrl, '');
                   const hasRealImg = Boolean(safeProdImg && !safeProdImg.startsWith('data:image/svg+xml'));
@@ -1350,69 +1760,86 @@ export function FormulaTreeRenderer({
                     <article
                       key={prod.id}
                       data-testid={`v9-catalog-card-${prod.sku}`}
+                      data-node-path={cardPath}
+                      data-node-label={`Card · ${prod.name}`}
+                      data-edit-props="bgColor,visibility"
                       className="flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-[var(--cg-card)] transition-shadow hover:shadow-md"
+                      style={cardOvr.style}
                     >
                       <div>
                         {/* Cinza neutro #F1F5F9 quando SKU ainda sem foto */}
-                        <div
-                          onClick={() => onSelectProductDetail?.(prod)}
-                          className="relative aspect-square w-full cursor-pointer overflow-hidden bg-[#F1F5F9]"
-                        >
-                          {hasRealImg ? (
-                            <img
-                              src={safeProdImg}
-                              alt={prod.name}
-                              style={{
-                                objectPosition: `${prod.imageFocalPoint?.x ?? 50}% ${prod.imageFocalPoint?.y ?? 50}%`,
-                              }}
-                              className="size-full object-cover"
-                            />
-                          ) : (
-                            <div
-                              data-testid="v9-neutral-gray-thumb"
-                              className="flex size-full flex-col items-center justify-center gap-2 bg-[#F1F5F9] p-4 text-center text-slate-600"
-                            >
-                              <span
-                                className="flex size-12 items-center justify-center rounded-2xl border border-slate-300/70 bg-white/80 text-base font-extrabold tracking-tight text-slate-700 shadow-2xs"
-                                style={{ borderBottom: '3px solid var(--cg-accent)' }}
+                        {!imgOvr.hidden ? (
+                          <div
+                            data-node-path={`${cardPath}.image`}
+                            data-node-label={`Foto · ${prod.name}`}
+                            data-edit-props="image,visibility"
+                            onClick={() => onSelectProductDetail?.(prod)}
+                            className="relative aspect-square w-full cursor-pointer overflow-hidden bg-[#F1F5F9]"
+                          >
+                            {hasRealImg ? (
+                              <SafeCatalogImage
+                                src={safeProdImg}
+                                alt={prod.name}
+                                category={prod.category}
+                                primaryColor={profile.brand?.primaryColor || '#0B4DB8'}
+                                style={{
+                                  objectPosition: `${prod.imageFocalPoint?.x ?? 50}% ${prod.imageFocalPoint?.y ?? 50}%`,
+                                }}
+                                className="size-full object-cover"
+                              />
+                            ) : (
+                              <div
+                                data-testid="v9-neutral-gray-thumb"
+                                className="flex size-full flex-col items-center justify-center gap-2 bg-[#F1F5F9] p-4 text-center text-slate-600"
                               >
-                                {(prod.name || 'CG')
-                                  .trim()
-                                  .split(/\s+/)
-                                  .slice(0, 2)
-                                  .map((w) => w[0]?.toUpperCase() || '')
-                                  .join('') || 'CG'}
-                              </span>
-                              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                                {prod.category || 'Catálogo'}
-                              </span>
-                            </div>
-                          )}
+                                <span
+                                  className="flex size-12 items-center justify-center rounded-2xl border border-slate-300/70 bg-white/80 text-base font-extrabold tracking-tight text-slate-700 shadow-2xs"
+                                  style={{ borderBottom: '3px solid var(--cg-accent)' }}
+                                >
+                                  {(prod.name || 'CG')
+                                    .trim()
+                                    .split(/\s+/)
+                                    .slice(0, 2)
+                                    .map((w) => w[0]?.toUpperCase() || '')
+                                    .join('') || 'CG'}
+                                </span>
+                                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                                  {prod.category || 'Catálogo'}
+                                </span>
+                              </div>
+                            )}
 
-                          {editable && !hasRealImg && onOpenWebPhotoSearch ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenWebPhotoSearch(prod);
-                              }}
-                              className="absolute bottom-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-3 py-1 text-[11px] font-bold text-[#0F172A] shadow-sm hover:bg-white"
-                            >
-                              Pesquisar foto (0 cr)
-                            </button>
-                          ) : null}
-                        </div>
+                            {editable && !hasRealImg && onOpenWebPhotoSearch ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenWebPhotoSearch(prod);
+                                }}
+                                className="absolute bottom-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/95 px-3 py-1 text-[11px] font-bold text-[#0F172A] shadow-sm hover:bg-white"
+                              >
+                                Pesquisar foto (0 cr)
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
 
                         <div className="p-4">
                           <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--cg-ink-muted)]">
                             {prod.category || 'Geral'}
                           </span>
-                          <h3
-                            onClick={() => onSelectProductDetail?.(prod)}
-                            className="mt-1 cursor-pointer text-sm font-extrabold text-[var(--cg-ink)] hover:text-[var(--cg-accent)]"
-                          >
-                            {prod.name}
-                          </h3>
+                          {!titleOvr.hidden ? (
+                            <h3
+                              data-node-path={`${cardPath}.title`}
+                              data-node-label={`Nome · ${prod.name}`}
+                              data-edit-props="fontSize,textColor,visibility"
+                              onClick={() => onSelectProductDetail?.(prod)}
+                              className="mt-1 cursor-pointer text-sm font-extrabold text-[var(--cg-ink)] hover:text-[var(--cg-accent)]"
+                              style={titleOvr.style}
+                            >
+                              {prod.name}
+                            </h3>
+                          ) : null}
                           {prod.variation && prod.variation !== 'Padrão' ? (
                             <p className="mt-0.5 text-xs text-[var(--cg-ink-muted)]">{prod.variation}</p>
                           ) : null}
@@ -1428,20 +1855,33 @@ export function FormulaTreeRenderer({
                             Economize {formatCurrencyBRL(Math.round((prod.priceCents * pixDiscountPercent) / 100))} no Pix
                           </span>
                         ) : null}
-                        <div className="cg-tabular whitespace-nowrap text-lg font-black text-[var(--cg-ink)]">
-                          {formatCurrencyBRL(prod.priceCents)}
-                        </div>
+                        {!priceOvr.hidden ? (
+                          <div
+                            data-node-path={`${cardPath}.price`}
+                            data-node-label={`Preço · ${prod.name}`}
+                            data-edit-props="fontSize,textColor,visibility"
+                            className="cg-tabular whitespace-nowrap text-lg font-black text-[var(--cg-ink)]"
+                            style={priceOvr.style}
+                          >
+                            {formatCurrencyBRL(prod.priceCents)}
+                          </div>
+                        ) : null}
                         {(() => {
                           const effectiveStock = typeof prod.stock === 'number' ? prod.stock : prod.stockQty;
                           const isOutOfStock =
                             prod.autoPausedOutOfStock === true ||
                             (Boolean(prod.trackStock) && Number(effectiveStock ?? 0) <= 0);
+                          if (ctaOvr.hidden) return null;
                           return isOutOfStock ? (
                           <button
                             type="button"
                             disabled
                             data-testid={`v9-add-cart-${prod.sku}`}
+                            data-node-path={`${cardPath}.cta`}
+                            data-node-label={`Botão · ${prod.name}`}
+                            data-edit-props="text,bgColor,textColor,visibility"
                             className="inline-flex min-h-[40px] w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-200 px-2 text-center text-[11px] font-bold text-slate-500 @min-[640px]/formula:min-h-[44px] @min-[640px]/formula:px-3 @min-[640px]/formula:text-xs"
+                            style={ctaOvr.style}
                           >
                             Esgotado
                           </button>
@@ -1449,6 +1889,9 @@ export function FormulaTreeRenderer({
                           <button
                             type="button"
                             data-testid={`v9-add-cart-${prod.sku}`}
+                            data-node-path={`${cardPath}.cta`}
+                            data-node-label={`Botão · ${prod.name}`}
+                            data-edit-props="text,bgColor,textColor,visibility"
                             onClick={() => handleCardAdd(prod)}
                             className={cn(
                               'inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl px-2 text-center text-[11px] font-bold leading-tight text-white transition-colors @min-[640px]/formula:min-h-[44px] @min-[640px]/formula:px-3 @min-[640px]/formula:text-xs',
@@ -1456,6 +1899,7 @@ export function FormulaTreeRenderer({
                                 ? 'bg-emerald-600'
                                 : 'bg-[var(--cg-accent)] hover:bg-[var(--cg-accent-deep)]',
                             )}
+                            style={ctaOvr.style}
                           >
                             {isAdded ? (
                               <>
@@ -1478,51 +1922,163 @@ export function FormulaTreeRenderer({
         }
 
         if (sec.type === 'ClosingScheduleSplit') {
+          const ns = getSecNodeStyles(sec);
           const closingImg = sanitizeSafeAssetUrl(
             sec.config.imageUrl || profile.brand?.storefrontPhotoUrl || '',
             '',
           );
+          const eyebrowOvr = resolveNodeStyle(ns, 'schedule.eyebrow');
+          const titleOvr = resolveNodeStyle(ns, 'schedule.title');
+          const subOvr = resolveNodeStyle(ns, 'schedule.subtitle');
+          const slotsOvr = resolveNodeStyle(ns, 'schedule.slots');
+          const imgOvr = resolveNodeStyle(ns, 'schedule.image');
+          const waHeadingOvr = resolveNodeStyle(ns, 'schedule.whatsappHeading');
+          const ctaOvr = resolveNodeStyle(ns, 'schedule.cta');
           return wrapEditable(
             sec,
             <section className="mx-auto max-w-6xl px-4 py-10 @min-[640px]/formula:px-6">
               <div className="grid grid-cols-1 items-center gap-8 rounded-3xl border border-slate-200/80 bg-[var(--cg-card)] p-6 @min-[640px]/formula:p-8 @min-[900px]/formula:grid-cols-2">
                 <div className="space-y-3">
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-[var(--cg-accent)]">
-                    {sec.config.eyebrow || 'Atendimento'}
-                  </span>
-                  <h2 className="text-2xl font-extrabold text-[var(--cg-ink)]" style={{ fontFamily: 'var(--cg-heading-font)' }}>
-                    {sec.config.title}
-                  </h2>
-                  {sec.config.subtitle ? <p className="text-sm text-[var(--cg-ink-muted)]">{sec.config.subtitle}</p> : null}
-                  {sec.config.slots?.length ? (
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {sec.config.slots.map((sl, i) => (
-                        <span key={i} className="rounded-full bg-[var(--cg-surface-alt)] px-3 py-1 text-xs font-bold text-[var(--cg-ink)]">
-                          {sl}
-                        </span>
-                      ))}
-                    </div>
+                  {sec.config.eyebrow && !eyebrowOvr.hidden ? (
+                    <span
+                      data-node-path="schedule.eyebrow"
+                      data-node-label="Selo de atendimento"
+                      data-edit-props="text,textColor,visibility"
+                      className="text-xs font-extrabold uppercase tracking-wider text-[var(--cg-accent)]"
+                      style={eyebrowOvr.style}
+                    >
+                      {sec.config.eyebrow}
+                    </span>
+                  ) : null}
+                  {!titleOvr.hidden ? (
+                    <h2
+                      data-node-path="schedule.title"
+                      data-node-label="Título de horários"
+                      data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                      className="text-2xl font-extrabold text-[var(--cg-ink)]"
+                      style={{ fontFamily: 'var(--cg-heading-font)', ...titleOvr.style }}
+                    >
+                      {sec.config.title}
+                    </h2>
+                  ) : null}
+                  {sec.config.subtitle && !subOvr.hidden ? (
+                    <p
+                      data-node-path="schedule.subtitle"
+                      data-node-label="Subtítulo de horários"
+                      data-edit-props="text,fontSize,textAlign,textColor,visibility"
+                      className="text-sm text-[var(--cg-ink-muted)]"
+                      style={subOvr.style}
+                    >
+                      {sec.config.subtitle}
+                    </p>
+                  ) : null}
+                  {sec.config.slots?.length && !slotsOvr.hidden ? (
+                    sec.config.slots.some((sl) => /(seg|ter|qua|qui|sex|s[aá]b|dom|dia)/i.test(sl)) ? (
+                      <div
+                        data-node-path="schedule.slots"
+                        data-node-label="Grade de horários"
+                        data-edit-props="columns,bgColor,visibility"
+                        className={cn(
+                          'grid gap-2 pt-2',
+                          resolveClassicGridCols(slotsOvr.columns, 'grid-cols-1 sm:grid-cols-2'),
+                        )}
+                        data-testid="closing-daily-schedule-grid"
+                        style={slotsOvr.style}
+                      >
+                        {sec.config.slots.map((sl, i) => {
+                          const slotPath = `schedule.slot.${i}`;
+                          const slotOvr = resolveNodeStyle(ns, slotPath);
+                          if (slotOvr.hidden) return null;
+                          const [dayPart, ...restParts] = sl.split('·').map((x) => x.trim());
+                          const detailPart = restParts.join(' · ');
+                          return (
+                            <div
+                              key={i}
+                              data-node-path={slotPath}
+                              data-node-label={`Horário · ${dayPart}`}
+                              data-edit-props="text,bgColor,textColor,visibility"
+                              className="flex flex-col justify-center rounded-2xl border border-slate-200/80 bg-[var(--cg-surface)] px-3.5 py-2.5"
+                              style={slotOvr.style}
+                            >
+                              <span className="text-xs font-extrabold text-[var(--cg-ink)]">{dayPart}</span>
+                              {detailPart ? (
+                                <span className="mt-0.5 text-[11px] font-medium text-[var(--cg-ink-muted)]">
+                                  {detailPart}
+                                </span>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div
+                        data-node-path="schedule.slots"
+                        data-node-label="Horários e dias"
+                        data-edit-props="bgColor,visibility"
+                        className="flex flex-wrap gap-2 pt-1"
+                        style={slotsOvr.style}
+                      >
+                        {sec.config.slots.map((sl, i) => {
+                          const slotPath = `schedule.slot.${i}`;
+                          const slotOvr = resolveNodeStyle(ns, slotPath);
+                          if (slotOvr.hidden) return null;
+                          return (
+                            <span
+                              key={i}
+                              data-node-path={slotPath}
+                              data-node-label={`Horário ${i + 1}`}
+                              data-edit-props="text,bgColor,textColor,visibility"
+                              className="rounded-full bg-[var(--cg-surface-alt)] px-3 py-1 text-xs font-bold text-[var(--cg-ink)]"
+                              style={slotOvr.style}
+                            >
+                              {sl}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )
                   ) : null}
                 </div>
 
                 <div className="space-y-4">
-                  {closingImg ? (
-                    <div className="aspect-[16/9] overflow-hidden rounded-2xl bg-[#F1F5F9]">
+                  {closingImg && !imgOvr.hidden ? (
+                    <div
+                      data-node-path="schedule.image"
+                      data-node-label="Foto do atendimento"
+                      data-edit-props="image,visibility"
+                      className="aspect-[16/9] overflow-hidden rounded-2xl bg-[#F1F5F9]"
+                    >
                       <img src={closingImg} alt={storeName} className="size-full object-cover" />
                     </div>
                   ) : null}
-                  <h3 className="text-lg font-extrabold text-[var(--cg-ink)]">{sec.config.whatsappHeading}</h3>
+                  {!waHeadingOvr.hidden ? (
+                    <h3
+                      data-node-path="schedule.whatsappHeading"
+                      data-node-label="Chamada WhatsApp"
+                      data-edit-props="text,fontSize,textColor,visibility"
+                      className="text-lg font-extrabold text-[var(--cg-ink)]"
+                      style={waHeadingOvr.style}
+                    >
+                      {sec.config.whatsappHeading}
+                    </h3>
+                  ) : null}
                   {sec.config.whatsappSubtext ? (
                     <p className="text-sm text-[var(--cg-ink-muted)]">{sec.config.whatsappSubtext}</p>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => onDirectWhatsappSend?.(`Olá ${storeName}! Gostaria de atendimento.`)}
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-[var(--cg-accent)] px-6 text-sm font-bold text-white hover:bg-[var(--cg-accent-deep)]"
-                  >
-                    <MessageCircle className="size-4" />
-                    <span>{sec.config.ctaLabel || 'Chamar no WhatsApp'}</span>
-                  </button>
+                  {!ctaOvr.hidden ? (
+                    <button
+                      type="button"
+                      data-node-path="schedule.cta"
+                      data-node-label="Botão WhatsApp"
+                      data-edit-props="text,bgColor,textColor,visibility"
+                      onClick={() => onDirectWhatsappSend?.(`Olá ${storeName}! Gostaria de atendimento.`)}
+                      className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-[var(--cg-accent)] px-6 text-sm font-bold text-white hover:bg-[var(--cg-accent-deep)]"
+                      style={ctaOvr.style}
+                    >
+                      <MessageCircle className="size-4" />
+                      <span>{sec.config.ctaLabel || 'Chamar no WhatsApp'}</span>
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </section>,
@@ -1530,13 +2086,25 @@ export function FormulaTreeRenderer({
         }
 
         if (sec.type === 'RichFooter') {
+          const ns = getSecNodeStyles(sec);
+          const tagOvr = resolveNodeStyle(ns, 'footer.tagline');
           return wrapEditable(
             sec,
             <footer className="mt-8 bg-[var(--cg-footer-bg)] py-10 text-slate-200">
               <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 @min-[640px]/formula:px-6">
                 <div>
                   <strong className="text-base font-extrabold text-white">{storeName}</strong>
-                  {sec.config.tagline ? <p className="mt-1 text-xs text-slate-300">{sec.config.tagline}</p> : null}
+                  {sec.config.tagline && !tagOvr.hidden ? (
+                    <p
+                      data-node-path="footer.tagline"
+                      data-node-label="Frase do rodapé"
+                      data-edit-props="text,fontSize,textColor,visibility"
+                      className="mt-1 text-xs text-slate-300"
+                      style={tagOvr.style}
+                    >
+                      {sec.config.tagline}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="text-xs text-slate-400">
                   {profile.business?.address ? <div>{profile.business.address}</div> : null}
@@ -1549,6 +2117,46 @@ export function FormulaTreeRenderer({
 
         return null;
       })}
+
+      {Array.isArray(formulaV9.atomicBlueprint?.sections) &&
+      formulaV9.atomicBlueprint.sections.length >= 1 ? (
+        <div
+          data-testid="v9-atomic-blueprint-root"
+          className="w-full"
+        >
+          {appliedCoupon ? (
+            <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-center text-xs font-semibold text-emerald-900">
+              Cupom <strong>{appliedCoupon.code}</strong> ativo (-{appliedCoupon.discountPercent}% no pedido)
+            </div>
+          ) : null}
+          {formulaV9.atomicBlueprint.sections.map((atomicSec, idx) => (
+            <AtomicSectionRenderer
+              key={String(atomicSec?.tuple?.[0] || idx)}
+              section={atomicSec}
+              index={idx}
+              storeName={storeName}
+              logoUrl={logoUrl}
+              profile={profile}
+              engineSeed={atomicSeed}
+              products={products}
+              primaryColor={profile.brand?.primaryColor || '#18181B'}
+              accentColor={profile.brand?.accentColor || '#D8A848'}
+              externalCategoryFilter={selectedCategory}
+              onSelectCategoryFilter={(cat) => setSelectedCategory(cat)}
+              appliedCoupon={appliedCoupon}
+              onApplyCoupon={(code, discountPercent) => setAppliedCoupon({ code, discountPercent })}
+              onAddToCart={onAddToCart}
+              onSelectProductDetail={onSelectProductDetail}
+              onDirectWhatsappSend={(msg) => {
+                const couponNote = appliedCoupon
+                  ? `\nCupom aplicado: ${appliedCoupon.code} (-${appliedCoupon.discountPercent}%)`
+                  : '';
+                onDirectWhatsappSend?.(`${msg}${couponNote}`);
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

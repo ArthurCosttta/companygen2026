@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, AlertCircle, Clock, Lock } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, Lock, Mail, Search } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { useToast } from '@/components/ui/ToastProvider';
+import { GuestClaimEmailModal } from '@/components/auth/GuestClaimEmailModal';
 import { saveLocalShowcaseSession } from '@/services/supabase-client';
 import { getBrandHorizontalLogo, useDocumentDarkMode } from '@/utils/themeLogos';
 import {
@@ -39,13 +40,31 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
         sessionStorage.setItem('cg_entry_qr', qrParam);
       }
       const q = normalizeInviteCodeInput(params.get('code') || params.get('invite') || '');
-      if (/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(q)) return q;
+      if (/^AI10-[A-Z0-9]{3,5}-[A-Z0-9]{3,5}$/i.test(q)) return q;
     } catch {}
     return 'AI10-';
   });
   const [state, setState] = useState<AccessCodeState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [creditsAwarded, setCreditsAwarded] = useState<number>(0);
+  const [claimedWithoutEmail, setClaimedWithoutEmail] = useState(false);
+  const [guestStoreName, setGuestStoreName] = useState<string>('');
+  const [hasLinkedEmail, setHasLinkedEmail] = useState(false);
+  const [claimModalState, setClaimModalState] = useState<{
+    open: boolean;
+    guestToken: string;
+    code: string;
+    credits: number;
+    storeName?: string;
+  }>({ open: false, guestToken: '', code: '', credits: 0 });
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupEmail, setLookupEmail] = useState('');
+  const [lookupOrderId, setLookupOrderId] = useState('');
+  const [lookupBusy, setLookupBusy] = useState(false);
+  const [lookupFeedback, setLookupFeedback] = useState<{
+    type: 'success' | 'error' | 'info';
+    text: string;
+  } | null>(null);
   const debounceAbortRef = useRef<AbortController | null>(null);
   const submittingRef = useRef(false);
 
@@ -56,6 +75,9 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
     if (formatted.length < 14 || formatted !== code) {
       debounceAbortRef.current?.abort();
       setCreditsAwarded(0);
+      setClaimedWithoutEmail(false);
+      setGuestStoreName('');
+      setHasLinkedEmail(false);
     }
     if (state !== 'idle') {
       setState('idle');
@@ -72,6 +94,9 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
       if (formatted.length < 14 || formatted !== code) {
         debounceAbortRef.current?.abort();
         setCreditsAwarded(0);
+        setClaimedWithoutEmail(false);
+        setGuestStoreName('');
+        setHasLinkedEmail(false);
       }
       if (state !== 'idle') {
         setState('idle');
@@ -82,8 +107,11 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
 
   useEffect(() => {
     const cleanCode = code.trim();
-    if (cleanCode.length !== 14 || !/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(cleanCode)) {
+    if (cleanCode.length < 12 || cleanCode.length > 16 || !/^AI10-[A-Z0-9]{3,5}-[A-Z0-9]{3,5}$/i.test(cleanCode)) {
       setCreditsAwarded(0);
+      setClaimedWithoutEmail(false);
+      setGuestStoreName('');
+      setHasLinkedEmail(false);
       return;
     }
     if (submittingRef.current || state === 'activated') return;
@@ -102,15 +130,23 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
         .then(async (res) => {
           const data = await res.json().catch(() => null);
           if (ctrl.signal.aborted) return;
-          if (res.ok && data?.valid && Number(data.credits) > 0) {
-            setCreditsAwarded(Number(data.credits));
+          if (res.ok && data?.valid && Number(data.credits) >= 0) {
+            setCreditsAwarded(Number(data.credits) || 0);
+            setClaimedWithoutEmail(Boolean(data.claimedWithoutEmail));
+            setGuestStoreName(String(data.guestStoreName || ''));
+            setHasLinkedEmail(false);
           } else {
             setCreditsAwarded(0);
+            setClaimedWithoutEmail(false);
+            setGuestStoreName('');
+            setHasLinkedEmail(Boolean(data?.hasLinkedEmail));
           }
         })
         .catch(() => {
           if (!ctrl.signal.aborted) {
             setCreditsAwarded(0);
+            setClaimedWithoutEmail(false);
+            setGuestStoreName('');
           }
         });
     }, 150);
@@ -121,12 +157,46 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
     };
   }, [code, state]);
 
+  const startOrResumeGuestForEmailClaim = async (cleanCode: string) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setState('loading');
+    setErrorMessage('');
+    try {
+      const res = await fetch('/api/access/guest-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: cleanCode }),
+      });
+      const guestData = await res.json().catch(() => null);
+      if (!res.ok || !guestData?.ok || !guestData.token) {
+        setState(res.status === 409 ? 'already_redeemed' : 'invalid');
+        setHasLinkedEmail(res.status === 409);
+        setErrorMessage(guestData?.error || 'Não foi possível preparar este código para vínculo.');
+        return;
+      }
+      setState('idle');
+      setClaimModalState({
+        open: true,
+        guestToken: String(guestData.token),
+        code: cleanCode,
+        credits: Number(guestData.balance ?? guestData.credits) || 0,
+        storeName: guestStoreName || undefined,
+      });
+    } catch {
+      setState('invalid');
+      setErrorMessage('Erro de conexão ao preparar vínculo do código.');
+    } finally {
+      submittingRef.current = false;
+    }
+  };
+
   const handleValidateCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const cleanCode = code.trim();
     debounceAbortRef.current?.abort();
 
-    if (cleanCode.length !== 14 || !/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(cleanCode)) {
+    if (cleanCode.length < 12 || cleanCode.length > 16 || !/^AI10-[A-Z0-9]{3,5}-[A-Z0-9]{3,5}$/i.test(cleanCode)) {
       setState('invalid');
       setErrorMessage('Por favor, digite o código completo no formato AI10-XXXX-XXXX.');
       return;
@@ -156,10 +226,20 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
           setState('expired');
         } else if (data?.reason === 'already_redeemed') {
           setState('already_redeemed');
+          setHasLinkedEmail(Boolean(data?.hasLinkedEmail));
         } else {
           setState('invalid');
         }
         setErrorMessage(data?.error || 'Código de acesso inválido ou esgotado.');
+        return;
+      }
+
+      if (data?.claimedWithoutEmail) {
+        submittingRef.current = false;
+        setClaimedWithoutEmail(true);
+        setGuestStoreName(String(data.guestStoreName || ''));
+        setCreditsAwarded(Number(data.credits) || 0);
+        await startOrResumeGuestForEmailClaim(cleanCode);
         return;
       }
 
@@ -217,6 +297,76 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
     }
   };
 
+  const handleKiwifyLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (lookupBusy) return;
+    const cleanEmail = lookupEmail.trim().toLowerCase();
+    const cleanOrderId = lookupOrderId.trim().replace(/^#/, '').trim();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setLookupFeedback({ type: 'error', text: 'Digite o e-mail usado na compra da Kiwify.' });
+      return;
+    }
+    if (cleanOrderId.length < 3) {
+      setLookupFeedback({ type: 'error', text: 'Digite o ID do pedido recebido no recibo da Kiwify.' });
+      return;
+    }
+
+    setLookupBusy(true);
+    setLookupFeedback(null);
+    try {
+      const res = await fetch('/api/kiwify/lookup-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, orderId: cleanOrderId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.found) {
+        setLookupFeedback({
+          type: 'error',
+          text:
+            data?.error ||
+            'Nenhuma compra aprovada encontrada para esse e-mail e ID de pedido.',
+        });
+        return;
+      }
+
+      if (data.status === 'available' && data.code) {
+        const formatted = normalizeInviteCodeInput(String(data.code));
+        setCode(formatted);
+        setState('idle');
+        setErrorMessage('');
+        setLookupFeedback({
+          type: 'success',
+          text: `Código ${formatted} (${Number(data.credits || 0)} cr) preenchido acima! Clique em "VALIDAR CÓDIGO E CONTINUAR →".`,
+        });
+        showToast({
+          type: 'success',
+          message: `Código encontrado (${formatted})! Clique em validar para liberar seus créditos.`,
+          durationMs: 4500,
+        });
+      } else if (data.status === 'redeemed') {
+        setLookupFeedback({
+          type: 'info',
+          text:
+            data.message ||
+            `O código ${data.codeMasked || ''} já foi resgatado. Faça login com sua conta para acessar.`,
+        });
+      } else {
+        setLookupFeedback({
+          type: 'error',
+          text: data.message || 'Este pedido está cancelado ou revogado.',
+        });
+      }
+    } catch {
+      setLookupFeedback({
+        type: 'error',
+        text: 'Erro de conexão ao consultar pedido Kiwify. Tente novamente.',
+      });
+    } finally {
+      setLookupBusy(false);
+    }
+  };
+
   const hasErrorState = state === 'invalid' || state === 'expired' || state === 'already_redeemed';
 
   return (
@@ -228,7 +378,7 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
       aria-label="Página de Código de Acesso"
     >
       <div
-        className={`relative w-full max-w-[460px] overflow-hidden rounded-3xl border p-8 shadow-2xl backdrop-blur-xl ${
+        className={`relative w-full max-w-[460px] overflow-hidden rounded-3xl border p-8 shadow-2xl ${
           isDark
             ? 'border-slate-800 bg-[#111726]/95'
             : 'border-[var(--cg-border)] bg-[var(--cg-surface)] shadow-[0_20px_50px_rgba(11,29,82,0.08)]'
@@ -276,7 +426,7 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
                 type="text"
                 autoComplete="off"
                 spellCheck="false"
-                maxLength={14}
+                maxLength={16}
                 value={code}
                 onChange={handleInputChange}
                 onPaste={handleInputPaste}
@@ -335,7 +485,30 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
               </div>
             )}
 
-            {creditsAwarded > 0 ? (
+            {claimedWithoutEmail && state !== 'activated' ? (
+              <div
+                data-testid="access-guest-unclaimed-card"
+                className="mt-2 space-y-2 rounded-xl border border-amber-500/40 bg-amber-50/90 px-3.5 py-2.5 text-center text-xs font-medium text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
+              >
+                <p>
+                  <strong>Código iniciado sem e-mail</strong>
+                  {guestStoreName ? ` (${guestStoreName})` : ''} · Saldo disponível:{' '}
+                  <strong>{creditsAwarded} cr</strong>. Ainda não há e-mail vinculado.
+                </p>
+              </div>
+            ) : null}
+
+            {hasLinkedEmail && state === 'already_redeemed' ? (
+              <button
+                type="button"
+                onClick={() => (onGoToLogin ? onGoToLogin() : (window.location.href = '/'))}
+                className="mt-2 w-full rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-700"
+              >
+                Fazer login com meu e-mail →
+              </button>
+            ) : null}
+
+            {creditsAwarded > 0 && !claimedWithoutEmail ? (
               <div
                 data-testid="access-credits-translation-card"
                 className={`mt-2 rounded-xl border px-3.5 py-2.5 text-center text-xs font-medium ${
@@ -350,20 +523,33 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
             ) : null}
           </div>
 
-          <ActionButton
-            type="submit"
-            data-testid="access-validate-btn"
-            variant="primary"
-            size={48}
-            isLoading={state === 'loading'}
-            loadingText="VALIDANDO CÓDIGO..."
-            disabled={state === 'loading' || state === 'activated' || code.length < 8}
-            className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-2xl text-sm tracking-wide shadow-lg shadow-blue-600/20"
-          >
-            VALIDAR CÓDIGO E CONTINUAR →
-          </ActionButton>
+          {!claimedWithoutEmail ? (
+            <ActionButton
+              type="submit"
+              data-testid="access-validate-btn"
+              variant="primary"
+              size={48}
+              isLoading={state === 'loading'}
+              loadingText="VALIDANDO CÓDIGO..."
+              disabled={state === 'loading' || state === 'activated' || code.length < 8}
+              className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-2xl text-sm tracking-wide shadow-lg shadow-blue-600/20"
+            >
+              VALIDAR CÓDIGO E CONTINUAR →
+            </ActionButton>
+          ) : (
+            <button
+              type="button"
+              data-testid="access-claim-email-btn"
+              disabled={state === 'loading'}
+              onClick={() => void startOrResumeGuestForEmailClaim(code.trim())}
+              className="flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#2563EB] px-4 text-sm font-bold tracking-wide text-white shadow-lg shadow-blue-600/20 transition hover:bg-[#1D4ED8] disabled:opacity-60"
+            >
+              <Mail className="size-4 shrink-0" />
+              <span>Vincular este código ao meu e-mail →</span>
+            </button>
+          )}
 
-          {/^AI10-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(code.trim()) && state !== 'activated' ? (
+          {/^AI10-[A-Z0-9]{3,5}-[A-Z0-9]{3,5}$/i.test(code.trim()) && state !== 'activated' && !hasLinkedEmail ? (
             <button
               type="button"
               data-testid="access-guest-start-btn"
@@ -380,7 +566,8 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
                   });
                   const guestData = await res.json().catch(() => null);
                   if (!res.ok || !guestData?.ok || !guestData.token) {
-                    setState('invalid');
+                    setState(res.status === 409 ? 'already_redeemed' : 'invalid');
+                    if (res.status === 409) setHasLinkedEmail(true);
                     setErrorMessage(guestData?.error || 'Não foi possível iniciar com este convite.');
                     return;
                   }
@@ -388,18 +575,23 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
                     token: guestData.token,
                     user: guestData.user,
                     code: code.trim(),
-                    credits: Number(guestData.credits) || 100,
-                    balance: Number(guestData.balance ?? guestData.credits) || 100,
+                    credits: Number(guestData.balance ?? guestData.credits) || 0,
+                    balance: Number(guestData.balance ?? guestData.credits) || 0,
                     savedAt: new Date().toISOString(),
                   });
                   setState('activated');
-                  setCreditsAwarded(Number(guestData.credits) || 100);
+                  setCreditsAwarded(Number(guestData.balance ?? guestData.credits) || 0);
                   showToast({
                     type: 'success',
-                    message: 'Acesso liberado sem e-mail! Monte sua loja agora e vincule seu e-mail só quando publicar.',
+                    message: guestData.resumed
+                      ? 'Loja convidada reaberta! Você pode vincular seu e-mail no topo a qualquer momento.'
+                      : 'Acesso liberado sem e-mail! Monte sua loja agora e vincule seu e-mail no topo quando quiser.',
                     durationMs: 4000,
                   });
-                  onSuccess?.({ code: code.trim(), credits: Number(guestData.credits) || 100 });
+                  onSuccess?.({
+                    code: code.trim(),
+                    credits: Number(guestData.balance ?? guestData.credits) || 0,
+                  });
                 } catch {
                   setState('invalid');
                   setErrorMessage('Erro de conexão ao iniciar modo convidado.');
@@ -409,10 +601,101 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
               }}
               className="w-full min-h-[44px] rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs font-extrabold text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-300"
             >
-              Começar Minha Loja Agora (sem e-mail) →
+              {claimedWithoutEmail
+                ? 'Continuar sem e-mail nesta loja →'
+                : 'Começar Minha Loja Agora (sem e-mail) →'}
             </button>
           ) : null}
         </form>
+
+        {/* Busca de código para compras Kiwify */}
+        <div className="mt-4">
+          <div className="text-center">
+            <button
+              type="button"
+              data-testid="kiwify-lookup-toggle"
+              onClick={() => {
+                setLookupOpen((prev) => !prev);
+                setLookupFeedback(null);
+              }}
+              className={`inline-flex items-center gap-1.5 text-xs font-semibold underline underline-offset-4 transition ${
+                isDark
+                  ? 'text-sky-300 hover:text-white'
+                  : 'text-[#2563EB] hover:text-[#1D4ED8]'
+              }`}
+            >
+              <Search className="size-3.5" />
+              Comprou na Kiwify agora? Buscar meu código
+            </button>
+          </div>
+
+          {lookupOpen ? (
+            <form
+              onSubmit={handleKiwifyLookup}
+              data-testid="kiwify-lookup-panel"
+              className={`mt-3 space-y-2.5 rounded-2xl border p-4 text-left ${
+                isDark
+                  ? 'border-slate-700/80 bg-slate-900/70 text-slate-200'
+                  : 'border-blue-200 bg-blue-50/60 text-slate-800'
+              }`}
+            >
+              <p className="text-[11px] font-semibold leading-relaxed">
+                Informe o e-mail da compra e o ID do pedido (no recibo da Kiwify) para recuperar seu código <span className="font-mono">AI10-XXXX-XXXX</span>:
+              </p>
+              <input
+                type="email"
+                data-testid="kiwify-lookup-email"
+                value={lookupEmail}
+                onChange={(e) => setLookupEmail(e.target.value)}
+                placeholder="E-mail usado na Kiwify"
+                disabled={lookupBusy}
+                className={`w-full rounded-xl border px-3 py-2 text-xs focus:outline-none focus:ring-2 ${
+                  isDark
+                    ? 'border-slate-700 bg-slate-950 text-white placeholder-slate-500 focus:border-blue-500 focus:ring-blue-500/20'
+                    : 'border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:ring-blue-600/20'
+                }`}
+              />
+              <input
+                type="text"
+                data-testid="kiwify-lookup-order-id"
+                value={lookupOrderId}
+                onChange={(e) => setLookupOrderId(e.target.value)}
+                placeholder="ID do pedido Kiwify (ex.: 9b1c2d3e-...)"
+                disabled={lookupBusy}
+                className={`w-full rounded-xl border px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 ${
+                  isDark
+                    ? 'border-slate-700 bg-slate-950 text-white placeholder-slate-500 focus:border-blue-500 focus:ring-blue-500/20'
+                    : 'border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:ring-blue-600/20'
+                }`}
+              />
+              <ActionButton
+                type="submit"
+                size={44}
+                variant="secondary"
+                isLoading={lookupBusy}
+                loadingText="Buscando pedido..."
+                data-testid="kiwify-lookup-submit"
+                className="w-full text-xs"
+              >
+                Buscar meu código
+              </ActionButton>
+              {lookupFeedback ? (
+                <p
+                  data-testid="kiwify-lookup-feedback"
+                  className={`rounded-xl px-3 py-2 text-xs font-medium ${
+                    lookupFeedback.type === 'success'
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                      : lookupFeedback.type === 'info'
+                        ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300'
+                        : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                  }`}
+                >
+                  {lookupFeedback.text}
+                </p>
+              ) : null}
+            </form>
+          ) : null}
+        </div>
 
         {/* Checklist de Benefícios */}
         <div
@@ -462,6 +745,22 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
           </button>
         </div>
       </div>
+
+      <GuestClaimEmailModal
+        open={claimModalState.open}
+        onOpenChange={(open) => setClaimModalState((prev) => ({ ...prev, open }))}
+        guestToken={claimModalState.guestToken}
+        inviteCode={claimModalState.code}
+        currentCredits={claimModalState.credits}
+        storeName={claimModalState.storeName}
+        onClaimed={({ balance }) => {
+          setState('activated');
+          onSuccess?.({
+            code: claimModalState.code,
+            credits: typeof balance === 'number' ? balance : claimModalState.credits,
+          });
+        }}
+      />
     </main>
   );
 }

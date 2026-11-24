@@ -12,6 +12,7 @@ export interface ParsedSpreadsheetSheet {
   name: string;
   headers: string[];
   rows: string[][];
+  imagesByRow?: Record<number, string>;
 }
 
 export type SpreadsheetFormat = 'xlsx' | 'xls-xml' | 'xls-html' | 'csv' | 'tsv';
@@ -324,32 +325,61 @@ function parseAttrs(attrString: string): Record<string, string> {
   return attrs;
 }
 
-function rowsToSheet(name: string, matrix: string[][]): ParsedSpreadsheetSheet | null {
-  const nonEmptyRows = matrix
-    .map(row => row.map(cell => String(cell ?? '').trim()))
-    .filter(row => row.some(cell => cell.length > 0));
-  if (!nonEmptyRows.length) return null;
+function rowsToSheet(
+  name: string,
+  matrix: string[][],
+  rawRowNums?: number[],
+): (ParsedSpreadsheetSheet & { _headerExcelRowZero?: number; _excelRowByDataRow?: number[] }) | null {
+  const indexedRows = matrix
+    .map((row, idx) => ({
+      cells: row.map(cell => String(cell ?? '').trim()),
+      excelRowZero: rawRowNums && Number.isInteger(rawRowNums[idx]) ? rawRowNums[idx] : idx,
+    }))
+    .filter(item => item.cells.some(cell => cell.length > 0));
+  if (!indexedRows.length) return null;
 
-  const maxCols = Math.max(...nonEmptyRows.map(r => r.length), 1);
+  // Smart header detection: skip single-cell title banner rows when a richer multi-column header exists in top 5 rows
+  let headerIdx = 0;
+  const countNonEmpty = (r: string[]) => r.filter(Boolean).length;
+  if (indexedRows.length >= 2 && countNonEmpty(indexedRows[0].cells) === 1) {
+    const better = indexedRows.slice(1, 5).findIndex(it => countNonEmpty(it.cells) >= 2);
+    if (better >= 0) headerIdx = better + 1;
+  }
+
+  const sliceRows = indexedRows.slice(headerIdx);
+  const maxCols = Math.max(...sliceRows.map(r => r.cells.length), 1);
   const pad = (row: string[]) =>
     Array.from({ length: maxCols }, (_, idx) => row[idx] ?? '');
 
-  const [headerRow, ...dataRows] = nonEmptyRows;
-  const paddedHeaders = pad(headerRow).map((h, idx) => h || `Coluna_${idx + 1}`);
+  const [headerItem, ...dataItems] = sliceRows;
+  const paddedHeaders = pad(headerItem.cells).map((h, idx) => h || `Coluna_${idx + 1}`);
   return {
     name,
     headers: paddedHeaders,
-    rows: dataRows.map(pad),
+    rows: dataItems.map(d => pad(d.cells)),
+    _headerExcelRowZero: headerItem.excelRowZero,
+    _excelRowByDataRow: dataItems.map(d => d.excelRowZero),
   };
 }
 
-function parseWorksheetXml(xml: string, sharedStrings: string[], sheetName: string): ParsedSpreadsheetSheet | null {
+function parseWorksheetXml(
+  xml: string,
+  sharedStrings: string[],
+  sheetName: string,
+): (ParsedSpreadsheetSheet & { _headerExcelRowZero?: number; _excelRowByDataRow?: number[] }) | null {
   const matrix: string[][] = [];
-  const rowRegex = /<row(?:\s[^>]*)?>([\s\S]*?)<\/row>/gi;
+  const rawRowNums: number[] = [];
+  const rowRegex = /<row(\s[^>]*)?>([\s\S]*?)<\/row>/gi;
   let rowMatch: RegExpExecArray | null;
+  let seqRowZero = 0;
 
   while ((rowMatch = rowRegex.exec(xml)) !== null) {
-    const rowBody = rowMatch[1];
+    const rowAttrs = parseAttrs(rowMatch[1] || '');
+    const explicitRowNum = rowAttrs.r ? Number(rowAttrs.r) - 1 : seqRowZero;
+    const rowZero = Number.isFinite(explicitRowNum) && explicitRowNum >= 0 ? explicitRowNum : seqRowZero;
+    seqRowZero = rowZero + 1;
+
+    const rowBody = rowMatch[2];
     const rowCells: string[] = [];
     const cellRegex = /<c(\s[^>]*)?(?:\/>|>([\s\S]*?)<\/c>)/gi;
     let cellMatch: RegExpExecArray | null;
@@ -392,10 +422,89 @@ function parseWorksheetXml(xml: string, sharedStrings: string[], sheetName: stri
 
     if (rowCells.some(c => c.trim().length > 0)) {
       matrix.push(rowCells);
+      rawRowNums.push(rowZero);
     }
   }
 
-  return rowsToSheet(sheetName, matrix);
+  return rowsToSheet(sheetName, matrix, rawRowNums);
+}
+
+function guessImageMimeFromPath(filePath: string): string | null {
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  return null;
+}
+
+async function extractWorksheetEmbeddedImages(
+  zip: JSZip,
+  sheetPath: string,
+): Promise<Map<number, string>> {
+  const byExcelRowZero = new Map<number, string>();
+  const normalizedSheetPath = sheetPath.replace(/^\/+/, '');
+  const sheetDir = normalizedSheetPath.split('/').slice(0, -1).join('/');
+  const sheetFile = normalizedSheetPath.split('/').pop() || '';
+  const sheetRelsPath = `${sheetDir}/_rels/${sheetFile}.rels`;
+
+  const drawingPaths: string[] = [];
+  const sheetRelsFile = zip.file(sheetRelsPath);
+  if (sheetRelsFile) {
+    const relsXml = await sheetRelsFile.async('string');
+    const relRegex = /<Relationship\s+([^>]+?)\/?>/gi;
+    let rm: RegExpExecArray | null;
+    while ((rm = relRegex.exec(relsXml)) !== null) {
+      const attrs = parseAttrs(rm[1]);
+      if (attrs.Target && /drawing/i.test(attrs.Target)) {
+        const clean = attrs.Target.replace(/^\.\.\//, 'xl/').replace(/^\/+/, '');
+        drawingPaths.push(clean.startsWith('xl/') ? clean : `xl/${clean}`);
+      }
+    }
+  }
+
+  for (const drawingPath of drawingPaths) {
+    const drawingFile = zip.file(drawingPath);
+    if (!drawingFile) continue;
+    const drawingXml = await drawingFile.async('string');
+    const drawingDir = drawingPath.split('/').slice(0, -1).join('/');
+    const drawingName = drawingPath.split('/').pop() || '';
+    const drawingRelsFile = zip.file(`${drawingDir}/_rels/${drawingName}.rels`);
+    const embedToMedia = new Map<string, string>();
+    if (drawingRelsFile) {
+      const dRelsXml = await drawingRelsFile.async('string');
+      const relRegex = /<Relationship\s+([^>]+?)\/?>/gi;
+      let rm: RegExpExecArray | null;
+      while ((rm = relRegex.exec(dRelsXml)) !== null) {
+        const attrs = parseAttrs(rm[1]);
+        if (attrs.Id && attrs.Target) {
+          const clean = attrs.Target.replace(/^\.\.\//, 'xl/').replace(/^\/+/, '');
+          embedToMedia.set(attrs.Id, clean.startsWith('xl/') ? clean : `xl/${clean}`);
+        }
+      }
+    }
+
+    const anchorRe = /<xdr:(?:twoCellAnchor|oneCellAnchor)[^>]*>([\s\S]*?)<\/xdr:(?:twoCellAnchor|oneCellAnchor)>/gi;
+    let am: RegExpExecArray | null;
+    while ((am = anchorRe.exec(drawingXml)) !== null) {
+      const block = am[1];
+      const rowMatch = block.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/i);
+      const blipMatch = block.match(/<a:blip[^>]*r:embed=["']([^"']+)["']/i);
+      if (!rowMatch || !blipMatch) continue;
+      const excelRowZero = Number(rowMatch[1]);
+      const mediaPath = embedToMedia.get(blipMatch[1]);
+      if (!mediaPath) continue;
+      const mediaFile = zip.file(mediaPath);
+      const mime = guessImageMimeFromPath(mediaPath);
+      if (!mediaFile || !mime) continue;
+      const b64 = await mediaFile.async('base64');
+      if (b64 && !byExcelRowZero.has(excelRowZero)) {
+        byExcelRowZero.set(excelRowZero, `data:${mime};base64,${b64}`);
+      }
+    }
+  }
+
+  return byExcelRowZero;
 }
 
 async function parseXlsxArchive(bytes: Uint8Array): Promise<ParsedSpreadsheetResult> {
@@ -452,7 +561,21 @@ async function parseXlsxArchive(bytes: Uint8Array): Promise<ParsedSpreadsheetRes
     if (!file) continue;
     const xml = await file.async('string');
     const parsed = parseWorksheetXml(xml, sharedStrings, entry.name);
-    if (parsed) sheets.push(parsed);
+    if (!parsed) continue;
+    const embeddedMap = await extractWorksheetEmbeddedImages(zip, entry.path);
+    const imagesByRow: Record<number, string> = {};
+    if (embeddedMap.size > 0 && Array.isArray(parsed._excelRowByDataRow)) {
+      parsed._excelRowByDataRow.forEach((excelRowZero, dataIdx) => {
+        const uri = embeddedMap.get(excelRowZero);
+        if (uri) imagesByRow[dataIdx] = uri;
+      });
+    }
+    sheets.push({
+      name: parsed.name,
+      headers: parsed.headers,
+      rows: parsed.rows,
+      ...(Object.keys(imagesByRow).length > 0 ? { imagesByRow } : {}),
+    });
   }
 
   return { format: 'xlsx', sheets };

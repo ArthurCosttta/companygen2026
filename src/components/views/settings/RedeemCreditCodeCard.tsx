@@ -64,13 +64,15 @@ export function RedeemCreditCodeCard({
   }, [userId]);
 
   const limitReached = quota.used >= quota.limit;
+  const isKiwifyPaidPrefix = code.trim().toUpperCase().startsWith('AI10');
+  const submitBlockedByPromoLimit = limitReached && !isKiwifyPaidPrefix;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting || limitReached) return;
+    if (submitting || submitBlockedByPromoLimit) return;
     const trimmed = code.trim().toUpperCase();
     if (trimmed.length < 8) {
-      setError('Digite o código completo (ex.: RC10-XXXX-XXXX).');
+      setError('Digite o código completo (ex.: RC10-XXXX-XXXX ou AI10-XXXX-XXXX).');
       return;
     }
     setSubmitting(true);
@@ -129,15 +131,13 @@ export function RedeemCreditCodeCard({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
-            <Gift className="size-4.5" aria-hidden="true" />
-          </span>
+          <Gift className="size-4.5 shrink-0 text-[#09090B] dark:text-slate-200" aria-hidden="true" />
           <div>
             <h3 className="text-sm font-bold text-[#0F172A] dark:text-slate-100">
               Resgatar Código de Créditos
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Tem um código especial de recarga (RC10)? Resgate aqui direto na sua conta.
+              Tem um código de recarga (RC10) ou compra na Kiwify (AI10)? Resgate aqui direto na sua conta.
             </p>
           </div>
         </div>
@@ -161,18 +161,18 @@ export function RedeemCreditCodeCard({
             setCode(formatCodeInput(e.target.value));
             if (error) setError('');
           }}
-          disabled={limitReached || submitting}
-          placeholder="RC10-XXXX-XXXX"
+          disabled={submitting}
+          placeholder="RC10-XXXX-XXXX ou AI10-XXXX-XXXX"
           maxLength={14}
           data-testid="redeem-code-input"
-          aria-label="Código de recarga de créditos"
+          aria-label="Código de recarga ou compra Kiwify"
           className="cg-tabular min-h-[44px] flex-1 rounded-xl border border-slate-300 bg-white px-3.5 font-mono text-sm font-bold tracking-wider uppercase text-[#0F172A] placeholder:font-sans placeholder:tracking-normal placeholder:font-normal focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 disabled:opacity-50 dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-100"
         />
         <ActionButton
           type="submit"
           size={44}
           variant="primary"
-          disabled={limitReached || !code.trim()}
+          disabled={submitBlockedByPromoLimit || !code.trim()}
           isLoading={submitting}
           loadingText="Resgatando..."
           data-testid="redeem-code-submit"
@@ -186,7 +186,7 @@ export function RedeemCreditCodeCard({
       {limitReached ? (
         <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
           <AlertCircle className="size-3.5 shrink-0" />
-          Você atingiu o limite máximo de {quota.limit} resgates de códigos promocionais nesta conta.
+          Você atingiu o limite máximo de {quota.limit} resgates de códigos promocionais (RC10). Códigos pagos da Kiwify (AI10) continuam liberados.
         </p>
       ) : null}
 

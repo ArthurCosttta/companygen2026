@@ -1,21 +1,23 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@fontsource/inter/400.css";
-@import "@fontsource/inter/500.css";
-@import "@fontsource/inter/600.css";
-@import "@fontsource/inter/700.css";
-@import "@fontsource/inter/800.css";
-@import "@fontsource/playfair-display/400.css";
-@import "@fontsource/playfair-display/700.css";
-@import "@fontsource/playfair-display/800.css";
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/inter/latin-600.css";
+@import "@fontsource/inter/latin-700.css";
+@import "@fontsource/instrument-serif/latin-400.css";
+@import "@fontsource/jetbrains-mono/latin-400.css";
+@import "@fontsource/jetbrains-mono/latin-600.css";
+@import "@fontsource/jetbrains-mono/latin-700.css";
 @import "./tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-serif: 'Playfair Display', Georgia, Cambria, 'Times New Roman', serif;
+  --font-sans: 'DM Sans', 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', 'Fraunces', 'Playfair Display', Georgia, Cambria, 'Times New Roman', serif;
+  --font-display-geo: 'Syne', 'Bricolage Grotesque', 'Plus Jakarta Sans', ui-sans-serif, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -171,25 +173,71 @@ html.dark .bg-\[\#DBEAFE\] {
 html.dark .bg-\[\#ECFDF5\],
 html.dark .bg-\[\#DCFCE7\],
 html.dark .bg-\[\#DDFBE1\],
-html.dark .bg-\[\#DFFBE6\] {
-  background-color: rgba(16, 185, 129, 0.14) !important;
+html.dark .bg-\[\#DFFBE6\],
+html.dark .bg-emerald-50,
+html.dark .bg-emerald-50\/40,
+html.dark .bg-emerald-50\/80,
+html.dark .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+}
+
+html.dark .bg-\[\#E7FFDB\],
+html.dark .bg-\[\#E7FFDB\]\/40,
+html.dark .bg-\[\#DCF8C6\] {
+  background-color: #064E3B !important;
+}
+
+html.dark .bg-\[\#E2E8F0\] {
+  background-color: #1E293B !important;
 }
 
 html.dark .bg-\[\#FEF3C7\],
-html.dark .bg-\[\#FFFBEB\] {
-  background-color: rgba(245, 158, 11, 0.14) !important;
+html.dark .bg-\[\#FFFBEB\],
+html.dark .bg-amber-50,
+html.dark .bg-amber-50\/80,
+html.dark .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.16) !important;
 }
 
 html.dark .bg-\[\#FEF2F2\],
-html.dark .bg-\[\#FFE4E6\] {
-  background-color: rgba(239, 68, 68, 0.14) !important;
+html.dark .bg-\[\#FFE4E6\],
+html.dark .bg-rose-50,
+html.dark .bg-rose-100,
+html.dark .bg-red-50,
+html.dark .bg-red-100 {
+  background-color: rgba(244, 63, 94, 0.16) !important;
 }
 
-html.dark .bg-\[\#F3E8FF\] {
-  background-color: rgba(139, 92, 246, 0.14) !important;
+html.dark .bg-\[\#F3E8FF\],
+html.dark .bg-purple-50,
+html.dark .bg-purple-50\/50,
+html.dark .bg-purple-100,
+html.dark .bg-purple-200\/70 {
+  background-color: rgba(139, 92, 246, 0.18) !important;
+}
+
+html.dark .bg-blue-50,
+html.dark .bg-blue-50\/80,
+html.dark .bg-blue-50\/90,
+html.dark .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.16) !important;
+}
+
+/* Primary/Active buttons that used solid dark ink (#09090B / slate-950) pop cleanly in Dark Mode */
+html.dark button.bg-slate-950,
+html.dark button.bg-\[\#09090B\],
+html.dark a.bg-slate-950,
+html.dark a.bg-\[\#09090B\] {
+  background-color: #2563EB !important;
+  border-color: #60A5FA !important;
+  color: #FFFFFF !important;
 }
 
 /* Primary headings & body -> #ffffff */
+html.dark .text-\[\#09090B\],
+html.dark .text-\[\#111827\],
+html.dark .text-\[\#18181B\],
+html.dark .text-\[\#0A0A0A\],
 html.dark .text-\[\#0F172A\],
 html.dark .text-\[\#0B1D52\],
 html.dark .text-\[\#101F41\],
@@ -233,23 +281,63 @@ html.dark .text-zinc-400 {
 }
 
 /* Semantic dark text brightened on carbon surfaces */
-html.dark .text-\[\#1D4ED8\] {
-  color: #93c5fd !important;
+html.dark .text-\[\#1D4ED8\],
+html.dark .text-blue-950,
+html.dark .text-blue-900,
+html.dark .text-blue-800,
+html.dark .text-blue-700 {
+  color: #BFDBFE !important;
 }
 html.dark .text-\[\#15803D\],
-html.dark .text-\[\#008E2D\] {
-  color: #4ade80 !important;
+html.dark .text-\[\#008E2D\],
+html.dark .text-emerald-950,
+html.dark .text-emerald-900,
+html.dark .text-emerald-800,
+html.dark .text-emerald-700 {
+  color: #6EE7B7 !important;
 }
-html.dark .text-\[\#B45309\] {
-  color: #fcd34d !important;
+html.dark .text-\[\#B45309\],
+html.dark .text-amber-950,
+html.dark .text-amber-900,
+html.dark .text-amber-800,
+html.dark .text-amber-700 {
+  color: #FDE68A !important;
 }
 html.dark .text-\[\#B91C1C\],
 html.dark .text-\[\#BE123C\],
-html.dark .text-\[\#D94C4C\] {
-  color: #fca5a5 !important;
+html.dark .text-\[\#D94C4C\],
+html.dark .text-rose-950,
+html.dark .text-rose-900,
+html.dark .text-rose-800,
+html.dark .text-rose-700,
+html.dark .text-red-900,
+html.dark .text-red-800,
+html.dark .text-red-700 {
+  color: #FECDD3 !important;
 }
-html.dark .text-\[\#7E22CE\] {
-  color: #d8b4fe !important;
+html.dark .text-\[\#7E22CE\],
+html.dark .text-purple-950,
+html.dark .text-purple-900,
+html.dark .text-purple-800,
+html.dark .text-purple-700 {
+  color: #DDD6FE !important;
+}
+
+html.dark .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+html.dark .border-purple-200 {
+  border-color: rgba(139, 92, 246, 0.35) !important;
+}
+html.dark .border-amber-200 {
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+html.dark .border-blue-200 {
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+html.dark .border-rose-200,
+html.dark .border-red-200 {
+  border-color: rgba(244, 63, 94, 0.35) !important;
 }
 
 /* Borders */
@@ -667,6 +755,11 @@ html.dark .cg-card-shadow {
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--cg-focus-ring);
 }
+.cg-no-focus-ring:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
 
 @media print {
   .cg-sidebar,
@@ -770,4 +863,35 @@ html.dark .cg-light-preview textarea {
     border: none !important;
     box-shadow: none !important;
   }
+}
+
+/* Modo Desempenho (PC Leve / Baixa RAM / Windows 32-bit / Electron Software Rasterizer) */
+.cg-cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
+html.cg-low-spec *,
+html.cg-low-spec *::before,
+html.cg-low-spec *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}
+
+html.cg-low-spec .animate-pulse,
+html.cg-low-spec .animate-bounce {
+  animation: none !important;
+}
+
+html.cg-low-spec [class*="shadow-"] {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+/* Foco acessível visível para navegação via teclado */
+:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
 }
