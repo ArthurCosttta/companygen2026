@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-050",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/ProductImageDetailModal.tsx"
+  ],
+  "range": [
+    78,
+    173
+  ],
+  "preserveTestIds": [
+    "image-detail-confirm-official",
+    "image-detail-zoom-in",
+    "product-image-detail-modal"
+  ],
+  "description": "Achatar 3 sombra(s), 0 blur(s) e 0 gradiente(s) em ProductImageDetailModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

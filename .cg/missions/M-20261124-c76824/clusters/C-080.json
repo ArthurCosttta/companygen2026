@@ -1,0 +1,27 @@
+{
+  "clusterId": "C-080",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/Sidebar.tsx"
+  ],
+  "range": [
+    142,
+    207
+  ],
+  "preserveTestIds": [
+    "desktop-sidebar",
+    "sidebar-brand-logo",
+    "sidebar-collapse-toggle",
+    "sidebar-exe-health",
+    "sidebar-logout-btn",
+    "sidebar-support-btn",
+    "sidebar-updater-restart-btn"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em Sidebar.tsx",
+  "check": "verify-micro",
+  "after": []
+}

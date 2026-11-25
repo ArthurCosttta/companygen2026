@@ -1,0 +1,27 @@
+{
+  "clusterId": "C-144",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/onboarding/OnboardingSynthesisStage.tsx"
+  ],
+  "range": [
+    487,
+    577
+  ],
+  "preserveTestIds": [
+    "synthesis-error-banner",
+    "synthesis-recharge-btn",
+    "synthesis-retry-btn",
+    "synthesis-back-btn",
+    "synthesis-micro-feed"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (487-577) de OnboardingSynthesisStage.tsx preservando 5 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-143"
+  ]
+}

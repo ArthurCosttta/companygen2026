@@ -1,0 +1,34 @@
+{
+  "clusterId": "C-284",
+  "wave": "W5",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-NAV-EACH-SCREEN",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/access/AccessCodeView.tsx"
+  ],
+  "range": null,
+  "preserveTestIds": [
+    "access-brand-logo",
+    "access-claim-email-btn",
+    "access-code-input",
+    "access-credits-translation-card",
+    "access-go-to-login-btn",
+    "access-guest-start-btn",
+    "access-guest-unclaimed-card",
+    "access-state-feedback",
+    "access-validate-btn",
+    "kiwify-lookup-email",
+    "kiwify-lookup-feedback",
+    "kiwify-lookup-order-id",
+    "kiwify-lookup-panel",
+    "kiwify-lookup-submit",
+    "kiwify-lookup-toggle"
+  ],
+  "description": "OPEN_NAVIGATOR: validar rota \"access\" (375x812) com consoleErrors==0 e todos os botões/gavetas vivos",
+  "check": "OPEN_NAVIGATOR",
+  "after": [
+    "C-283"
+  ]
+}

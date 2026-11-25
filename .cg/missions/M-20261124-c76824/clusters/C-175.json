@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-175",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/settings/SettingsView.tsx"
+  ],
+  "range": [
+    1728,
+    1818
+  ],
+  "preserveTestIds": [
+    "settings-open-support-ticket-btn"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (1728-1818) de SettingsView.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-174"
+  ]
+}

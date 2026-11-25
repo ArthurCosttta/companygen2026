@@ -610,6 +610,7 @@ export function createWorkspaceApi(options = {}) {
       setWhatsappCloudState(user.id, { available: false, revision: 0, uploaded: new Set(), lastSync: 0, error: 'Migração pendente.' });
       return;
     }
+    // @cg:reads disk:supabase-whatsapp.json
     const markerFile = path.join(directory, 'supabase-whatsapp.json');
     let marker = { revision: 0 };
     try { marker = JSON.parse(await readFile(markerFile, 'utf8')); } catch {}
@@ -1617,12 +1618,17 @@ export function createWorkspaceApi(options = {}) {
   async function backupExportHandler(req, res, user, directory) {
     if (req.method !== 'GET') throw new ApiError(405, 'Método indisponível.');
     const { current } = await loadProfileState(user, directory);
-    const customTemplates = await readJsonFile(path.join(directory, 'ai_custom_templates.json'), []);
+    const [customTemplates, stdTemplates, whatsappFlows] = await Promise.all([
+      readJsonFile(path.join(directory, 'ai_custom_templates.json'), []),
+      readJsonFile(path.join(directory, 'templates.json'), []),
+      readJsonFile(path.join(directory, 'whatsapp_flows.json'), []),
+    ]);
     const rawPayload = stripSecretKeys({
       schemaVersion: 1,
       exportedAt: new Date().toISOString(),
       profile: current.data,
-      quickReplies: Array.isArray(customTemplates) ? customTemplates : [],
+      quickReplies: Array.isArray(stdTemplates) && stdTemplates.length > 0 ? stdTemplates : Array.isArray(customTemplates) ? customTemplates : [],
+      whatsappFlows: Array.isArray(whatsappFlows) ? whatsappFlows : [],
       formulaIr: current.data?.storeLayout?.formulasIr || null,
     });
     const payloadJson = JSON.stringify(rawPayload, null, 2);
@@ -1723,9 +1729,16 @@ export function createWorkspaceApi(options = {}) {
     const { current } = await loadProfileState(user, directory);
     const saved = await saveProfileState(user, directory, current.revision, sanitizedProfile);
     if (Array.isArray(payload.quickReplies)) {
+      const cleanReplies = stripSecretKeys(payload.quickReplies).slice(0, 80);
+      await Promise.all([
+        atomicWriteJson(path.join(directory, 'ai_custom_templates.json'), cleanReplies),
+        atomicWriteJson(path.join(directory, 'templates.json'), cleanReplies),
+      ]);
+    }
+    if (Array.isArray(payload.whatsappFlows)) {
       await atomicWriteJson(
-        path.join(directory, 'ai_custom_templates.json'),
-        stripSecretKeys(payload.quickReplies).slice(0, 80),
+        path.join(directory, 'whatsapp_flows.json'),
+        stripSecretKeys(payload.whatsappFlows).slice(0, 60),
       );
     }
 

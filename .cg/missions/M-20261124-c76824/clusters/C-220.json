@@ -1,0 +1,19 @@
+{
+  "clusterId": "C-220",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/ReferenceComponentsPack.tsx"
+  ],
+  "range": [
+    2274,
+    2322
+  ],
+  "preserveTestIds": [],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em ReferenceComponentsPack.tsx",
+  "check": "verify-micro",
+  "after": []
+}

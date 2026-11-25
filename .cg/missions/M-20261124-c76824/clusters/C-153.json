@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-153",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/ManualSaleModal.tsx"
+  ],
+  "range": [
+    186,
+    251
+  ],
+  "preserveTestIds": [
+    "manual-sale-submit"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em ManualSaleModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

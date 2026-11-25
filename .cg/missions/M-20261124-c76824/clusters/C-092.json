@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-092",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/CreditAlertCenterModal.tsx"
+  ],
+  "range": [
+    35,
+    115
+  ],
+  "preserveTestIds": [
+    "credit-alert-center-modal"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (35-115) de CreditAlertCenterModal.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-091"
+  ]
+}

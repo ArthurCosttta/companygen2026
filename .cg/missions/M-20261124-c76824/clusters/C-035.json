@@ -1,0 +1,31 @@
+{
+  "clusterId": "C-035",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/HighSaturationNotificationBar.tsx"
+  ],
+  "range": [
+    72,
+    167
+  ],
+  "preserveTestIds": [
+    "notification-bar-resume-ai-btn",
+    "notification-enable-mobile-btn",
+    "phone-notification-primary",
+    "phone-notification-queue-list",
+    "phone-notification-queue-toggle",
+    "silence-alarm-btn",
+    "tela-38-notification-bar"
+  ],
+  "description": "Achatar 2 sombra(s), 0 blur(s) e 0 gradiente(s) em HighSaturationNotificationBar.tsx",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:43.527Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

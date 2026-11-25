@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-215",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/ProductEditorDrawer.tsx"
+  ],
+  "range": [
+    902,
+    915
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (902-915) de ProductEditorDrawer.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-214"
+  ]
+}

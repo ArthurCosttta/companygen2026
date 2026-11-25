@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-240",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/studio/ArchetypeComposerView.tsx"
+  ],
+  "range": [
+    656,
+    746
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (656-746) de ArchetypeComposerView.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-239"
+  ]
+}

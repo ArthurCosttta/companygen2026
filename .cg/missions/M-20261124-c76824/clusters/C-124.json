@@ -1,0 +1,35 @@
+{
+  "clusterId": "C-124",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/admin/AdminUser360Drawer.tsx"
+  ],
+  "range": [
+    403,
+    468
+  ],
+  "preserveTestIds": [
+    "admin-360-acc-credits",
+    "admin-360-acc-flags",
+    "admin-360-acc-kiwify",
+    "admin-360-acc-limits",
+    "admin-360-ban-btn",
+    "admin-360-credit-amount",
+    "admin-360-credit-note",
+    "admin-360-credit-reason",
+    "admin-360-credit-submit",
+    "admin-360-limit-note",
+    "admin-360-limit-submit",
+    "admin-360-support-readonly-btn",
+    "admin-360-tier-select",
+    "admin-drawer-copy-store-url-btn",
+    "admin-drawer-view-store-btn"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em AdminUser360Drawer.tsx",
+  "check": "verify-micro",
+  "after": []
+}

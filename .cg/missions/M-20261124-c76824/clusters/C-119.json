@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-119",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/admin/AdminConsoleView.tsx"
+  ],
+  "range": [
+    1057,
+    1147
+  ],
+  "preserveTestIds": [
+    "admin-code-type-select",
+    "admin-code-credits-input",
+    "admin-code-maxuses-input"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (1057-1147) de AdminConsoleView.tsx preservando 3 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-118"
+  ]
+}

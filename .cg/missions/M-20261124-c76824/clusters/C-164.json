@@ -1,0 +1,27 @@
+{
+  "clusterId": "C-164",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/OrdersKanbanView.tsx"
+  ],
+  "range": [
+    863,
+    953
+  ],
+  "preserveTestIds": [
+    "orders-subtab-kanban",
+    "orders-subtab-crm",
+    "orders-auto-notify-toggle",
+    "orders-ai-modify-input",
+    "orders-ai-modify-btn"
+  ],
+  "description": "Padronizar região \"nav_tabs\" (863-953) de OrdersKanbanView.tsx preservando 5 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-163"
+  ]
+}

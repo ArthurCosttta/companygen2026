@@ -1,0 +1,39 @@
+{
+  "clusterId": "C-048",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/FormulaTreeRenderer.tsx"
+  ],
+  "range": [
+    1113,
+    1208
+  ],
+  "preserveTestIds": [
+    "closing-daily-schedule-grid",
+    "quiz-next-step-btn",
+    "quiz-reveal-btn",
+    "v9-atomic-blueprint-root",
+    "v9-catalog-category-chips",
+    "v9-catalog-grid",
+    "v9-catalog-search-photos-btn",
+    "v9-complementary-bundles",
+    "v9-contextual-faq",
+    "v9-exp-primary-btn",
+    "v9-exp-secondary-btn",
+    "v9-exp-summary-lines",
+    "v9-exp-total",
+    "v9-header-bag-btn",
+    "v9-hero-bento-collage",
+    "v9-hero-primary-cta",
+    "v9-interactive-experience",
+    "v9-neutral-gray-thumb",
+    "v9-quiz-recommended-card"
+  ],
+  "description": "Achatar 2 sombra(s), 0 blur(s) e 1 gradiente(s) em FormulaTreeRenderer.tsx",
+  "check": "verify-micro",
+  "after": []
+}

@@ -676,32 +676,32 @@ export function OrdersKanbanView({
   return (
     <div
       data-testid="orders-kanban-view"
-      className="min-h-full w-full overflow-x-hidden bg-[#F8FAFC] dark:bg-[#090D16] px-4 py-4 pb-10 text-[#0F172A] dark:text-[#F8FAFC] sm:px-6 min-[769px]:pb-8"
+      className="min-h-full w-full overflow-x-hidden bg-[#F8FAFC] dark:bg-[#090D16] px-5 py-6 pb-10 text-[#09090B] dark:text-[#F8FAFC] sm:px-8"
     >
-      <div data-testid="dashboard-t5-view" className="mx-auto max-w-7xl space-y-3.5 sm:space-y-4">
-        {/* Header & Primary Action */}
-        <header className="flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-xl font-bold tracking-tight text-[#0F172A] dark:text-[#F8FAFC] sm:text-2xl">
-                Pedidos e Vendas
-              </h1>
-              <span
-                data-testid="dashboard-sales-total"
-                className="cg-tabular inline-flex items-center rounded-full bg-emerald-500/12 px-2.5 py-0.5 text-xs font-extrabold text-[#15803D] dark:text-emerald-300"
-              >
-                Real: {formatCurrencyBRL(kpis.salesCents)} · {kpis.nonCancelledCount} válido(s)
-              </span>
+      <div data-testid="dashboard-t5-view" className="mx-auto max-w-[1360px] space-y-5">
+        {/* Header Editorial Minimalista (alinhado à Minha Loja) */}
+        <header className="flex flex-wrap items-end justify-between gap-6 border-b border-[#E2E8F0] pb-5 dark:border-[#1E293B]">
+          <div className="flex flex-wrap items-center gap-x-7 gap-y-3 min-w-0">
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="font-serif text-[34px] font-extrabold leading-[0.95] tracking-[-0.03em] text-[#09090B] dark:text-[#F8FAFC] sm:text-[44px]">
+                  Pedidos
+                </h1>
+                <span
+                  data-testid="dashboard-sales-total"
+                  className="cg-tabular inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white px-3 py-1 text-xs font-bold text-[#09090B] dark:border-[#1E293B] dark:bg-[#111726] dark:text-emerald-300"
+                >
+                  <span className="size-2 rounded-full bg-[#10B981]" aria-hidden="true" />
+                  {formatCurrencyBRL(kpis.salesCents)} · {kpis.nonCancelledCount} válido(s)
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs text-[#64748B] dark:text-[#94A3B8]">
+                Vitrine, WhatsApp e lançamentos do balcão ·{' '}
+                <span data-testid="dashboard-catalog-count" className="cg-tabular font-semibold text-[#09090B] dark:text-slate-200">
+                  {(profile.catalog?.products ?? []).filter(p => p.active !== false).length} itens ativos
+                </span>
+              </p>
             </div>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-[#94A3B8]">
-              Acompanhe vendas da vitrine, WhatsApp e lançamentos do balcão em tempo real.
-            </p>
-            <span
-              data-testid="dashboard-catalog-count"
-              className="cg-tabular inline-flex items-center rounded-full bg-slate-100 dark:bg-[#090D16] px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:text-[#94A3B8]"
-            >
-              {(profile.catalog?.products ?? []).filter(p => p.active !== false).length} produtos ativos no catálogo
-            </span>
           </div>
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">

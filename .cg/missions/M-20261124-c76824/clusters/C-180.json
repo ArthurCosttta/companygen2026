@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-180",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/AtomicSectionRenderers.tsx"
+  ],
+  "range": [
+    1180,
+    1245
+  ],
+  "preserveTestIds": [
+    "v9-atomic-catalog-grid",
+    "v9-neutral-gray-thumb"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em AtomicSectionRenderers.tsx",
+  "check": "verify-micro",
+  "after": []
+}

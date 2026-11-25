@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-078",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/HighSaturationNotificationBar.tsx"
+  ],
+  "range": [
+    188,
+    278
+  ],
+  "preserveTestIds": [
+    "silence-alarm-btn",
+    "notification-bar-resume-ai-btn",
+    "phone-notification-queue-toggle",
+    "phone-notification-queue-list"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (188-278) de HighSaturationNotificationBar.tsx preservando 4 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-077"
+  ]
+}

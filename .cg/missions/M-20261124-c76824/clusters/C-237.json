@@ -1,0 +1,35 @@
+{
+  "clusterId": "C-237",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/studio/ArchetypeComposerView.tsx"
+  ],
+  "range": [
+    1083,
+    1152
+  ],
+  "preserveTestIds": [
+    "editor-402-open-plans-btn",
+    "editor-ai-command-input",
+    "editor-ai-command-submit",
+    "editor-canvas-dropzone",
+    "editor-confirm-create-page-btn",
+    "editor-create-page-btn",
+    "editor-credit-balance-badge",
+    "editor-critic-dismiss-btn",
+    "editor-design-critic-bar",
+    "editor-diff-entry",
+    "editor-diff-modal-body",
+    "editor-diff-pill",
+    "editor-export-zip-btn",
+    "editor-http-402-banner",
+    "editor-manual-subtitle-input"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em ArchetypeComposerView.tsx",
+  "check": "verify-micro",
+  "after": []
+}

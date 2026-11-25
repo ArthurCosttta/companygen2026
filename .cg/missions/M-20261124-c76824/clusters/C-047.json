@@ -1,0 +1,46 @@
+{
+  "clusterId": "C-047",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/EditorialStoreControlView.tsx"
+  ],
+  "range": [
+    981,
+    1076
+  ],
+  "preserveTestIds": [
+    "dock-filter-toggle",
+    "dock-library-btn",
+    "dock-new-product-btn",
+    "dock-search-trigger",
+    "editorial-add-page-btn",
+    "editorial-bottom-dock",
+    "editorial-clear-query-btn",
+    "editorial-cmd-dialog",
+    "editorial-cmd-input",
+    "editorial-cmd-list",
+    "editorial-download-zip-btn",
+    "editorial-empty-grid",
+    "editorial-hero-cta",
+    "editorial-hero-strip",
+    "editorial-metric-cliques",
+    "editorial-metric-pedidos",
+    "editorial-metric-visitas",
+    "editorial-multipage-control-panel",
+    "editorial-open-library-btn",
+    "editorial-post-onboarding-suggestions",
+    "editorial-product-grid",
+    "editorial-simulate-order-btn",
+    "editorial-store-status",
+    "editorial-store-title",
+    "editorial-store-title-input",
+    "store-editorial-view"
+  ],
+  "description": "Achatar 0 sombra(s), 0 blur(s) e 2 gradiente(s) em EditorialStoreControlView.tsx",
+  "check": "verify-micro",
+  "after": []
+}

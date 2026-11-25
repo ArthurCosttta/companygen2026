@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-177",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/settings/SettingsView.tsx"
+  ],
+  "range": [
+    801,
+    891
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"list_or_grid\" (801-891) de SettingsView.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-176"
+  ]
+}

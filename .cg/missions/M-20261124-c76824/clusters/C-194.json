@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-194",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/CustomerStorefrontView.tsx"
+  ],
+  "range": [
+    967,
+    1057
+  ],
+  "preserveTestIds": [
+    "storefront-floating-bag-bar"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (967-1057) de CustomerStorefrontView.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-193"
+  ]
+}

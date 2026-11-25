@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-062",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/app/App.tsx"
+  ],
+  "range": [
+    2047,
+    2120
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (2047-2120) de App.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-061"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "clusterId": "C-112",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/admin/AdminConsoleView.tsx"
+  ],
+  "range": [
+    318,
+    383
+  ],
+  "preserveTestIds": [
+    "admin-canary-dom-banner",
+    "admin-client-search",
+    "admin-clients-table",
+    "admin-code-create-btn",
+    "admin-code-credits-input",
+    "admin-code-maxuses-input",
+    "admin-code-note-input",
+    "admin-code-type-select",
+    "admin-codes-search",
+    "admin-codes-table",
+    "admin-desktop-min-version",
+    "admin-kiwify-dlq",
+    "admin-kiwify-search",
+    "admin-kpi-alerts",
+    "admin-kpi-credits"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em AdminConsoleView.tsx",
+  "check": "verify-micro",
+  "after": []
+}

@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-017",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/app/App.tsx"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_writer em \"ss:cg_post_onboarding_tips_${user.id}\" (src/app/App.tsx)",
+  "check": "agent-ops lint",
+  "after": [
+    "C-016"
+  ],
+  "updatedAt": "2026-11-24T17:06:35.546Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

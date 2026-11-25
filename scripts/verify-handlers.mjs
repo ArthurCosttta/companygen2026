@@ -10,14 +10,14 @@ const capabilityRegistry = JSON.parse(
 );
 
 const wizardSource = await readFile(
-  path.join(root, 'src/components/views/onboarding/ExpressFichaWizardModal.tsx'),
+  path.join(root, 'src/components/views/onboarding/OnboardingIgnitionView.tsx'),
   'utf8',
 );
 
 const requiredActionTestIds = [
-  'onb-instagram-analyze-btn',
-  'onb-step1-xlsx-input',
-  'onb-ai-autofill-btn',
+  'ignition-instagram-fetch-btn',
+  'ignition-file-input',
+  'onboarding-ai-assist-btn',
 ];
 
 const missing = [];

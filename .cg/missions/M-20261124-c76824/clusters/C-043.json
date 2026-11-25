@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-043",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/OrderSpreadsheetCatalogModal.tsx"
+  ],
+  "range": [
+    247,
+    342
+  ],
+  "preserveTestIds": [
+    "download-cataloged-orders-xlsx-btn",
+    "kpi-balcao-manual",
+    "kpi-conversoes-d1",
+    "kpi-faturamento-liquido",
+    "kpi-total-pedidos",
+    "tela-27-xls-orders-modal"
+  ],
+  "description": "Achatar 1 sombra(s), 0 blur(s) e 0 gradiente(s) em OrderSpreadsheetCatalogModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

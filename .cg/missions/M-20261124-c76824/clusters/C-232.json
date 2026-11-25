@@ -1,0 +1,24 @@
+{
+  "clusterId": "C-232",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/UniversalCatalogXlsxModal.tsx"
+  ],
+  "range": [
+    457,
+    526
+  ],
+  "preserveTestIds": [
+    "import-standardized-products-btn",
+    "load-complex-xlsx-sample-btn",
+    "tela-08-xls-universal-modal",
+    "xlsx-catalog-upload-input"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em UniversalCatalogXlsxModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

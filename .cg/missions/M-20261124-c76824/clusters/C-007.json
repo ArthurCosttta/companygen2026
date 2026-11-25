@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-007",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "server/admin-console.mjs"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_reader em \"disk:whatsapp_session.json\" (server/admin-console.mjs)",
+  "check": "agent-ops lint",
+  "after": [
+    "C-006"
+  ],
+  "updatedAt": "2026-11-24T17:06:28.876Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "clusterId": "C-086",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/Topbar.tsx"
+  ],
+  "range": [
+    161,
+    230
+  ],
+  "preserveTestIds": [
+    "app-topbar",
+    "topbar-active-title",
+    "topbar-breadcrumb",
+    "topbar-claim-email-btn",
+    "topbar-command-palette-btn",
+    "topbar-help-menu-btn",
+    "topbar-help-open-shortcuts",
+    "topbar-help-open-support",
+    "topbar-help-open-tour",
+    "topbar-help-popover",
+    "topbar-last-credit-spent",
+    "topbar-open-checkout-btn",
+    "topbar-preview-vitrine",
+    "topbar-theme-toggle-btn"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em Topbar.tsx",
+  "check": "verify-micro",
+  "after": []
+}

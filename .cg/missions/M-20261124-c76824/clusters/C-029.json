@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-029",
+  "wave": "W1",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-TIMERS",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/onboarding/OnboardingSynthesisStage.tsx"
+  ],
+  "range": [
+    184,
+    219
+  ],
+  "preserveTestIds": [],
+  "description": "Auditar setInterval na linha 194 de OnboardingSynthesisStage.tsx (pausar quando oculto / sem alocação ociosa)",
+  "check": "verify-micro",
+  "after": [
+    "C-028"
+  ],
+  "updatedAt": "2026-11-24T17:06:40.751Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

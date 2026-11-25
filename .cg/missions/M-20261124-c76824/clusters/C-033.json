@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-033",
+  "wave": "W1",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-TIMERS",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/hooks/useVisibilityAwareInterval.ts"
+  ],
+  "range": [
+    8,
+    43
+  ],
+  "preserveTestIds": [],
+  "description": "Auditar setInterval na linha 18 de useVisibilityAwareInterval.ts (pausar quando oculto / sem alocação ociosa)",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:43.037Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

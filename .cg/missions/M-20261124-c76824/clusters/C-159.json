@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-159",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/OrderDetailsModal.tsx"
+  ],
+  "range": [
+    332,
+    422
+  ],
+  "preserveTestIds": [
+    "confirm-cancel-order-btn"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (332-422) de OrderDetailsModal.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-158"
+  ]
+}

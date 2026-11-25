@@ -1,0 +1,19 @@
+{
+  "clusterId": "C-248",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/DisconnectConfirmModal.tsx"
+  ],
+  "range": [
+    75,
+    124
+  ],
+  "preserveTestIds": [],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em DisconnectConfirmModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

@@ -1,0 +1,317 @@
+{
+  "version": "1.0.0",
+  "missionId": "M-20261124-ce359f",
+  "createdAt": "2026-11-24T14:29:39.404Z",
+  "repoHeadAtStart": "32d176d",
+  "status": "in_progress",
+  "rawPrompt": "otimizar performance do projeto para pc fraco + aplicar visual minimalista da tela minha loja em whatsapp, pedidos, ajustes, admin, checkout e landing preservando todos os botoes em gavetas + atualizar .cg jsons + validar todas as paginas no navegador",
+  "incidentId": null,
+  "totalGoals": 4,
+  "cursor": {
+    "clusterIdx": 0,
+    "stepIdx": 0,
+    "stepId": "S1"
+  },
+  "activatedPolicies": {
+    "PERFORMANCE": {
+      "contextSources": [
+        "vite-bundle-sizes",
+        "poll-intervals"
+      ],
+      "generationPolicies": [
+        "NO_RES_CLONE_JSON_ON_HEALTHY_NON_AI_CALLS",
+        "LOW_SPEC_FRIENDLY_TIMERS"
+      ],
+      "slotHeuristics": {},
+      "mandatoryVerification": [
+        "npm run build"
+      ]
+    },
+    "DELIVERY": {
+      "contextSources": [
+        "git status",
+        "package.json scripts",
+        ".cg/missions/"
+      ],
+      "generationPolicies": [
+        "POWERSHELL_USE_SEMICOLON_NOT_AND",
+        "NEVER_COMMIT_TEMP_DATA_OR_VIDEOS",
+        "VERIFY_AFTER_FINAL_EDIT"
+      ],
+      "slotHeuristics": {},
+      "mandatoryVerification": [
+        "npm run typecheck",
+        "npm run build",
+        "node --test tests/unit/*.test.mjs"
+      ]
+    },
+    "STATE_FLOW": {
+      "contextSources": [
+        "state-ownership.json",
+        "route-registry.json",
+        "zod-schemas"
+      ],
+      "generationPolicies": [
+        "CHECK_BOTH_READERS_AND_WRITERS",
+        "NEVER_RESET_FICHA_COMPLETED_ON_READY_STORE",
+        "PREFER_NEWER_OR_READY_PROFILE_IN_LOAD_STATE"
+      ],
+      "slotHeuristics": {
+        "SingleSourceSync": "Qualquer novo arquivo JSON em disco precisa de leitor e escritor mapeados no grafo"
+      },
+      "mandatoryVerification": [
+        "node scripts/verify-handlers.mjs",
+        "node --test tests/unit/*.test.mjs"
+      ]
+    },
+    "BEHAVIOR": {
+      "contextSources": [
+        "dependency-graph.json",
+        "state-ownership.json",
+        "invariants/registry.json",
+        "unit-tests"
+      ],
+      "generationPolicies": [
+        "REPRODUCE_SILENT_FAILURE_BEFORE_EDIT",
+        "NEVER_RELAX_TEST_ASSERTIONS",
+        "SELF_CHAT_TEST_EXEMPT_FROM_ANTIBAN_AND_SAFETEST"
+      ],
+      "slotHeuristics": {
+        "WhatsAppTriggers": "Carregar templates.json E whatsapp_flows.json aprovados em loadCustomQuickReplies",
+        "NicheInference": "Classificação determinística por catálogo real vence sobre segmento genérico/LLM"
+      },
+      "mandatoryVerification": [
+        "npm run typecheck",
+        "node --test tests/unit/*.test.mjs"
+      ]
+    },
+    "OBSERVABILITY": {
+      "contextSources": [
+        "server/crash-telemetry.mjs",
+        ".cg/incidents/"
+      ],
+      "generationPolicies": [
+        "SCRUB_PII_BEFORE_PERSIST",
+        "ATTACH_SUSPECTED_GRAPH_NODES"
+      ],
+      "slotHeuristics": {},
+      "mandatoryVerification": [
+        "node --test tests/unit/crash-telemetry.test.mjs"
+      ]
+    },
+    "VISUAL": {
+      "contextSources": [
+        "component-tree.json",
+        "uiTokens",
+        "lastNavigatorScreenshots"
+      ],
+      "generationPolicies": [
+        "WHITE_THEME_DEFAULT (?theme=light)",
+        "ZERO_VISIBLE_AI_VENDOR_NAMES (GLM, Whisper, BLIP, RunPod)",
+        "CHECK_VIEWPORTS_1280x800_AND_375x812",
+        "USE_LAZY_NAMED_FOR_DYNAMIC_ROUTES"
+      ],
+      "slotHeuristics": {
+        "ActionButtonSize": "Permitido apenas ActionButtonSize válido (ex: 36, 40, 44, 48, 52)",
+        "LazyExport": "lazyNamed() deve sempre validar componente definido antes de retornar { default }"
+      },
+      "mandatoryVerification": [
+        "npm run typecheck",
+        "npm run build",
+        "OPEN_NAVIGATOR(consoleErrors==0)"
+      ]
+    }
+  },
+  "stateSnapshotCount": 37,
+  "clusters": [
+    {
+      "clusterId": "CL-CORE",
+      "cell": "core",
+      "mode": "primary",
+      "goals": [
+        {
+          "goalId": "G1",
+          "text": "otimizar performance do projeto para pc fraco",
+          "macroIntents": [
+            "PERFORMANCE",
+            "DELIVERY"
+          ],
+          "cell": "core",
+          "files": []
+        },
+        {
+          "goalId": "G3",
+          "text": "atualizar .cg jsons",
+          "macroIntents": [
+            "STATE_FLOW",
+            "DELIVERY"
+          ],
+          "cell": "core",
+          "files": []
+        },
+        {
+          "goalId": "G4",
+          "text": "validar todas as paginas no navegador",
+          "macroIntents": [
+            "BEHAVIOR",
+            "DELIVERY"
+          ],
+          "cell": "core",
+          "files": []
+        }
+      ],
+      "macroIntents": [
+        "PERFORMANCE",
+        "DELIVERY",
+        "STATE_FLOW",
+        "BEHAVIOR"
+      ],
+      "allowedEditSet": [
+        "server/ai-global-agent.mjs",
+        "server/atomic-visual-critic.mjs",
+        "server/design-critic.mjs",
+        "server/email-mailer.mjs",
+        "server/email-templates.mjs",
+        "server/index.mjs"
+      ],
+      "steps": [
+        {
+          "id": "S1",
+          "op": "CONTEXT_TRIAGE",
+          "command": "node scripts/agent-ops.mjs triage --domain core",
+          "status": "pending"
+        },
+        {
+          "id": "S2",
+          "op": "IMPACT_CHECK",
+          "command": "node scripts/agent-ops.mjs impact --target server/ai-global-agent.mjs",
+          "status": "pending"
+        },
+        {
+          "id": "S3",
+          "op": "CODE_EDIT",
+          "goals": [
+            "G1: otimizar performance do projeto para pc fraco",
+            "G3: atualizar .cg jsons",
+            "G4: validar todas as paginas no navegador"
+          ],
+          "allowedFiles": [
+            "server/ai-global-agent.mjs",
+            "server/atomic-visual-critic.mjs",
+            "server/design-critic.mjs",
+            "server/email-mailer.mjs",
+            "server/email-templates.mjs",
+            "server/index.mjs"
+          ],
+          "status": "pending"
+        },
+        {
+          "id": "S4",
+          "op": "VERIFY_GATE",
+          "command": "node scripts/agent-ops.mjs verify --target server/ai-global-agent.mjs",
+          "status": "pending"
+        },
+        {
+          "id": "S5",
+          "op": "OPEN_NAVIGATOR",
+          "targetUrl": "http://127.0.0.1:5179/?theme=light",
+          "status": "pending"
+        },
+        {
+          "id": "S6",
+          "op": "ATUALIZE_JSON",
+          "command": "node scripts/agent-ops.mjs update-state --mission M-20261124-ce359f --step S6 --status done",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "clusterId": "CL-WHATSAPP",
+      "cell": "whatsapp",
+      "mode": "parallel_disjoint_files",
+      "goals": [
+        {
+          "goalId": "G2",
+          "text": "aplicar visual minimalista da tela minha loja em whatsapp, pedidos, ajustes, admin, checkout e landing preservando todos os botoes em gavetas",
+          "macroIntents": [
+            "STATE_FLOW",
+            "BEHAVIOR",
+            "OBSERVABILITY",
+            "VISUAL",
+            "DELIVERY"
+          ],
+          "cell": "whatsapp",
+          "files": [
+            "server/ai-sofia-local.mjs",
+            "shared/whatsapp-webview-script.mjs",
+            "src/hooks/useWebviewWhatsappResponder.ts",
+            "src/components/auth/AuthFlowView.tsx",
+            "server/admin-console.mjs"
+          ]
+        }
+      ],
+      "macroIntents": [
+        "STATE_FLOW",
+        "BEHAVIOR",
+        "OBSERVABILITY",
+        "VISUAL",
+        "DELIVERY"
+      ],
+      "allowedEditSet": [
+        "server/ai-sofia-local.mjs",
+        "shared/whatsapp-webview-script.mjs",
+        "src/hooks/useWebviewWhatsappResponder.ts",
+        "src/components/auth/AuthFlowView.tsx",
+        "server/admin-console.mjs"
+      ],
+      "steps": [
+        {
+          "id": "S7",
+          "op": "CONTEXT_TRIAGE",
+          "command": "node scripts/agent-ops.mjs triage --domain whatsapp",
+          "status": "pending"
+        },
+        {
+          "id": "S8",
+          "op": "IMPACT_CHECK",
+          "command": "node scripts/agent-ops.mjs impact --target server/ai-sofia-local.mjs",
+          "status": "pending"
+        },
+        {
+          "id": "S9",
+          "op": "CODE_EDIT",
+          "goals": [
+            "G2: aplicar visual minimalista da tela minha loja em whatsapp, pedidos, ajustes, admin, checkout e landing preservando todos os botoes em gavetas"
+          ],
+          "allowedFiles": [
+            "server/ai-sofia-local.mjs",
+            "shared/whatsapp-webview-script.mjs",
+            "src/hooks/useWebviewWhatsappResponder.ts",
+            "src/components/auth/AuthFlowView.tsx",
+            "server/admin-console.mjs"
+          ],
+          "status": "pending"
+        },
+        {
+          "id": "S10",
+          "op": "VERIFY_GATE",
+          "command": "node scripts/agent-ops.mjs verify --target server/ai-sofia-local.mjs",
+          "status": "pending"
+        },
+        {
+          "id": "S11",
+          "op": "OPEN_NAVIGATOR",
+          "targetUrl": "http://127.0.0.1:5179/?theme=light",
+          "status": "pending"
+        },
+        {
+          "id": "S12",
+          "op": "ATUALIZE_JSON",
+          "command": "node scripts/agent-ops.mjs update-state --mission M-20261124-ce359f --step S12 --status done",
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "expansions": []
+}

@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-105",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/SupportTicketModal.tsx"
+  ],
+  "range": [
+    416,
+    463
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"list_or_grid\" (416-463) de SupportTicketModal.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-104"
+  ]
+}

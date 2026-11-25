@@ -39,6 +39,7 @@ export function FlipCountdownMatrix({
 
   useEffect(() => {
     const id = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       setRemainingSec((s) => (s > 1 ? s - 1 : targetHours * 3600));
     }, 1000);
     return () => window.clearInterval(id);

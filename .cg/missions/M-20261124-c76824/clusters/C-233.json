@@ -1,0 +1,24 @@
+{
+  "clusterId": "C-233",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/UniversalCatalogXlsxModal.tsx"
+  ],
+  "range": [
+    457,
+    547
+  ],
+  "preserveTestIds": [
+    "xlsx-catalog-upload-input",
+    "load-complex-xlsx-sample-btn"
+  ],
+  "description": "Padronizar região \"header\" (457-547) de UniversalCatalogXlsxModal.tsx preservando 2 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-232"
+  ]
+}

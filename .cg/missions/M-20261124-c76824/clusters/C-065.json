@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-065",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/auth/AuthFlowView.tsx"
+  ],
+  "range": [
+    907,
+    979
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (907-979) de AuthFlowView.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-064"
+  ]
+}

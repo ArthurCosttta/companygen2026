@@ -1,0 +1,19 @@
+{
+  "clusterId": "C-280",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/main.tsx"
+  ],
+  "range": [
+    1,
+    41
+  ],
+  "preserveTestIds": [],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em main.tsx",
+  "check": "verify-micro",
+  "after": []
+}

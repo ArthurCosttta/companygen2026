@@ -1,0 +1,24 @@
+{
+  "clusterId": "C-167",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/OrdersKanbanView.tsx"
+  ],
+  "range": [
+    598,
+    688
+  ],
+  "preserveTestIds": [
+    "orders-kanban-view",
+    "dashboard-t5-view"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (598-688) de OrdersKanbanView.tsx preservando 2 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-166"
+  ]
+}

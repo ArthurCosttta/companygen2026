@@ -1,0 +1,24 @@
+{
+  "clusterId": "C-200",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/DynamicBriefQuestionsModal.tsx"
+  ],
+  "range": [
+    113,
+    178
+  ],
+  "preserveTestIds": [
+    "brief-confirm-release-btn",
+    "brief-next-btn",
+    "brief-source-badge",
+    "dynamic-brief-questions-modal"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em DynamicBriefQuestionsModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

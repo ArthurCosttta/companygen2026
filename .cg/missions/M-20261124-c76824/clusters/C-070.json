@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-070",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/CommandPaletteModal.tsx"
+  ],
+  "range": [
+    90,
+    155
+  ],
+  "preserveTestIds": [
+    "command-palette-empty",
+    "command-palette-input",
+    "command-palette-modal"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em CommandPaletteModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

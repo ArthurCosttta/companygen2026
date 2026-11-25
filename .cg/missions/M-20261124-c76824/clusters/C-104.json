@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-104",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/SupportTicketModal.tsx"
+  ],
+  "range": [
+    460,
+    463
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (460-463) de SupportTicketModal.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-103"
+  ]
+}

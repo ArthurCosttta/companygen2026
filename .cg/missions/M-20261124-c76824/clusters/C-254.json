@@ -1,0 +1,35 @@
+{
+  "clusterId": "C-254",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsAppConnectionView.tsx"
+  ],
+  "range": [
+    965,
+    1034
+  ],
+  "preserveTestIds": [
+    "recheck-wpp-ai-connection",
+    "save-wpp-ai-instructions",
+    "upload-wpp-ai-file-btn",
+    "wpp-ai-brain-collapse-btn",
+    "wpp-ai-connection-pill",
+    "wpp-ai-single-prompt",
+    "wpp-antiban-preqr-checks",
+    "wpp-auto-repair-btn",
+    "wpp-autonomy-accordion-panel",
+    "wpp-autonomy-accordion-toggle",
+    "wpp-channel-section",
+    "wpp-conciseness-bar",
+    "wpp-desktop-live-responder-status",
+    "wpp-docs-drawer-panel",
+    "wpp-drawer-docs-btn"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em WhatsAppConnectionView.tsx",
+  "check": "verify-micro",
+  "after": []
+}

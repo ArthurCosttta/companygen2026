@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-216",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/ProductEditorDrawer.tsx"
+  ],
+  "range": [
+    577,
+    667
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"list_or_grid\" (577-667) de ProductEditorDrawer.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-215"
+  ]
+}

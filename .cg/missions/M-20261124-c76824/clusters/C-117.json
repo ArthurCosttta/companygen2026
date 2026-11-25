@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-117",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/admin/AdminConsoleView.tsx"
+  ],
+  "range": [
+    816,
+    906
+  ],
+  "preserveTestIds": [
+    "admin-onboarding-thermometer"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (816-906) de AdminConsoleView.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-116"
+  ]
+}

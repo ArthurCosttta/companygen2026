@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-083",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/Sidebar.tsx"
+  ],
+  "range": [
+    236,
+    326
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (236-326) de Sidebar.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-082"
+  ]
+}

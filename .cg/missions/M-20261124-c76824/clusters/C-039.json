@@ -1,0 +1,30 @@
+{
+  "clusterId": "C-039",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/GlobalAiAssistantWidget.tsx"
+  ],
+  "range": [
+    94,
+    189
+  ],
+  "preserveTestIds": [
+    "global-ai-assistant-btn",
+    "global-ai-assistant-panel",
+    "global-ai-attach-btn",
+    "global-ai-flip-side-btn",
+    "global-ai-input",
+    "global-ai-running-log"
+  ],
+  "description": "Achatar 2 sombra(s), 0 blur(s) e 0 gradiente(s) em GlobalAiAssistantWidget.tsx",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:44.866Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

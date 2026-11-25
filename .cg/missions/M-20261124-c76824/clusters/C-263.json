@@ -1,0 +1,27 @@
+{
+  "clusterId": "C-263",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsAppConnectionView.tsx"
+  ],
+  "range": [
+    1559,
+    1649
+  ],
+  "preserveTestIds": [
+    "wpp-channel-section",
+    "wpp-mode-simulator-btn",
+    "wpp-mode-real-btn",
+    "wpp-auto-repair-btn",
+    "wpp-fullscreen-toggle-btn"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (1559-1649) de WhatsAppConnectionView.tsx preservando 5 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-262"
+  ]
+}

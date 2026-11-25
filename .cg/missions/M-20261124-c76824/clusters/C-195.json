@@ -1,0 +1,27 @@
+{
+  "clusterId": "C-195",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/CustomerStorefrontView.tsx"
+  ],
+  "range": [
+    1141,
+    1231
+  ],
+  "preserveTestIds": [
+    "cart-free-shipping-badge",
+    "cart-coupon-discount-row",
+    "cart-pix-discount-row",
+    "cart-checkout-error-card",
+    "cart-grand-total"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (1141-1231) de CustomerStorefrontView.tsx preservando 5 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-194"
+  ]
+}

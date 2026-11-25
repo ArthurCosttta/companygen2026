@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-278",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsappPersistentVisualizer.tsx"
+  ],
+  "range": [
+    87,
+    152
+  ],
+  "preserveTestIds": [
+    "wpp-global-visualizer-panel",
+    "wpp-global-visualizer-pill"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em WhatsappPersistentVisualizer.tsx",
+  "check": "verify-micro",
+  "after": []
+}

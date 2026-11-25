@@ -1,0 +1,24 @@
+{
+  "clusterId": "C-053",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/UniversalCatalogXlsxModal.tsx"
+  ],
+  "range": [
+    309,
+    404
+  ],
+  "preserveTestIds": [
+    "import-standardized-products-btn",
+    "load-complex-xlsx-sample-btn",
+    "tela-08-xls-universal-modal",
+    "xlsx-catalog-upload-input"
+  ],
+  "description": "Achatar 1 sombra(s), 0 blur(s) e 0 gradiente(s) em UniversalCatalogXlsxModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

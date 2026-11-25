@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-156",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/OrderDetailsModal.tsx"
+  ],
+  "range": [
+    165,
+    230
+  ],
+  "preserveTestIds": [
+    "confirm-cancel-order-btn",
+    "order-details-print-btn",
+    "order-details-revert-paid",
+    "order-details-status-badge",
+    "order-details-whatsapp-btn"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em OrderDetailsModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

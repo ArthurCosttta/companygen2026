@@ -118,9 +118,9 @@ export function HighSaturationNotificationBar({
       <div
         data-testid="phone-notification-primary"
         className={cn(
-          'rounded-2xl border-2 bg-[#0F172A] p-4 text-white shadow-2xl transition-all duration-200',
+          'rounded-2xl border bg-[#09090B] p-4 text-white shadow-sm transition-colors duration-150',
           style.borderClass,
-          isUrgent ? 'ring-4 ring-[#FF2E54]/85' : 'ring-2 ring-[#10B981]/60',
+          isUrgent ? 'ring-2 ring-[#FF2E54]/85' : 'ring-1 ring-[#10B981]/60',
         )}
       >
         <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-white/10 px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-wider">

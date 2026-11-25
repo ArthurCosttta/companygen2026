@@ -1,0 +1,19 @@
+{
+  "clusterId": "C-093",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/DrawerContainer.tsx"
+  ],
+  "range": [
+    69,
+    134
+  ],
+  "preserveTestIds": [],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em DrawerContainer.tsx",
+  "check": "verify-micro",
+  "after": []
+}

@@ -354,6 +354,7 @@ export function OnboardingIgnitionView({
     }
     setLoadingProgressPct(12);
     const barTimer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       setLoadingProgressPct((prev) => {
         if (prev >= 80) return 80;
         const stepJump = prev < 45 ? 6 : prev < 68 ? 3 : 1;
@@ -361,6 +362,7 @@ export function OnboardingIgnitionView({
       });
     }, 550);
     const msgTimer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       setLoadingMessageIdx((i) => (i + 1) % QUESTION_LOADING_MESSAGES.length);
     }, 1850);
     return () => {

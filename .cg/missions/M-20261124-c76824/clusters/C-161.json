@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-161",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/OrderSpreadsheetCatalogModal.tsx"
+  ],
+  "range": [
+    295,
+    385
+  ],
+  "preserveTestIds": [
+    "kpi-total-pedidos",
+    "kpi-faturamento-liquido",
+    "kpi-conversoes-d1",
+    "kpi-balcao-manual"
+  ],
+  "description": "Padronizar região \"header\" (295-385) de OrderSpreadsheetCatalogModal.tsx preservando 4 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-160"
+  ]
+}

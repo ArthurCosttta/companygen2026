@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-134",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/onboarding/OnboardingIgnitionView.tsx"
+  ],
+  "range": [
+    919,
+    1009
+  ],
+  "preserveTestIds": [
+    "ignition-back-to-store-btn",
+    "ignition-logout-btn",
+    "ignition-clear-draft-btn"
+  ],
+  "description": "Padronizar região \"header\" (919-1009) de OnboardingIgnitionView.tsx preservando 3 testId(s)",
+  "check": "verify-micro",
+  "after": []
+}

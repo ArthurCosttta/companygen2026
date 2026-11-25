@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-067",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/auth/GuestClaimEmailModal.tsx"
+  ],
+  "range": [
+    147,
+    212
+  ],
+  "preserveTestIds": [
+    "guest-claim-email-input",
+    "guest-claim-password-input",
+    "guest-claim-submit-btn"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em GuestClaimEmailModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

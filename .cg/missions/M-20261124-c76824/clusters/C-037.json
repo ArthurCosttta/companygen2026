@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-037",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/ActionButton.tsx"
+  ],
+  "range": [
+    35,
+    130
+  ],
+  "preserveTestIds": [],
+  "description": "Achatar 6 sombra(s), 0 blur(s) e 1 gradiente(s) em ActionButton.tsx",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:43.984Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

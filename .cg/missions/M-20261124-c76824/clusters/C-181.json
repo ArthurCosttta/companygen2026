@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-181",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/AtomicSectionRenderers.tsx"
+  ],
+  "range": [
+    1355,
+    1445
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"list_or_grid\" (1355-1445) de AtomicSectionRenderers.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-180"
+  ]
+}

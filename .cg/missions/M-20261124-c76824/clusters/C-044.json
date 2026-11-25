@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-044",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/AtomicSectionRenderers.tsx"
+  ],
+  "range": [
+    1165,
+    1260
+  ],
+  "preserveTestIds": [
+    "v9-atomic-catalog-grid",
+    "v9-neutral-gray-thumb"
+  ],
+  "description": "Achatar 5 sombra(s), 0 blur(s) e 0 gradiente(s) em AtomicSectionRenderers.tsx",
+  "check": "verify-micro",
+  "after": []
+}

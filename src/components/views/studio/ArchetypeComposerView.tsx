@@ -203,7 +203,7 @@ function DraggableLibraryCard({
       data-testid={`library-widget-${item.taxonomy}`}
       className={`group rounded-xl border p-2.5 transition ${
         isDragging
-          ? 'border-[#2563EB] bg-blue-50 shadow-lg dark:bg-blue-950/40'
+          ? 'border-[#2563EB] bg-blue-50 shadow-xs dark:bg-blue-950/40'
           : alreadyActive
             ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-800/50 dark:bg-emerald-950/20'
             : 'border-[var(--cg-border)] bg-[var(--cg-surface-elevated)] hover:border-[#2563EB]/60'

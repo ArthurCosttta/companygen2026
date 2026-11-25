@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-089",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/Topbar.tsx"
+  ],
+  "range": [
+    341,
+    427
+  ],
+  "preserveTestIds": [
+    "topbar-help-popover",
+    "topbar-help-open-support",
+    "topbar-help-open-shortcuts",
+    "topbar-help-open-tour"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (341-427) de Topbar.tsx preservando 4 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-088"
+  ]
+}

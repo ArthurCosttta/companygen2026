@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-060",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/app/App.tsx"
+  ],
+  "range": [
+    1624,
+    1714
+  ],
+  "preserveTestIds": [
+    "vitrine-overlay-persistent"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (1624-1714) de App.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-059"
+  ]
+}

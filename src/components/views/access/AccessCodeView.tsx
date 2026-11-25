@@ -378,14 +378,12 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
       aria-label="Página de Código de Acesso"
     >
       <div
-        className={`relative w-full max-w-[460px] overflow-hidden rounded-3xl border p-8 shadow-2xl ${
+        className={`relative w-full max-w-[460px] overflow-hidden rounded-[18px] border p-8 shadow-xs ${
           isDark
-            ? 'border-slate-800 bg-[#111726]/95'
-            : 'border-[var(--cg-border)] bg-[var(--cg-surface)] shadow-[0_20px_50px_rgba(11,29,82,0.08)]'
+            ? 'border-slate-800 bg-[#111726]'
+            : 'border-[#E2E8F0] bg-white'
         }`}
       >
-        {/* Glow de fundo */}
-        <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 size-56 rounded-full bg-blue-500/15 blur-3xl" />
 
         {/* Header CompanyGen Studio */}
         <div className="relative flex flex-col items-center text-center">
@@ -532,7 +530,7 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
               isLoading={state === 'loading'}
               loadingText="VALIDANDO CÓDIGO..."
               disabled={state === 'loading' || state === 'activated' || code.length < 8}
-              className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-2xl text-sm tracking-wide shadow-lg shadow-blue-600/20"
+              className="w-full bg-[#09090B] hover:bg-[#2563EB] text-white font-bold rounded-xl text-sm tracking-wide shadow-2xs"
             >
               VALIDAR CÓDIGO E CONTINUAR →
             </ActionButton>
@@ -542,7 +540,7 @@ export function AccessCodeView({ onSuccess, onGoToLogin }: AccessCodeViewProps) 
               data-testid="access-claim-email-btn"
               disabled={state === 'loading'}
               onClick={() => void startOrResumeGuestForEmailClaim(code.trim())}
-              className="flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#2563EB] px-4 text-sm font-bold tracking-wide text-white shadow-lg shadow-blue-600/20 transition hover:bg-[#1D4ED8] disabled:opacity-60"
+              className="flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#09090B] px-4 text-sm font-bold tracking-wide text-white shadow-2xs transition hover:bg-[#2563EB] disabled:opacity-60"
             >
               <Mail className="size-4 shrink-0" />
               <span>Vincular este código ao meu e-mail →</span>

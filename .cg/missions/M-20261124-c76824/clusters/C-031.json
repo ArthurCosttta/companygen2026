@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-031",
+  "wave": "W1",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-TIMERS",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/hooks/useHighSaturationNotifications.ts"
+  ],
+  "range": [
+    337,
+    372
+  ],
+  "preserveTestIds": [],
+  "description": "Auditar setInterval na linha 347 de useHighSaturationNotifications.ts (pausar quando oculto / sem alocação ociosa)",
+  "check": "verify-micro",
+  "after": [
+    "C-023"
+  ],
+  "updatedAt": "2026-11-24T17:06:41.996Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

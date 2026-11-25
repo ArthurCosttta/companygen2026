@@ -1,0 +1,27 @@
+{
+  "clusterId": "C-058",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/app/App.tsx"
+  ],
+  "range": [
+    439,
+    504
+  ],
+  "preserveTestIds": [
+    "admin-storefront-preview-banner",
+    "network-offline-banner",
+    "public-storefront-route",
+    "support-readonly-banner",
+    "support-readonly-exit-btn",
+    "vitrine-overlay-persistent",
+    "whatsapp-persistent-mount"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em App.tsx",
+  "check": "verify-micro",
+  "after": []
+}

@@ -176,7 +176,7 @@ export function WhatsappPersistentVisualizer({
       {open && (
         <div
           data-testid="wpp-global-visualizer-panel"
-          className="absolute right-0 top-11 z-50 w-[360px] max-w-[92vw] rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-2xl"
+          className="absolute right-0 top-11 z-50 w-[360px] max-w-[92vw] rounded-2xl border border-[#E2E8F0] bg-white p-4 text-left shadow-sm"
         >
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">

@@ -1,0 +1,19 @@
+{
+  "clusterId": "C-106",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/ToastProvider.tsx"
+  ],
+  "range": [
+    1,
+    80
+  ],
+  "preserveTestIds": [],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em ToastProvider.tsx",
+  "check": "verify-micro",
+  "after": []
+}

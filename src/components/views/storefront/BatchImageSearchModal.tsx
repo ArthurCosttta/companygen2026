@@ -309,7 +309,7 @@ export function BatchImageSearchModal({
         aria-labelledby="batch-image-title"
         className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65"
       >
-        <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-3xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl border border-[#E2E8F0] bg-white shadow-sm">
           {/* Cabeçalho */}
           <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
             <div className="flex items-center gap-3">
@@ -365,7 +365,7 @@ export function BatchImageSearchModal({
                 return (
                   <div
                     key={item.product.id}
-                    className="flex flex-col rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs transition-shadow hover:shadow-md"
+                    className="flex flex-col rounded-[14px] border border-[#E2E8F0] bg-white p-3.5 transition-colors hover:border-[#09090B]/30"
                   >
                     <div className="flex items-start gap-3">
                       {/* Preview da Imagem com botão de Zoom */}

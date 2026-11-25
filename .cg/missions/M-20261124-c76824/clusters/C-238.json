@@ -1,0 +1,28 @@
+{
+  "clusterId": "C-238",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/studio/ArchetypeComposerView.tsx"
+  ],
+  "range": [
+    1083,
+    1173
+  ],
+  "preserveTestIds": [
+    "editor-page-selector",
+    "editor-create-page-btn",
+    "editor-undo-btn",
+    "editor-redo-btn",
+    "editor-viewport-desktop",
+    "editor-viewport-mobile"
+  ],
+  "description": "Padronizar região \"header\" (1083-1173) de ArchetypeComposerView.tsx preservando 6 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-237"
+  ]
+}

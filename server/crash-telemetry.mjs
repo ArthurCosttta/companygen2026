@@ -452,6 +452,12 @@ export async function recordCrashTelemetry({
         lastSeenAt: now,
       };
       savedRecord.aiContextPrompt = buildAiContextPrompt(savedRecord);
+      savedRecord.contextRequest = {
+        intent: cleanCategory.includes('SILENT') ? 'BEHAVIOR' : 'BEHAVIOR',
+        anchor: suspectedFiles[0] || '',
+        incidentId: fingerprint,
+        cli: `node scripts/agent-ops.mjs triage --anchor "${suspectedFiles[0] || ''}"`,
+      };
       list.push(savedRecord);
     }
 

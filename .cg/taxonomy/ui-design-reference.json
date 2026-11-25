@@ -1,0 +1,48 @@
+{
+  "version": "1.0.0",
+  "sourceReference": "src/components/views/storefront/EditorialStoreControlView.tsx",
+  "generatedAt": "2026-11-24T17:15:30.087Z",
+  "tokens": {
+    "canvasBg": "bg-[#F8FAFC]",
+    "surfaceCard": "rounded-[14px] border border-[#E2E8F0] bg-white",
+    "headerTitle": "font-serif text-[32px] sm:text-[44px] font-extrabold leading-[0.95] tracking-[-0.03em] text-[#09090B]",
+    "subtitle": "text-xs text-[#64748B]",
+    "metricsValue": "font-bold leading-none tabular-nums text-[#09090B]",
+    "pillActive": "rounded-full bg-[#09090B] text-white",
+    "pillInactive": "rounded-full text-[#334155] hover:bg-[#F1F5F9]",
+    "forbiddenClasses": [
+      "backdrop-blur",
+      "shadow-xl",
+      "shadow-lg",
+      "bg-gradient-"
+    ]
+  },
+  "referenceTestIds": [
+    "dock-filter-toggle",
+    "dock-library-btn",
+    "dock-new-product-btn",
+    "dock-search-trigger",
+    "editorial-add-page-btn",
+    "editorial-bottom-dock",
+    "editorial-clear-query-btn",
+    "editorial-cmd-dialog",
+    "editorial-cmd-input",
+    "editorial-cmd-list",
+    "editorial-download-zip-btn",
+    "editorial-empty-grid",
+    "editorial-hero-cta",
+    "editorial-hero-strip",
+    "editorial-metric-cliques",
+    "editorial-metric-pedidos",
+    "editorial-metric-visitas",
+    "editorial-multipage-control-panel",
+    "editorial-open-library-btn",
+    "editorial-post-onboarding-suggestions",
+    "editorial-product-grid",
+    "editorial-simulate-order-btn",
+    "editorial-store-status",
+    "editorial-store-title",
+    "editorial-store-title-input",
+    "store-editorial-view"
+  ]
+}

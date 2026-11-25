@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-140",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/onboarding/OnboardingModals.tsx"
+  ],
+  "range": [
+    114,
+    159
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (114-159) de OnboardingModals.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-139"
+  ]
+}

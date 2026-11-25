@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-276",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx"
+  ],
+  "range": [
+    387,
+    477
+  ],
+  "preserveTestIds": [
+    "wpp-flow-detail-card",
+    "wpp-simulate-fake-chat-btn",
+    "wpp-open-center-modal-btn"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (387-477) de WhatsappMessageFlowsPanel.tsx preservando 3 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-275"
+  ]
+}

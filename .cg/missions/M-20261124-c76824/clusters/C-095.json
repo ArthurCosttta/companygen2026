@@ -1,0 +1,19 @@
+{
+  "clusterId": "C-095",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/EmptyStateCard.tsx"
+  ],
+  "range": [
+    158,
+    184
+  ],
+  "preserveTestIds": [],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em EmptyStateCard.tsx",
+  "check": "verify-micro",
+  "after": []
+}

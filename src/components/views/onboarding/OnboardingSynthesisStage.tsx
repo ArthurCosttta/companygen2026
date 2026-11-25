@@ -140,6 +140,7 @@ export function OnboardingSynthesisStage({
     setProgressPct((prev) => Math.max(prev, base));
     const ceiling = Math.min(96, base + 14);
     const timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       setProgressPct((prev) => (prev < ceiling ? prev + 1 : prev));
     }, 350);
     return () => window.clearInterval(timer);

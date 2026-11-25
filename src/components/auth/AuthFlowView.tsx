@@ -403,19 +403,24 @@ export function AuthFlowView() {
   }
 
   return (
-    <main className="min-h-dvh w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-[#0F172A] dark:bg-[#090D16] dark:text-slate-100 md:grid md:grid-cols-2 md:items-stretch">
-      {/* Left Brand Panel (Desktop Royal Blue & Slate Highlight) */}
+    <main className="min-h-dvh w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-[#09090B] dark:bg-[#090D16] dark:text-slate-100 md:grid md:grid-cols-2 md:items-stretch">
+      {/* Left Brand Panel (Editorial Minimalist — alinhado ao estilo Minha Loja) */}
       <section
         aria-label="Apresentação CompanyGen"
-        className="flex min-w-0 flex-col justify-between bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#1D4ED8] p-6 text-white sm:p-10 md:p-12"
+        className="flex min-w-0 flex-col justify-between border-b border-[#E2E8F0] bg-white p-6 text-[#09090B] dark:border-[#1E293B] dark:bg-[#111726] dark:text-slate-100 sm:p-10 md:border-r md:border-b-0 md:p-12"
       >
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
+          <img
+            src="/brand/logo-horizontal-clara.webp"
+            alt="CompanyGen"
+            className="h-9 w-auto self-start object-contain dark:hidden"
+          />
           <img
             src="/brand/logo-horizontal-escura.webp"
             alt="CompanyGen"
-            className="h-10 w-auto self-start object-contain"
+            className="hidden h-9 w-auto self-start object-contain dark:block"
           />
-          <p className="text-xs font-medium text-blue-200">
+          <p className="text-xs font-medium text-[#64748B] dark:text-slate-400">
             Vitrine Online & Atendimento WhatsApp
           </p>
 
@@ -425,57 +430,57 @@ export function AuthFlowView() {
             aria-label="Como o sistema funciona em 3 passos"
             className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2.5"
           >
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-blue-200 ring-1 ring-white/20">
-                <Store className="size-4" aria-hidden="true" />
+            <div className="flex items-center gap-2">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[#09090B] dark:border-[#1E293B] dark:bg-[#090D16] dark:text-slate-200">
+                <Store className="size-3.5" aria-hidden="true" />
               </span>
-              <span className="text-xs font-semibold text-white">Vitrine 24h Web</span>
+              <span className="text-xs font-semibold text-[#09090B] dark:text-slate-200">Vitrine 24h Web</span>
             </div>
-            <ArrowRight className="hidden sm:block size-3.5 shrink-0 text-blue-300" aria-hidden="true" />
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-emerald-300 ring-1 ring-white/20">
-                <MessageSquare className="size-4" aria-hidden="true" />
+            <ArrowRight className="hidden sm:block size-3.5 shrink-0 text-[#94A3B8]" aria-hidden="true" />
+            <div className="flex items-center gap-2">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[#10B981] dark:border-[#1E293B] dark:bg-[#090D16]">
+                <MessageSquare className="size-3.5" aria-hidden="true" />
               </span>
-              <span className="text-xs font-semibold text-white">Sofia no PC (.exe)</span>
+              <span className="text-xs font-semibold text-[#09090B] dark:text-slate-200">Sofia no PC (.exe)</span>
             </div>
-            <ArrowRight className="hidden sm:block size-3.5 shrink-0 text-blue-300" aria-hidden="true" />
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-amber-300 ring-1 ring-white/20">
-                <ShoppingBag className="size-4" aria-hidden="true" />
+            <ArrowRight className="hidden sm:block size-3.5 shrink-0 text-[#94A3B8]" aria-hidden="true" />
+            <div className="flex items-center gap-2">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[#2563EB] dark:border-[#1E293B] dark:bg-[#090D16]">
+                <ShoppingBag className="size-3.5" aria-hidden="true" />
               </span>
-              <span className="text-xs font-semibold text-white">Pedidos no Painel</span>
+              <span className="text-xs font-semibold text-[#09090B] dark:text-slate-200">Pedidos no Painel</span>
             </div>
           </div>
         </div>
 
-        <div className="hidden md:block my-8 space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-blue-100">
-            <Sparkles className="size-3.5 text-[#F59E0B]" aria-hidden="true" />
+        <div className="hidden md:block my-8 space-y-5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-1 text-xs font-semibold text-[#334155] dark:border-[#1E293B] dark:bg-[#090D16] dark:text-slate-300">
+            <Sparkles className="size-3.5 text-[#10B981]" aria-hidden="true" />
             <span>Pronto para vender em minutos</span>
           </div>
 
-          <h1 className="max-w-md text-3xl font-bold tracking-tight text-white md:text-4xl">
+          <h1 className="max-w-md font-serif text-[38px] font-extrabold leading-[1.02] tracking-[-0.03em] text-[#09090B] dark:text-white lg:text-[44px]">
             Sua loja online e seu WhatsApp trabalhando juntos
           </h1>
-          <p className="max-w-md text-sm leading-relaxed text-slate-200">
+          <p className="max-w-md text-sm leading-relaxed text-[#64748B] dark:text-slate-300">
             Cadastre seus produtos, publique sua vitrine personalizada e receba pedidos organizados direto no WhatsApp e no painel de caixa.
           </p>
 
-          <ul className="grid gap-3 pt-2 text-sm text-slate-100">
+          <ul className="grid gap-3 pt-1 text-sm text-[#334155] dark:text-slate-200">
             <li className="flex items-center gap-3">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-blue-200">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#09090B] dark:border-[#1E293B] dark:bg-[#090D16] dark:text-slate-200">
                 <Store className="size-4" aria-hidden="true" />
               </span>
               <span>Vitrine profissional pronta para compartilhar no Instagram</span>
             </li>
             <li className="flex items-center gap-3">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-emerald-300">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#10B981] dark:border-[#1E293B] dark:bg-[#090D16]">
                 <MessageSquare className="size-4" aria-hidden="true" />
               </span>
               <span>WhatsApp real integrado com respostas rápidas e chave Pix</span>
             </li>
             <li className="flex items-center gap-3">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-blue-200">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-[#2563EB] dark:border-[#1E293B] dark:bg-[#090D16]">
                 <ShoppingBag className="size-4" aria-hidden="true" />
               </span>
               <span>Controle de pedidos da vitrine e vendas do balcão em tempo real</span>
@@ -485,14 +490,14 @@ export function AuthFlowView() {
 
         <div
           data-testid="landing-download-options"
-          className="mt-4 rounded-2xl border border-white/20 bg-white/10 p-4 text-xs text-slate-100 space-y-3"
+          className="mt-4 rounded-[14px] border border-[#E2E8F0] bg-[#F8FAFC] p-4 text-xs text-[#334155] dark:border-[#1E293B] dark:bg-[#090D16] dark:text-slate-200 space-y-3"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Monitor className="size-4 text-emerald-300" aria-hidden="true" />
-              <span className="font-bold text-white">Baixar Aplicativo Desktop (v1.1.0)</span>
+              <Monitor className="size-4 text-[#09090B] dark:text-emerald-400" aria-hidden="true" />
+              <span className="font-bold text-[#09090B] dark:text-white">Baixar Aplicativo Desktop (v1.1.0)</span>
             </div>
-            <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[10px] font-bold text-blue-100">
+            <span className="rounded-full border border-[#E2E8F0] bg-white px-2.5 py-0.5 text-[10px] font-bold text-[#334155] dark:border-[#1E293B] dark:bg-[#111726] dark:text-slate-300">
               Detectado: {DESKTOP_OS_CATALOG.find((o) => o.id === detectedOs)?.shortLabel}
             </span>
           </div>
@@ -510,12 +515,12 @@ export function AuthFlowView() {
                   onClick={() => setSelectedOs(osOpt.id)}
                   className={`rounded-xl border px-2.5 py-2 text-left transition ${
                     active
-                      ? 'border-white bg-white text-[#0F172A] shadow-sm'
-                      : 'border-white/20 bg-white/5 text-slate-100 hover:bg-white/15'
+                      ? 'border-[#09090B] bg-[#09090B] text-white dark:border-white dark:bg-white dark:text-[#09090B]'
+                      : 'border-[#E2E8F0] bg-white text-[#334155] hover:border-[#09090B]/30 dark:border-[#1E293B] dark:bg-[#111726] dark:text-slate-200'
                   }`}
                 >
-                  <div className="text-[11.5px] font-extrabold leading-tight">{osOpt.shortLabel}</div>
-                  <div className={`mt-0.5 text-[10px] ${active ? 'text-slate-600' : 'text-blue-200'}`}>
+                  <div className="text-[11.5px] font-bold leading-tight">{osOpt.shortLabel}</div>
+                  <div className={`mt-0.5 text-[10px] ${active ? 'text-slate-300 dark:text-slate-600' : 'text-[#64748B] dark:text-slate-400'}`}>
                     {osOpt.id === 'win64'
                       ? '.exe 64-bit'
                       : osOpt.id === 'win32'

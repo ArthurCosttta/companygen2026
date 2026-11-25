@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-157",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/OrderDetailsModal.tsx"
+  ],
+  "range": [
+    167,
+    257
+  ],
+  "preserveTestIds": [
+    "order-details-status-badge",
+    "order-details-print-btn",
+    "order-details-whatsapp-btn"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (167-257) de OrderDetailsModal.tsx preservando 3 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-156"
+  ]
+}

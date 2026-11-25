@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-222",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/StorePagesExpansionModal.tsx"
+  ],
+  "range": [
+    169,
+    234
+  ],
+  "preserveTestIds": [
+    "expansion-402-banner",
+    "expansion-continue-btn",
+    "expansion-generate-btn",
+    "modal-credit-balance-pill",
+    "store-pages-expansion-modal"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em StorePagesExpansionModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

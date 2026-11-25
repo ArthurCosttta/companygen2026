@@ -221,7 +221,7 @@ export function GlobalAiAssistantWidget({
       {open ? (
         <div
           data-testid="global-ai-assistant-panel"
-          className="mb-3 flex w-[340px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white text-[#09090B] shadow-2xl sm:w-[390px]"
+          className="mb-3 flex w-[340px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white text-[#09090B] shadow-sm sm:w-[390px]"
         >
           <div className="flex items-center justify-between border-b border-[#E2E8F0] bg-[#FFFFFF] px-3.5 py-2.5">
             <div className="flex items-center gap-2">
@@ -390,7 +390,7 @@ export function GlobalAiAssistantWidget({
         type="button"
         data-testid="global-ai-assistant-btn"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-[42px] items-center gap-2 rounded-full border border-[#09090B] bg-[#09090B] px-4 py-2 text-xs font-semibold text-white shadow-lg transition hover:bg-[#18181B]"
+        className="inline-flex min-h-[42px] items-center gap-2 rounded-full border border-[#09090B] bg-[#09090B] px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-[#18181B]"
       >
         <Sparkles className="size-3.5" aria-hidden="true" />
         <span>IA Global</span>

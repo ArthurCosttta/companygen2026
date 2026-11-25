@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-196",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/CustomerStorefrontView.tsx"
+  ],
+  "range": [
+    282,
+    372
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"list_or_grid\" (282-372) de CustomerStorefrontView.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-195"
+  ]
+}

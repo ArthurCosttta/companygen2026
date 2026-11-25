@@ -1,0 +1,29 @@
+{
+  "clusterId": "C-102",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/SupportTicketModal.tsx"
+  ],
+  "range": [
+    215,
+    280
+  ],
+  "preserveTestIds": [
+    "support-ai-triage-box",
+    "support-ticket-attachment-preview",
+    "support-ticket-attachment-remove",
+    "support-ticket-category",
+    "support-ticket-description",
+    "support-ticket-file-input",
+    "support-ticket-paste-zone",
+    "support-ticket-subject",
+    "support-ticket-submit"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em SupportTicketModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

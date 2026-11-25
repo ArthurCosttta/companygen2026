@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-023",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/hooks/useHighSaturationNotifications.ts"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_reader em \"ls:${MUTE_STORAGE_PREFIX}${owner}\" (src/hooks/useHighSaturationNotifications.ts)",
+  "check": "agent-ops lint",
+  "after": [
+    "C-022"
+  ],
+  "updatedAt": "2026-11-24T17:06:38.176Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-049",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/ProductEditorDrawer.tsx"
+  ],
+  "range": [
+    383,
+    478
+  ],
+  "preserveTestIds": [
+    "drawer-focal-point-box",
+    "drawer-focal-point-reticle",
+    "drawer-low-res-warning",
+    "drawer-photo-file-input",
+    "drawer-upload-photo-btn",
+    "product-low-stock-input"
+  ],
+  "description": "Achatar 1 sombra(s), 0 blur(s) e 0 gradiente(s) em ProductEditorDrawer.tsx",
+  "check": "verify-micro",
+  "after": []
+}

@@ -1,0 +1,20 @@
+{
+  "clusterId": "C-016",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/app/App.tsx"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_writer em \"ss:cg_ignition_opts_${payload.clientJobId}\" (src/app/App.tsx)",
+  "check": "agent-ops lint",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:34.951Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

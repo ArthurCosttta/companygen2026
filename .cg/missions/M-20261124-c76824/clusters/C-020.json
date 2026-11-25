@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-020",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/onboarding/OnboardingSynthesisStage.tsx"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_reader em \"ss:cg_ignition_opts_${activeJobId}\" (src/components/views/onboarding/OnboardingSynthesisStage.tsx)",
+  "check": "agent-ops lint",
+  "after": [
+    "C-019"
+  ],
+  "updatedAt": "2026-11-24T17:06:36.878Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

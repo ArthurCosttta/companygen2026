@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-273",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx"
+  ],
+  "range": [
+    476,
+    566
+  ],
+  "preserveTestIds": [
+    "wpp-flow-delete-btn"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (476-566) de WhatsappMessageFlowsPanel.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-272"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "clusterId": "C-291",
+  "wave": "W5",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-NAV-EACH-SCREEN",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/settings/SettingsView.tsx"
+  ],
+  "range": null,
+  "preserveTestIds": [
+    "settings-account-top-bar",
+    "settings-copy-diagnostic-btn",
+    "settings-export-backup-zip-btn",
+    "settings-low-spec-section",
+    "settings-mobile-alerts-card",
+    "settings-open-checkout-btn",
+    "settings-open-reset-btn",
+    "settings-open-support-ticket-btn",
+    "settings-panel-backup",
+    "settings-panel-credits",
+    "settings-panel-desktop",
+    "settings-restore-backup-zip-btn",
+    "settings-restore-error-alert",
+    "settings-restore-file-input",
+    "settings-save-desktop-prefs-btn",
+    "settings-test-mobile-alarm-btn",
+    "settings-testar-oi-btn",
+    "settings-top-logout-btn",
+    "settings-top-plans-btn",
+    "settings-view"
+  ],
+  "description": "OPEN_NAVIGATOR: validar rota \"settings\" (1280x800) com consoleErrors==0 e todos os botões/gavetas vivos",
+  "check": "OPEN_NAVIGATOR",
+  "after": []
+}

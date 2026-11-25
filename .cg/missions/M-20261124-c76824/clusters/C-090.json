@@ -1,0 +1,19 @@
+{
+  "clusterId": "C-090",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/ActionButton.tsx"
+  ],
+  "range": [
+    168,
+    233
+  ],
+  "preserveTestIds": [],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em ActionButton.tsx",
+  "check": "verify-micro",
+  "after": []
+}

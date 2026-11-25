@@ -45,21 +45,21 @@ export interface ActionButtonProps
 
 const VARIANT_CLASSES: Record<ActionButtonVariant, string> = {
   primary:
-    "bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white shadow-md shadow-blue-600/20",
+    "bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white shadow-2xs",
   primaryGradient:
-    "bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] hover:from-[#1D4ED8] hover:to-[#1E40AF] text-white shadow-md shadow-blue-600/20",
+    "bg-[#09090B] hover:bg-[#1E293B] active:bg-[#09090B] text-white shadow-2xs",
   success:
-    "bg-[#16A34A] hover:bg-[#15803D] active:bg-[#166534] text-white shadow-md shadow-green-600/20",
+    "bg-[#10B981] hover:bg-[#059669] active:bg-[#047857] text-white shadow-2xs",
   danger:
-    "bg-[#EF4444] hover:bg-[#DC2626] active:bg-[#B91C1C] text-white shadow-md shadow-red-600/15",
+    "bg-[#EF4444] hover:bg-[#DC2626] active:bg-[#B91C1C] text-white shadow-2xs",
   purple:
-    "bg-[#8B5CF6] hover:bg-[#7C3AED] active:bg-[#6D28D9] text-white shadow-md shadow-violet-600/20",
+    "bg-[#8B5CF6] hover:bg-[#7C3AED] active:bg-[#6D28D9] text-white shadow-2xs",
   dark:
-    "bg-[#0F172A] hover:bg-[#2563EB] active:bg-[#1D4ED8] text-white shadow-sm",
+    "bg-[#09090B] hover:bg-[#2563EB] active:bg-[#1D4ED8] text-white shadow-2xs",
   softBlue:
     "bg-[#EFF6FF] border border-[#BFDBFE] hover:bg-[#DBEAFE] active:bg-[#BFDBFE] text-[#1D4ED8] dark:bg-[#1E3A8A]/40 dark:border-[#3B82F6]/40 dark:text-[#93C5FD] dark:hover:bg-[#1E3A8A]/60",
   secondary:
-    "bg-[#F1F5F9] hover:bg-[#E2E8F0] active:bg-[#CBD5E1] text-[#0F172A] dark:bg-[var(--cg-surface-elevated)] dark:border dark:border-[var(--cg-border-strong)] dark:text-[var(--cg-text)] dark:hover:bg-[var(--cg-hover)]",
+    "bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] active:bg-[#F1F5F9] text-[#09090B] dark:bg-[var(--cg-surface-elevated)] dark:border-[var(--cg-border-strong)] dark:text-[var(--cg-text)] dark:hover:bg-[var(--cg-hover)]",
 };
 
 const SIZE_CLASSES: Record<string, string> = {

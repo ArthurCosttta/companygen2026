@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-069",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/auth/GuestClaimEmailModal.tsx"
+  ],
+  "range": [
+    303,
+    306
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (303-306) de GuestClaimEmailModal.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-068"
+  ]
+}

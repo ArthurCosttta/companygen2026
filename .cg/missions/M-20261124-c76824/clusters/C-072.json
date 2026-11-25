@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-072",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/CommandPaletteModal.tsx"
+  ],
+  "range": [
+    221,
+    311
+  ],
+  "preserveTestIds": [
+    "command-palette-modal"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (221-311) de CommandPaletteModal.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-071"
+  ]
+}

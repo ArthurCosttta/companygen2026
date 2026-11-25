@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-010",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "server/storefront-molde-fs.mjs"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_reader em \"disk:image-jobs.json\" (server/storefront-molde-fs.mjs)",
+  "check": "agent-ops lint",
+  "after": [
+    "C-009"
+  ],
+  "updatedAt": "2026-11-24T17:06:31.029Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

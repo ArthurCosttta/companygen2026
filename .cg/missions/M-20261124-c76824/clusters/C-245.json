@@ -1,0 +1,28 @@
+{
+  "clusterId": "C-245",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/studio/ArchetypeComposerView.tsx"
+  ],
+  "range": [
+    1105,
+    1195
+  ],
+  "preserveTestIds": [
+    "editor-create-page-btn",
+    "editor-undo-btn",
+    "editor-redo-btn",
+    "editor-viewport-desktop",
+    "editor-viewport-mobile",
+    "editor-diff-pill"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (1105-1195) de ArchetypeComposerView.tsx preservando 6 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-244"
+  ]
+}

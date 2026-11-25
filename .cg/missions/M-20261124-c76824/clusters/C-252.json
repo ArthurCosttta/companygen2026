@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-252",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/QuickRepliesSection.tsx"
+  ],
+  "range": [
+    768,
+    772
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (768-772) de QuickRepliesSection.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-251"
+  ]
+}

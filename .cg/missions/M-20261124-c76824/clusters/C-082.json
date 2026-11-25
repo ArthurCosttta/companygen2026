@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-082",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/Sidebar.tsx"
+  ],
+  "range": [
+    417,
+    461
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"nav_tabs\" (417-461) de Sidebar.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-081"
+  ]
+}

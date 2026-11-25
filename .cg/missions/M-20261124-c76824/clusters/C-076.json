@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-076",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/FloatingTopPill.tsx"
+  ],
+  "range": [
+    85,
+    175
+  ],
+  "preserveTestIds": [
+    "top-pill-whatsapp-human-badge",
+    "top-pill-open-vitrine",
+    "top-pill-tab-admin"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (85-175) de FloatingTopPill.tsx preservando 3 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-075"
+  ]
+}

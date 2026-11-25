@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-085",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/Sidebar.tsx"
+  ],
+  "range": [
+    427,
+    461
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"list_or_grid\" (427-461) de Sidebar.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-084"
+  ]
+}

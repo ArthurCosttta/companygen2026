@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-166",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/OrdersKanbanView.tsx"
+  ],
+  "range": [
+    1471,
+    1527
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (1471-1527) de OrdersKanbanView.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-165"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-063",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/app/App.tsx"
+  ],
+  "range": [
+    2062,
+    2120
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"list_or_grid\" (2062-2120) de App.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-062"
+  ]
+}

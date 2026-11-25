@@ -1,0 +1,16 @@
+{
+  "clusterId": "C-297",
+  "wave": "W6",
+  "macroIntent": "DELIVERY",
+  "kind": "GEN-CG-SYNC",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    ".cg/taxonomy/policies.json"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Reindexar .cg/graph/, validar testId Diff Guard global, tsc -b, vite build e suíte tests/unit/*.test.mjs",
+  "check": "agent-ops verify",
+  "after": []
+}

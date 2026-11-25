@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-088",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/Topbar.tsx"
+  ],
+  "range": [
+    172,
+    262
+  ],
+  "preserveTestIds": [
+    "topbar-breadcrumb",
+    "topbar-active-title",
+    "topbar-command-palette-btn",
+    "topbar-claim-email-btn"
+  ],
+  "description": "Padronizar região \"nav_tabs\" (172-262) de Topbar.tsx preservando 4 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-087"
+  ]
+}

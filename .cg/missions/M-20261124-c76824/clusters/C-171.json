@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-171",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/settings/SettingsView.tsx"
+  ],
+  "range": [
+    790,
+    880
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"nav_tabs\" (790-880) de SettingsView.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-170"
+  ]
+}

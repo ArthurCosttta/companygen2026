@@ -1,0 +1,19 @@
+{
+  "clusterId": "C-250",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/QuickRepliesSection.tsx"
+  ],
+  "range": [
+    264,
+    329
+  ],
+  "preserveTestIds": [],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em QuickRepliesSection.tsx",
+  "check": "verify-micro",
+  "after": []
+}

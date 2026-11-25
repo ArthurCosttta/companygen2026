@@ -1,0 +1,4645 @@
+{
+  "generatedAt": "2026-11-24T17:15:30.087Z",
+  "screenCount": 63,
+  "screens": {
+    "src/app/App.tsx": {
+      "cell": "core",
+      "lines": 2120,
+      "testIds": [
+        "admin-storefront-preview-banner",
+        "network-offline-banner",
+        "public-storefront-route",
+        "support-readonly-banner",
+        "support-readonly-exit-btn",
+        "vitrine-overlay-persistent",
+        "whatsapp-persistent-mount"
+      ],
+      "children": [
+        "AccessCodeView",
+        "ActionButton",
+        "AdminConsoleView",
+        "AlertTriangle",
+        "ArchetypeComposerView",
+        "AuthFlowView",
+        "BusinessProfile",
+        "CheckoutPlansView",
+        "CommandPaletteModal",
+        "ContextualHelpModal",
+        "CreditAlertCenterModal",
+        "CustomerStorefrontView",
+        "DashboardMetricsProjection",
+        "EditorialStoreControlView",
+        "EmptyStateCard",
+        "FloatingTopPill",
+        "GlobalAiAssistantWidget",
+        "GuestClaimEmailModal",
+        "HighSaturationNotificationBar",
+        "IgnitionSubmissionPayload",
+        "LogOut",
+        "MotionConfig",
+        "OnboardingHelpTopic",
+        "OnboardingIgnitionView",
+        "OnboardingSynthesisStage",
+        "OrdersKanbanView",
+        "Partial",
+        "PreviewKind",
+        "ProfileSnapshot",
+        "PublicStoreRouteTarget",
+        "PublicStorefrontRoute",
+        "RefreshCw",
+        "RouteErrorBoundary",
+        "SettingsView",
+        "ShieldAlert",
+        "ShoppingBag",
+        "Sidebar",
+        "SidebarTab",
+        "SkeletonBlock",
+        "SkeletonTableRows",
+        "Sparkles",
+        "StudioApp",
+        "SupportReadonlySession",
+        "SupportTicketModal",
+        "Suspense",
+        "ToastProvider",
+        "Topbar",
+        "User",
+        "WhatsAppConnectionView",
+        "WhatsappDadosResponse",
+        "WhatsappRuntimeStatus",
+        "WifiOff"
+      ],
+      "hooks": [
+        "useCallback",
+        "useClientMaturity",
+        "useConnectionPhaseInfo",
+        "useEffect",
+        "useHighSaturationNotifications",
+        "useMemo",
+        "useNetworkAndDraftGuard",
+        "useRef",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "App",
+        "mainReturnLine": 439,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 1,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              653,
+              743
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1624,
+              1714
+            ],
+            "testIds": [
+              "vitrine-overlay-persistent"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1732,
+              1822
+            ],
+            "testIds": [
+              "support-readonly-banner",
+              "support-readonly-exit-btn",
+              "network-offline-banner"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              2047,
+              2120
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              2062,
+              2120
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/auth/AuthFlowView.tsx": {
+      "cell": "core",
+      "lines": 979,
+      "testIds": [
+        "auth-activation-code-input",
+        "auth-brand-logo",
+        "auth-enter-with-code-btn",
+        "auth-flow-5s-diagram",
+        "auth-invite-banner",
+        "auth-open-access-btn",
+        "auth-open-showcase-lume-btn",
+        "landing-download-options",
+        "landing-download-os-btn"
+      ],
+      "children": [
+        "ActionButton",
+        "ArrowRight",
+        "Check",
+        "DesktopOsTarget",
+        "Download",
+        "Eye",
+        "EyeOff",
+        "HTMLFormElement",
+        "KeyRound",
+        "Mail",
+        "MessageSquare",
+        "ModalContainer",
+        "Monitor",
+        "ShieldCheck",
+        "ShoppingBag",
+        "SignupDraft",
+        "Sparkles",
+        "Store"
+      ],
+      "hooks": [
+        "useDocumentDarkMode",
+        "useEffect",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "AuthFlowView",
+        "mainReturnLine": 405,
+        "headerRange": null,
+        "hasFontSerif": true,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              751,
+              841
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              907,
+              979
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              506,
+              596
+            ],
+            "testIds": [
+              "landing-download-os-btn",
+              "auth-invite-banner",
+              "auth-open-showcase-lume-btn"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/auth/GuestClaimEmailModal.tsx": {
+      "cell": "core",
+      "lines": 306,
+      "testIds": [
+        "guest-claim-email-input",
+        "guest-claim-password-input",
+        "guest-claim-submit-btn"
+      ],
+      "children": [
+        "ActionButton",
+        "ArrowRight",
+        "CheckCircle2",
+        "Eye",
+        "EyeOff",
+        "HTMLFormElement",
+        "KeyRound",
+        "Mail",
+        "ModalContainer",
+        "ShieldCheck"
+      ],
+      "hooks": [
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "GuestClaimEmailModal",
+        "mainReturnLine": 147,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              148,
+              238
+            ],
+            "testIds": [
+              "guest-claim-submit-btn"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              303,
+              306
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/shell/CommandPaletteModal.tsx": {
+      "cell": "core",
+      "lines": 382,
+      "testIds": [
+        "command-palette-empty",
+        "command-palette-input",
+        "command-palette-modal"
+      ],
+      "children": [
+        "ArrowRight",
+        "HTMLInputElement",
+        "Icon",
+        "ModalContainer",
+        "PaletteEntry",
+        "Search"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "CommandPaletteModal",
+        "mainReturnLine": 90,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              294,
+              382
+            ],
+            "testIds": [
+              "command-palette-modal",
+              "command-palette-input",
+              "command-palette-empty"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              221,
+              311
+            ],
+            "testIds": [
+              "command-palette-modal"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              340,
+              382
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/shell/FloatingTopPill.tsx": {
+      "cell": "core",
+      "lines": 238,
+      "testIds": [
+        "editorial-top-pill",
+        "top-pill-credits-btn",
+        "top-pill-logout-btn",
+        "top-pill-open-vitrine",
+        "top-pill-tab-admin",
+        "top-pill-whatsapp-human-badge"
+      ],
+      "children": [
+        "Coins",
+        "Icon",
+        "LogOut",
+        "ShieldCheck"
+      ],
+      "hooks": [],
+      "visualProfile": {
+        "mainComponent": "FloatingTopPill",
+        "mainReturnLine": 75,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "nav_tabs",
+            "range": [
+              80,
+              170
+            ],
+            "testIds": [
+              "editorial-top-pill",
+              "top-pill-whatsapp-human-badge",
+              "top-pill-open-vitrine"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              85,
+              175
+            ],
+            "testIds": [
+              "top-pill-whatsapp-human-badge",
+              "top-pill-open-vitrine",
+              "top-pill-tab-admin"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/shell/HighSaturationNotificationBar.tsx": {
+      "cell": "core",
+      "lines": 280,
+      "testIds": [
+        "notification-bar-resume-ai-btn",
+        "notification-enable-mobile-btn",
+        "phone-notification-primary",
+        "phone-notification-queue-list",
+        "phone-notification-queue-toggle",
+        "silence-alarm-btn",
+        "tela-38-notification-bar"
+      ],
+      "children": [
+        "Bell",
+        "ChevronDown",
+        "ChevronUp",
+        "Headphones",
+        "ShoppingBag",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "HighSaturationNotificationBar",
+        "mainReturnLine": 87,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 1,
+        "drawerCount": 3,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              188,
+              278
+            ],
+            "testIds": [
+              "silence-alarm-btn",
+              "notification-bar-resume-ai-btn",
+              "phone-notification-queue-toggle",
+              "phone-notification-queue-list"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              244,
+              280
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/shell/Sidebar.tsx": {
+      "cell": "core",
+      "lines": 461,
+      "testIds": [
+        "desktop-sidebar",
+        "sidebar-brand-logo",
+        "sidebar-collapse-toggle",
+        "sidebar-exe-health",
+        "sidebar-logout-btn",
+        "sidebar-support-btn",
+        "sidebar-updater-restart-btn"
+      ],
+      "children": [
+        "Activity",
+        "HelpCircle",
+        "Icon",
+        "LogOut",
+        "PanelLeftClose",
+        "PanelLeftOpen",
+        "SidebarTab"
+      ],
+      "hooks": [
+        "useDocumentDarkMode",
+        "useEffect"
+      ],
+      "visualProfile": {
+        "mainComponent": "Sidebar",
+        "mainReturnLine": 142,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 1,
+        "regions": [
+          {
+            "kind": "nav_tabs",
+            "range": [
+              268,
+              358
+            ],
+            "testIds": [
+              "sidebar-exe-health"
+            ]
+          },
+          {
+            "kind": "nav_tabs",
+            "range": [
+              417,
+              461
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              236,
+              326
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              269,
+              359
+            ],
+            "testIds": [
+              "sidebar-exe-health"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              427,
+              461
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/shell/Topbar.tsx": {
+      "cell": "core",
+      "lines": 427,
+      "testIds": [
+        "app-topbar",
+        "topbar-active-title",
+        "topbar-breadcrumb",
+        "topbar-claim-email-btn",
+        "topbar-command-palette-btn",
+        "topbar-help-menu-btn",
+        "topbar-help-open-shortcuts",
+        "topbar-help-open-support",
+        "topbar-help-open-tour",
+        "topbar-help-popover",
+        "topbar-last-credit-spent",
+        "topbar-open-checkout-btn",
+        "topbar-preview-vitrine",
+        "topbar-theme-toggle-btn"
+      ],
+      "children": [
+        "ActionButton",
+        "ChevronRight",
+        "Compass",
+        "Eye",
+        "HTMLDivElement",
+        "HelpCircle",
+        "Keyboard",
+        "LifeBuoy",
+        "Mail",
+        "Moon",
+        "Search",
+        "SidebarTab",
+        "Sparkles",
+        "Sun"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "Topbar",
+        "mainReturnLine": 86,
+        "headerRange": [
+          161,
+          230
+        ],
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 1,
+        "drawerCount": 1,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              161,
+              251
+            ],
+            "testIds": [
+              "app-topbar",
+              "topbar-breadcrumb",
+              "topbar-active-title",
+              "topbar-command-palette-btn"
+            ]
+          },
+          {
+            "kind": "nav_tabs",
+            "range": [
+              172,
+              262
+            ],
+            "testIds": [
+              "topbar-breadcrumb",
+              "topbar-active-title",
+              "topbar-command-palette-btn",
+              "topbar-claim-email-btn"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              341,
+              427
+            ],
+            "testIds": [
+              "topbar-help-popover",
+              "topbar-help-open-support",
+              "topbar-help-open-shortcuts",
+              "topbar-help-open-tour"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/ui/ActionButton.tsx": {
+      "cell": "core",
+      "lines": 275,
+      "testIds": [],
+      "children": [
+        "ActionButtonVariant",
+        "Check",
+        "HTMLButtonElement",
+        "ReturnType"
+      ],
+      "hooks": [
+        "useCallback",
+        "useEffect",
+        "useLayoutEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": null,
+        "mainReturnLine": 168,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 1,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/ui/CreditAlertCenterModal.tsx": {
+      "cell": "core",
+      "lines": 115,
+      "testIds": [
+        "credit-alert-center-modal"
+      ],
+      "children": [
+        "ActionButton",
+        "CheckCircle2",
+        "Coins",
+        "InsufficientCreditsDetail",
+        "ModalContainer",
+        "Sparkles"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "CreditAlertCenterModal",
+        "mainReturnLine": 28,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              35,
+              115
+            ],
+            "testIds": [
+              "credit-alert-center-modal"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/ui/DrawerContainer.tsx": {
+      "cell": "core",
+      "lines": 214,
+      "testIds": [],
+      "children": [
+        "DialogPrimitive",
+        "DrawerContainerProps",
+        "HTMLElement",
+        "NonNullable",
+        "X"
+      ],
+      "hooks": [
+        "useEffect"
+      ],
+      "visualProfile": {
+        "mainComponent": "DrawerContainer",
+        "mainReturnLine": 69,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 5,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              151,
+              214
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/ui/EmptyStateCard.tsx": {
+      "cell": "core",
+      "lines": 184,
+      "testIds": [],
+      "children": [
+        "ActionButton",
+        "NonNullable",
+        "SkeletonBlock",
+        "SkeletonBlockProps"
+      ],
+      "hooks": [],
+      "visualProfile": {
+        "mainComponent": "SkeletonTableRows",
+        "mainReturnLine": 158,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              164,
+              184
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/ui/ErrorBoundary.tsx": {
+      "cell": "telemetry",
+      "lines": 227,
+      "testIds": [],
+      "children": [
+        "AppErrorBoundary",
+        "ErrorBoundaryProps",
+        "ErrorBoundaryState"
+      ],
+      "hooks": [],
+      "visualProfile": {
+        "mainComponent": "RouteErrorBoundary",
+        "mainReturnLine": 221,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/ui/GlobalAiAssistantWidget.tsx": {
+      "cell": "core",
+      "lines": 401,
+      "testIds": [
+        "global-ai-assistant-btn",
+        "global-ai-assistant-panel",
+        "global-ai-attach-btn",
+        "global-ai-flip-side-btn",
+        "global-ai-input",
+        "global-ai-running-log"
+      ],
+      "children": [
+        "ArrowLeftRight",
+        "GlobalChatMessage",
+        "HTMLInputElement",
+        "LifeBuoy",
+        "Loader2",
+        "Paperclip",
+        "Send",
+        "Sparkles",
+        "Trash2",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "GlobalAiAssistantWidget",
+        "mainReturnLine": 109,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              271,
+              361
+            ],
+            "testIds": [
+              "global-ai-running-log",
+              "global-ai-attach-btn",
+              "global-ai-input"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/ui/HumanErrorCard.tsx": {
+      "cell": "core",
+      "lines": 94,
+      "testIds": [
+        "human-error-action-btn",
+        "human-error-card"
+      ],
+      "children": [
+        "ActionButton",
+        "Icon",
+        "RefreshCw"
+      ],
+      "hooks": [],
+      "visualProfile": {
+        "mainComponent": "HumanErrorCard",
+        "mainReturnLine": 51,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/ui/ModalContainer.tsx": {
+      "cell": "core",
+      "lines": 268,
+      "testIds": [
+        "toast-region"
+      ],
+      "children": [
+        "DialogPrimitive",
+        "HTMLButtonElement",
+        "HTMLDivElement",
+        "HTMLElement",
+        "ModalContainerProps",
+        "NonNullable",
+        "X"
+      ],
+      "hooks": [
+        "useEffect"
+      ],
+      "visualProfile": {
+        "mainComponent": "ModalContainer",
+        "mainReturnLine": 151,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/ui/SupportTicketModal.tsx": {
+      "cell": "core",
+      "lines": 463,
+      "testIds": [
+        "support-ai-triage-box",
+        "support-ticket-attachment-preview",
+        "support-ticket-attachment-remove",
+        "support-ticket-category",
+        "support-ticket-description",
+        "support-ticket-file-input",
+        "support-ticket-paste-zone",
+        "support-ticket-subject",
+        "support-ticket-submit"
+      ],
+      "children": [
+        "ActionButton",
+        "CheckCircle2",
+        "HTMLElement",
+        "HTMLImageElement",
+        "ImagePlus",
+        "LifeBuoy",
+        "ModalContainer",
+        "Send",
+        "SupportTicketItem",
+        "Trash2"
+      ],
+      "hooks": [
+        "useCallback",
+        "useEffect",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "SupportTicketModal",
+        "mainReturnLine": 215,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              216,
+              306
+            ],
+            "testIds": [
+              "support-ai-triage-box",
+              "support-ticket-category",
+              "support-ticket-subject"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              460,
+              463
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              416,
+              463
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/ui/ToastProvider.tsx": {
+      "cell": "core",
+      "lines": 372,
+      "testIds": [],
+      "children": [
+        "Icon",
+        "Map",
+        "ToastCard",
+        "ToastContext",
+        "ToastContextValue",
+        "ToastItem",
+        "ToastType",
+        "Undo2",
+        "X"
+      ],
+      "hooks": [
+        "useCallback",
+        "useContext",
+        "useEffect",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "useToast",
+        "mainReturnLine": null,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/views/WhatsAppView.tsx": {
+      "cell": "whatsapp",
+      "lines": 204,
+      "testIds": [
+        "real-whatsapp-fallback",
+        "real-whatsapp-web",
+        "wpp-copy-install-command-btn",
+        "wpp-install-command-code"
+      ],
+      "children": [
+        "ArrowLeft",
+        "ArrowRight",
+        "Check",
+        "Copy",
+        "ExternalLink",
+        "HTMLDivElement",
+        "MessageSquare",
+        "RefreshCw",
+        "Terminal"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": null,
+        "mainReturnLine": 65,
+        "headerRange": [
+          192,
+          204
+        ],
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              192,
+              204
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/access/AccessCodeView.tsx": {
+      "cell": "access",
+      "lines": 765,
+      "testIds": [
+        "access-brand-logo",
+        "access-claim-email-btn",
+        "access-code-input",
+        "access-credits-translation-card",
+        "access-go-to-login-btn",
+        "access-guest-start-btn",
+        "access-guest-unclaimed-card",
+        "access-state-feedback",
+        "access-validate-btn",
+        "kiwify-lookup-email",
+        "kiwify-lookup-feedback",
+        "kiwify-lookup-order-id",
+        "kiwify-lookup-panel",
+        "kiwify-lookup-submit",
+        "kiwify-lookup-toggle"
+      ],
+      "children": [
+        "AbortController",
+        "AccessCodeState",
+        "ActionButton",
+        "AlertCircle",
+        "CheckCircle2",
+        "Clock",
+        "GuestClaimEmailModal",
+        "HTMLInputElement",
+        "Lock",
+        "Mail",
+        "Search"
+      ],
+      "hooks": [
+        "useDocumentDarkMode",
+        "useEffect",
+        "useRef",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "AccessCodeView",
+        "mainReturnLine": 154,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              179,
+              269
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              747,
+              765
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/admin/AdminConsoleView.tsx": {
+      "cell": "admin",
+      "lines": 1926,
+      "testIds": [
+        "admin-canary-dom-banner",
+        "admin-client-search",
+        "admin-clients-table",
+        "admin-code-create-btn",
+        "admin-code-credits-input",
+        "admin-code-maxuses-input",
+        "admin-code-note-input",
+        "admin-code-type-select",
+        "admin-codes-search",
+        "admin-codes-table",
+        "admin-desktop-min-version",
+        "admin-kiwify-dlq",
+        "admin-kiwify-search",
+        "admin-kpi-alerts",
+        "admin-kpi-credits",
+        "admin-kpi-margin",
+        "admin-kpi-users",
+        "admin-normal-user-crash-banner",
+        "admin-onboarding-thermometer",
+        "admin-qr-batch-count",
+        "admin-qr-batch-credits",
+        "admin-qr-batch-download-zip",
+        "admin-qr-batch-generator",
+        "admin-qr-batch-name",
+        "admin-qr-batch-print-a4",
+        "admin-qr-batch-result",
+        "admin-qr-batch-submit",
+        "admin-refresh-btn",
+        "admin-unit-economics",
+        "desktop-admin-console"
+      ],
+      "children": [
+        "ActionButton",
+        "Activity",
+        "AdminCrashLogsPanel",
+        "AdminOverviewData",
+        "AdminSectionTab",
+        "AdminUser360Drawer",
+        "AdminUser360Target",
+        "AlertTriangle",
+        "Check",
+        "CheckCircle2",
+        "ClientFilterChip",
+        "Copy",
+        "Download",
+        "ExternalLink",
+        "Flag",
+        "KeyRound",
+        "LifeBuoy",
+        "LogIn",
+        "Monitor",
+        "Package",
+        "Plus",
+        "Printer",
+        "QrBatchResponse",
+        "QrCode",
+        "Record",
+        "RefreshCw",
+        "Search",
+        "ShieldAlert",
+        "ShieldCheck",
+        "Trash2",
+        "TrendingUp",
+        "Users",
+        "Zap"
+      ],
+      "hooks": [
+        "useCallback",
+        "useEffect",
+        "useMemo",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "AdminConsoleView",
+        "mainReturnLine": 318,
+        "headerRange": null,
+        "hasFontSerif": true,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 8,
+        "regions": [
+          {
+            "kind": "nav_tabs",
+            "range": [
+              804,
+              894
+            ],
+            "testIds": [
+              "admin-onboarding-thermometer"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              338,
+              428
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1031,
+              1121
+            ],
+            "testIds": [
+              "admin-code-type-select"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1905,
+              1926
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              818,
+              908
+            ],
+            "testIds": [
+              "admin-onboarding-thermometer"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              935,
+              1025
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1059,
+              1149
+            ],
+            "testIds": [
+              "admin-code-type-select",
+              "admin-code-credits-input",
+              "admin-code-maxuses-input"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1208,
+              1298
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/admin/AdminCrashLogsPanel.tsx": {
+      "cell": "telemetry",
+      "lines": 604,
+      "testIds": [
+        "admin-copy-ai-context-btn",
+        "admin-crash-inspector",
+        "admin-crash-logs-panel",
+        "admin-logs-search",
+        "admin-logs-status-filter",
+        "admin-resolve-crash-btn"
+      ],
+      "children": [
+        "ActionButton",
+        "AlertTriangle",
+        "Bug",
+        "Check",
+        "CheckCircle2",
+        "Copy",
+        "CrashTelemetryLogRow",
+        "CrashTelemetrySummary",
+        "Download",
+        "FileCode2",
+        "RefreshCw",
+        "RotateCcw",
+        "Search",
+        "ServerCrash",
+        "Terminal",
+        "UserCheck"
+      ],
+      "hooks": [
+        "useCallback",
+        "useEffect",
+        "useMemo",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "AdminCrashLogsPanel",
+        "mainReturnLine": 239,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              353,
+              443
+            ],
+            "testIds": [
+              "admin-crash-inspector",
+              "admin-copy-ai-context-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              487,
+              577
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/admin/AdminUser360Drawer.tsx": {
+      "cell": "admin",
+      "lines": 813,
+      "testIds": [
+        "admin-360-acc-credits",
+        "admin-360-acc-flags",
+        "admin-360-acc-kiwify",
+        "admin-360-acc-limits",
+        "admin-360-ban-btn",
+        "admin-360-credit-amount",
+        "admin-360-credit-note",
+        "admin-360-credit-reason",
+        "admin-360-credit-submit",
+        "admin-360-limit-note",
+        "admin-360-limit-submit",
+        "admin-360-support-readonly-btn",
+        "admin-360-tier-select",
+        "admin-drawer-copy-store-url-btn",
+        "admin-drawer-view-store-btn",
+        "admin-user-360-drawer"
+      ],
+      "children": [
+        "ActionButton",
+        "AlertTriangle",
+        "Ban",
+        "ChevronDown",
+        "ChevronRight",
+        "Coins",
+        "Copy",
+        "DrawerContainer",
+        "ExternalLink",
+        "Eye",
+        "Flag",
+        "RefreshCw",
+        "ShieldAlert",
+        "ShieldCheck",
+        "UserCheck",
+        "Zap"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "AdminUser360Drawer",
+        "mainReturnLine": 403,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 7,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              404,
+              494
+            ],
+            "testIds": [
+              "admin-user-360-drawer",
+              "admin-drawer-view-store-btn",
+              "admin-drawer-copy-store-url-btn",
+              "admin-360-support-readonly-btn"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              810,
+              813
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              548,
+              638
+            ],
+            "testIds": [
+              "admin-360-credit-note",
+              "admin-360-credit-submit",
+              "admin-360-acc-kiwify"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              684,
+              774
+            ],
+            "testIds": [
+              "admin-360-acc-limits",
+              "admin-360-tier-select",
+              "admin-360-limit-note"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/checkout/CheckoutPlansView.tsx": {
+      "cell": "access",
+      "lines": 908,
+      "testIds": [
+        "checkout-brand-logo",
+        "checkout-clear-ledger-filter",
+        "checkout-current-balance",
+        "checkout-ledger-panel",
+        "checkout-ledger-tooltip",
+        "checkout-projected-balance",
+        "checkout-tab-ledger",
+        "checkout-tab-plans",
+        "credits-telemetry-panel",
+        "kiwify-awaiting-confirmation",
+        "kiwify-checkout-primary-btn",
+        "kiwify-credits-confirmed"
+      ],
+      "children": [
+        "ActionButton",
+        "ArrowLeft",
+        "BarChart3",
+        "CheckCircle2",
+        "CreditDurationSimulator",
+        "CreditLedgerEntry",
+        "CreditPlan",
+        "ExternalLink",
+        "ReceiptText",
+        "RedeemCreditCodeCard",
+        "ShieldCheck",
+        "Sparkles",
+        "X",
+        "Zap"
+      ],
+      "hooks": [
+        "useDocumentDarkMode",
+        "useEffect",
+        "useMemo",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "CheckoutPlansView",
+        "mainReturnLine": 103,
+        "headerRange": [
+          344,
+          413
+        ],
+        "hasFontSerif": true,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 4,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              344,
+              434
+            ],
+            "testIds": [
+              "checkout-brand-logo",
+              "checkout-current-balance",
+              "checkout-tab-plans"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              323,
+              413
+            ],
+            "testIds": [
+              "checkout-brand-logo"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              517,
+              607
+            ],
+            "testIds": [
+              "checkout-clear-ledger-filter",
+              "checkout-ledger-tooltip"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              633,
+              723
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/checkout/CreditDurationSimulator.tsx": {
+      "cell": "access",
+      "lines": 193,
+      "testIds": [
+        "credit-duration-simulator",
+        "sim-storefronts-slider",
+        "sim-storefronts-value",
+        "sim-whatsapp-slider",
+        "sim-whatsapp-value",
+        "simulator-estimated-days",
+        "simulator-monthly-estimate",
+        "simulator-recommended-plan"
+      ],
+      "children": [
+        "Calculator",
+        "CheckCircle2",
+        "CreditCostsMap",
+        "Sparkles"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo"
+      ],
+      "visualProfile": {
+        "mainComponent": "CreditDurationSimulator",
+        "mainReturnLine": 46,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/views/onboarding/OnboardingIgnitionView.tsx": {
+      "cell": "onboarding",
+      "lines": 1780,
+      "testIds": [
+        "ignition-address-input",
+        "ignition-back-to-store-btn",
+        "ignition-clear-draft-btn",
+        "ignition-description-input",
+        "ignition-dropzone",
+        "ignition-dropzone-clear",
+        "ignition-dropzone-loaded",
+        "ignition-file-input",
+        "ignition-glm-finish-btn",
+        "ignition-glm-next-btn",
+        "ignition-glm-questions-stage",
+        "ignition-goal-input",
+        "ignition-instagram-fetch-btn",
+        "ignition-loading-bar-80",
+        "ignition-logo-input",
+        "ignition-logout-btn",
+        "ignition-paste-btn",
+        "ignition-pix-input",
+        "ignition-stage",
+        "ignition-store-input",
+        "ignition-storefront-photo-btn",
+        "ignition-storefront-photo-input",
+        "ignition-submit-btn",
+        "ignition-upload-logo-btn",
+        "ignition-upload-spreadsheet-btn",
+        "ignition-whatsapp-input",
+        "onboarding-ai-assist-btn",
+        "onboarding-step1-next",
+        "onboarding-step2-next"
+      ],
+      "children": [
+        "AnimatePresence",
+        "ArrowLeft",
+        "ArrowRight",
+        "AtSign",
+        "BriefQuestionsJson",
+        "Check",
+        "ClipboardPaste",
+        "FileSpreadsheet",
+        "HTMLInputElement",
+        "IgnitionNichePreset",
+        "IgnitionSubmissionPayload",
+        "ImagePlus",
+        "ImportedCatalogState",
+        "Loader2",
+        "LogOut",
+        "MapPin",
+        "PixKeyType",
+        "PreBuildPagesCartStep",
+        "PreBuildRecommendedPage",
+        "Record",
+        "Sparkles",
+        "Upload",
+        "X"
+      ],
+      "hooks": [
+        "useDraftAutoSave",
+        "useEffect",
+        "useMemo",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "OnboardingIgnitionView",
+        "mainReturnLine": 368,
+        "headerRange": [
+          921,
+          990
+        ],
+        "hasFontSerif": true,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              921,
+              1011
+            ],
+            "testIds": [
+              "ignition-back-to-store-btn",
+              "ignition-logout-btn",
+              "ignition-clear-draft-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              509,
+              599
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              673,
+              763
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              806,
+              896
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              982,
+              1072
+            ],
+            "testIds": [
+              "ignition-clear-draft-btn",
+              "ignition-file-input",
+              "ignition-logo-input",
+              "ignition-storefront-photo-input",
+              "ignition-store-input"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/onboarding/OnboardingModals.tsx": {
+      "cell": "onboarding",
+      "lines": 159,
+      "testIds": [],
+      "children": [
+        "ActionButton",
+        "HelpCircle",
+        "ModalContainer",
+        "OnboardingHelpTopic",
+        "Sparkles"
+      ],
+      "hooks": [],
+      "visualProfile": {
+        "mainComponent": "ContextualHelpModal",
+        "mainReturnLine": 113,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              114,
+              159
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              139,
+              159
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/onboarding/OnboardingSynthesisStage.tsx": {
+      "cell": "onboarding",
+      "lines": 628,
+      "testIds": [
+        "synthesis-back-btn",
+        "synthesis-error-banner",
+        "synthesis-micro-feed",
+        "synthesis-progress-bar",
+        "synthesis-progress-pct",
+        "synthesis-recharge-btn",
+        "synthesis-retry-btn",
+        "synthesis-stage"
+      ],
+      "children": [
+        "ActionButton",
+        "AlertCircle",
+        "Array",
+        "ArrowLeft",
+        "CatalogProduct",
+        "Check",
+        "CreditCard",
+        "Loader2",
+        "RefreshCw",
+        "StoreMoldeJobStage"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "OnboardingSynthesisStage",
+        "mainReturnLine": 146,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              273,
+              363
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              488,
+              578
+            ],
+            "testIds": [
+              "synthesis-error-banner",
+              "synthesis-recharge-btn",
+              "synthesis-retry-btn",
+              "synthesis-back-btn",
+              "synthesis-micro-feed"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              584,
+              628
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/onboarding/PreBuildPagesCartStep.tsx": {
+      "cell": "onboarding",
+      "lines": 304,
+      "testIds": [
+        "pre-build-pages-cart-step",
+        "prebuild-confirm-build-btn",
+        "prebuild-total-credits"
+      ],
+      "children": [
+        "ArrowLeft",
+        "ArrowRight",
+        "Check",
+        "Layers",
+        "LayoutGrid",
+        "Loader2",
+        "Plus",
+        "ShoppingCart",
+        "Sparkles",
+        "Trash2"
+      ],
+      "hooks": [
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "PreBuildPagesCartStep",
+        "mainReturnLine": 80,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              122,
+              212
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/orders/ImportOrdersSpreadsheetModal.tsx": {
+      "cell": "spreadsheet",
+      "lines": 572,
+      "testIds": [
+        "orders-confirm-import-btn",
+        "orders-download-sample-btn",
+        "orders-file-dropzone",
+        "orders-file-input",
+        "orders-import-invalid-badge",
+        "orders-import-modal",
+        "orders-import-summary",
+        "orders-paste-textarea"
+      ],
+      "children": [
+        "ActionButton",
+        "AlertCircle",
+        "CheckCircle2",
+        "Download",
+        "FileSpreadsheet",
+        "HTMLInputElement",
+        "ModalContainer",
+        "ParsedOrderRow",
+        "ParsedSpreadsheetSheet",
+        "Sparkles",
+        "Trash2",
+        "Upload"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useRef",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "ImportOrdersSpreadsheetModal",
+        "mainReturnLine": 189,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              190,
+              280
+            ],
+            "testIds": [
+              "orders-import-summary",
+              "orders-import-invalid-badge",
+              "orders-confirm-import-btn",
+              "orders-import-modal",
+              "orders-file-dropzone"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              569,
+              572
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              378,
+              468
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              529,
+              572
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/orders/ManualSaleModal.tsx": {
+      "cell": "orders",
+      "lines": 439,
+      "testIds": [
+        "manual-sale-submit"
+      ],
+      "children": [
+        "ActionButton",
+        "Check",
+        "Minus",
+        "ModalContainer",
+        "Plus",
+        "ShoppingBag",
+        "Tag"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "ManualSaleModal",
+        "mainReturnLine": 186,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              187,
+              277
+            ],
+            "testIds": [
+              "manual-sale-submit"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              436,
+              439
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/orders/OrderDetailsModal.tsx": {
+      "cell": "orders",
+      "lines": 439,
+      "testIds": [
+        "confirm-cancel-order-btn",
+        "order-details-print-btn",
+        "order-details-revert-paid",
+        "order-details-status-badge",
+        "order-details-whatsapp-btn"
+      ],
+      "children": [
+        "ActionButton",
+        "AlertTriangle",
+        "Clock",
+        "CreditCard",
+        "HTMLButtonElement",
+        "MapPin",
+        "MessageSquare",
+        "ModalContainer",
+        "Package",
+        "Printer",
+        "RotateCcw"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "OrderDetailsModal",
+        "mainReturnLine": 165,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              167,
+              257
+            ],
+            "testIds": [
+              "order-details-status-badge",
+              "order-details-print-btn",
+              "order-details-whatsapp-btn"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              388,
+              439
+            ],
+            "testIds": [
+              "confirm-cancel-order-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              332,
+              422
+            ],
+            "testIds": [
+              "confirm-cancel-order-btn"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/orders/OrderSpreadsheetCatalogModal.tsx": {
+      "cell": "spreadsheet",
+      "lines": 486,
+      "testIds": [
+        "download-cataloged-orders-xlsx-btn",
+        "kpi-balcao-manual",
+        "kpi-conversoes-d1",
+        "kpi-faturamento-liquido",
+        "kpi-total-pedidos",
+        "tela-27-xls-orders-modal"
+      ],
+      "children": [
+        "CatalogOrdersResponse",
+        "Download",
+        "FileSpreadsheet",
+        "RefreshCw",
+        "Sparkles",
+        "X"
+      ],
+      "hooks": [
+        "useCallback",
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "OrderSpreadsheetCatalogModal",
+        "mainReturnLine": 262,
+        "headerRange": [
+          295,
+          364
+        ],
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              295,
+              385
+            ],
+            "testIds": [
+              "kpi-total-pedidos",
+              "kpi-faturamento-liquido",
+              "kpi-conversoes-d1",
+              "kpi-balcao-manual"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/orders/OrdersKanbanView.tsx": {
+      "cell": "orders",
+      "lines": 1527,
+      "testIds": [
+        "crm-avg-ticket",
+        "crm-order-count",
+        "crm-resumo-panel",
+        "crm-total-revenue",
+        "dashboard-catalog-count",
+        "dashboard-sales-total",
+        "dashboard-t5-view",
+        "open-manual-sale-btn",
+        "open-tela-27-xls-orders",
+        "orders-ai-modify-btn",
+        "orders-ai-modify-input",
+        "orders-auto-notify-toggle",
+        "orders-dre-panel",
+        "orders-import-audit-banner",
+        "orders-import-spreadsheet-btn",
+        "orders-kanban-board",
+        "orders-kanban-view",
+        "orders-optimistic-error-card",
+        "orders-subtab-crm",
+        "orders-subtab-kanban",
+        "orders-undo-import-btn",
+        "tela-39-d1-radar"
+      ],
+      "children": [
+        "ActionButton",
+        "BackendOrderStatus",
+        "BusinessOrder",
+        "CheckCircle2",
+        "Copy",
+        "D1FunnelMetrics",
+        "DashboardMetricsProjection",
+        "DashboardPeriodDays",
+        "EmptyStateCard",
+        "Eye",
+        "FileSpreadsheet",
+        "HumanErrorCard",
+        "ImportOrdersSpreadsheetModal",
+        "Loader2",
+        "ManualSaleModal",
+        "MessageCircle",
+        "MousePointerClick",
+        "OrderDetailsModal",
+        "OrderSpreadsheetCatalogModal",
+        "Partial",
+        "PlusCircle",
+        "Record",
+        "RefreshCw",
+        "Search",
+        "Set",
+        "SkeletonTableRows",
+        "Sparkles",
+        "Suspense",
+        "Undo2",
+        "Upload",
+        "Users",
+        "X"
+      ],
+      "hooks": [
+        "useCallback",
+        "useEffect",
+        "useMemo",
+        "useRef",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "OrdersKanbanView",
+        "mainReturnLine": 405,
+        "headerRange": [
+          683,
+          752
+        ],
+        "hasFontSerif": true,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              683,
+              773
+            ],
+            "testIds": [
+              "dashboard-sales-total",
+              "dashboard-catalog-count",
+              "orders-import-spreadsheet-btn",
+              "open-tela-27-xls-orders",
+              "open-manual-sale-btn",
+              "orders-import-audit-banner"
+            ]
+          },
+          {
+            "kind": "header",
+            "range": [
+              1347,
+              1437
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "nav_tabs",
+            "range": [
+              863,
+              953
+            ],
+            "testIds": [
+              "orders-subtab-kanban",
+              "orders-subtab-crm",
+              "orders-auto-notify-toggle",
+              "orders-ai-modify-input",
+              "orders-ai-modify-btn"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              731,
+              821
+            ],
+            "testIds": [
+              "open-tela-27-xls-orders",
+              "open-manual-sale-btn",
+              "orders-import-audit-banner",
+              "orders-undo-import-btn",
+              "tela-39-d1-radar"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1471,
+              1527
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              598,
+              688
+            ],
+            "testIds": [
+              "orders-kanban-view",
+              "dashboard-t5-view"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/settings/RedeemCreditCodeCard.tsx": {
+      "cell": "core",
+      "lines": 217,
+      "testIds": [
+        "redeem-code-error",
+        "redeem-code-input",
+        "redeem-code-submit",
+        "redeem-code-success",
+        "redeem-credit-code-card",
+        "redeem-quota-badge"
+      ],
+      "children": [
+        "ActionButton",
+        "AlertCircle",
+        "CheckCircle2",
+        "Gift",
+        "Sparkles"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "RedeemCreditCodeCard",
+        "mainReturnLine": 61,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/views/settings/SettingsView.tsx": {
+      "cell": "core",
+      "lines": 2166,
+      "testIds": [
+        "settings-account-top-bar",
+        "settings-copy-diagnostic-btn",
+        "settings-export-backup-zip-btn",
+        "settings-low-spec-section",
+        "settings-mobile-alerts-card",
+        "settings-open-checkout-btn",
+        "settings-open-reset-btn",
+        "settings-open-support-ticket-btn",
+        "settings-panel-backup",
+        "settings-panel-credits",
+        "settings-panel-desktop",
+        "settings-restore-backup-zip-btn",
+        "settings-restore-error-alert",
+        "settings-restore-file-input",
+        "settings-save-desktop-prefs-btn",
+        "settings-test-mobile-alarm-btn",
+        "settings-testar-oi-btn",
+        "settings-top-logout-btn",
+        "settings-top-plans-btn",
+        "settings-view"
+      ],
+      "children": [
+        "ActionButton",
+        "AlertTriangle",
+        "ArchiveRestore",
+        "Check",
+        "ChevronDown",
+        "Copy",
+        "CreditCard",
+        "Download",
+        "Eye",
+        "EyeOff",
+        "HTMLButtonElement",
+        "HTMLFormElement",
+        "HTMLInputElement",
+        "HelpCategory",
+        "HelpCircle",
+        "HumanErrorCard",
+        "Icon",
+        "KeyRound",
+        "LifeBuoy",
+        "LogOut",
+        "LowSpecPreference",
+        "MapPin",
+        "MessageSquare",
+        "ModalContainer",
+        "Monitor",
+        "Record",
+        "RedeemCreditCodeCard",
+        "RotateCcw",
+        "Save",
+        "Search",
+        "ShieldCheck",
+        "Sparkles",
+        "Store",
+        "SupportTicketModal",
+        "Truck",
+        "Upload",
+        "Wifi",
+        "WifiOff"
+      ],
+      "hooks": [
+        "useConnectionPhaseInfo",
+        "useEffect",
+        "useMemo",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "SettingsView",
+        "mainReturnLine": 458,
+        "headerRange": [
+          774,
+          843
+        ],
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 2,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              774,
+              864
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "nav_tabs",
+            "range": [
+              791,
+              881
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              541,
+              631
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              764,
+              854
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1607,
+              1697
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1729,
+              1819
+            ],
+            "testIds": [
+              "settings-open-support-ticket-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              488,
+              578
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              802,
+              892
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              921,
+              1011
+            ],
+            "testIds": [
+              "settings-testar-oi-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1164,
+              1254
+            ],
+            "testIds": [
+              "settings-panel-desktop"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/AtomicSectionRenderers.tsx": {
+      "cell": "storefront",
+      "lines": 3155,
+      "testIds": [
+        "v9-atomic-catalog-grid",
+        "v9-neutral-gray-thumb"
+      ],
+      "children": [
+        "ArrowRight",
+        "BlackFridayFinePrintBand",
+        "BlackFridayMassiveHero",
+        "BundleBuilderCalculator",
+        "CalendarDeliverySlotsBand",
+        "Check",
+        "CheckpointJourneyStrip",
+        "ChristmasKnitHeroStage",
+        "ClinicEditorialHeroAndStrip",
+        "ClinicSpecialistsDeck",
+        "Clock",
+        "CornerSparksSvg",
+        "DomainWorkbenchSection",
+        "FlipCountdownMatrix",
+        "Gift",
+        "HTMLCanvasElement",
+        "HTMLDivElement",
+        "HeroCtaCluster",
+        "IconComp",
+        "InteractiveImageTextStage",
+        "InteractiveSymptomOrNeedMap",
+        "InteractiveTearCouponBib",
+        "LazyMotion",
+        "MapPin",
+        "MessageCircle",
+        "Minus",
+        "NumberedEditorialPricingTiers",
+        "PaperGrainOverlay",
+        "Plus",
+        "React",
+        "Record",
+        "RecoveryCaseScoreboard",
+        "SafeCatalogImage",
+        "Search",
+        "SectionHeadingOrnament",
+        "ShoppingBag",
+        "SlantedStampAndFeatureSplit",
+        "Sparkles",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useRef",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "AtomicSectionRenderer",
+        "mainReturnLine": 1180,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 5,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1355,
+              1445
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1464,
+              1554
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1643,
+              1733
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1832,
+              1922
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/BatchImageSearchModal.tsx": {
+      "cell": "storefront",
+      "lines": 539,
+      "testIds": [
+        "batch-search-apply-btn",
+        "batch-search-start-btn"
+      ],
+      "children": [
+        "ActionButton",
+        "BatchImageItemResult",
+        "CheckCheck",
+        "ImageIcon",
+        "Maximize2",
+        "ProductImageDetailModal",
+        "RefreshCw",
+        "Search",
+        "Sparkles",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useRef",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "BatchImageSearchModal",
+        "mainReturnLine": 304,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              528,
+              539
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              358,
+              448
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              457,
+              539
+            ],
+            "testIds": [
+              "batch-search-apply-btn"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/CatalogGuardModals.tsx": {
+      "cell": "storefront",
+      "lines": 66,
+      "testIds": [],
+      "children": [
+        "ActionButton",
+        "AlertTriangle",
+        "HTMLButtonElement",
+        "ModalContainer"
+      ],
+      "hooks": [],
+      "visualProfile": {
+        "mainComponent": "DiscardChangesModal",
+        "mainReturnLine": 18,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              19,
+              66
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/CustomerStorefrontView.tsx": {
+      "cell": "storefront",
+      "lines": 1603,
+      "testIds": [
+        "cart-checkout-error-card",
+        "cart-coupon-apply-btn",
+        "cart-coupon-discount-row",
+        "cart-coupon-error",
+        "cart-coupon-input",
+        "cart-coupon-toggle",
+        "cart-free-shipping-badge",
+        "cart-grand-total",
+        "cart-pix-discount-row",
+        "checkout-wa-direct-link",
+        "floating-ai-inspector-btn",
+        "open-ai-inspector-btn",
+        "open-expansion-modal-btn",
+        "open-whatsapp-flows-btn",
+        "owner-preview-copy-link",
+        "owner-preview-open-orders-btn",
+        "owner-preview-simulate-order-btn",
+        "owner-preview-simulated-badge",
+        "page-switch-home",
+        "preview-viewport-desktop",
+        "preview-viewport-mobile",
+        "store-pages-switcher-strip",
+        "storefront-floating-bag-bar",
+        "storefront-owner-preview-bar",
+        "storefront-wa-direct-banner",
+        "storefront-wa-direct-link",
+        "tela-40-v5-storefront"
+      ],
+      "children": [
+        "ActionButton",
+        "AlertTriangle",
+        "ArrowLeft",
+        "CatalogProduct",
+        "Check",
+        "Copy",
+        "DrawerContainer",
+        "EmptyStateCard",
+        "FormulaTreeRenderer",
+        "FormulaV9Document",
+        "HTMLElement",
+        "MessageCircle",
+        "Minus",
+        "ModalContainer",
+        "Plus",
+        "Record",
+        "Send",
+        "ShoppingBag",
+        "StoreCartItem",
+        "StoreCoupon",
+        "StorePagesExpansionModal",
+        "StorefrontAiInspector",
+        "StorefrontPostGenWhatsappModal",
+        "Tag",
+        "Trash2",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useRef",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "CustomerStorefrontView",
+        "mainReturnLine": 212,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 2,
+        "drawerCount": 2,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              216,
+              306
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              833,
+              923
+            ],
+            "testIds": [
+              "open-expansion-modal-btn",
+              "open-ai-inspector-btn",
+              "owner-preview-simulated-badge",
+              "owner-preview-open-orders-btn",
+              "storefront-wa-direct-banner",
+              "storefront-wa-direct-link"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              967,
+              1057
+            ],
+            "testIds": [
+              "storefront-floating-bag-bar"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1141,
+              1231
+            ],
+            "testIds": [
+              "cart-free-shipping-badge",
+              "cart-coupon-discount-row",
+              "cart-pix-discount-row",
+              "cart-checkout-error-card",
+              "cart-grand-total"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              282,
+              372
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              477,
+              567
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              593,
+              683
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              947,
+              1037
+            ],
+            "testIds": [
+              "storefront-floating-bag-bar"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/DynamicBriefQuestionsModal.tsx": {
+      "cell": "storefront",
+      "lines": 332,
+      "testIds": [
+        "brief-confirm-release-btn",
+        "brief-next-btn",
+        "brief-source-badge",
+        "dynamic-brief-questions-modal"
+      ],
+      "children": [
+        "AnimatePresence",
+        "ArrowLeft",
+        "ArrowRight",
+        "Check",
+        "LazyMotion",
+        "Record",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "DynamicBriefQuestionsModal",
+        "mainReturnLine": 113,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              180,
+              270
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/EditorialStoreControlView.tsx": {
+      "cell": "storefront",
+      "lines": 1322,
+      "testIds": [
+        "dock-filter-toggle",
+        "dock-library-btn",
+        "dock-new-product-btn",
+        "dock-search-trigger",
+        "editorial-add-page-btn",
+        "editorial-bottom-dock",
+        "editorial-clear-query-btn",
+        "editorial-cmd-dialog",
+        "editorial-cmd-input",
+        "editorial-cmd-list",
+        "editorial-download-zip-btn",
+        "editorial-empty-grid",
+        "editorial-hero-cta",
+        "editorial-hero-strip",
+        "editorial-metric-cliques",
+        "editorial-metric-pedidos",
+        "editorial-metric-visitas",
+        "editorial-multipage-control-panel",
+        "editorial-open-library-btn",
+        "editorial-post-onboarding-suggestions",
+        "editorial-product-grid",
+        "editorial-simulate-order-btn",
+        "editorial-store-status",
+        "editorial-store-title",
+        "editorial-store-title-input",
+        "store-editorial-view"
+      ],
+      "children": [
+        "AnimatePresence",
+        "CatalogProduct",
+        "Download",
+        "EditorialCatalogFilter",
+        "FloatingTopPill",
+        "FolderOpen",
+        "HTMLInputElement",
+        "Icon",
+        "ImagePlus",
+        "ListFilter",
+        "Loader2",
+        "MyLibraryDockModal",
+        "PaletteCommandOption",
+        "Plus",
+        "ProductEditorDrawer",
+        "React",
+        "Search",
+        "ShoppingBag",
+        "Sparkles",
+        "StorePagesExpansionModal",
+        "UniversalCatalogXlsxModal",
+        "X"
+      ],
+      "hooks": [
+        "useCallback",
+        "useEffect",
+        "useMemo",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "EditorialStoreControlView",
+        "mainReturnLine": 252,
+        "headerRange": [
+          646,
+          715
+        ],
+        "hasFontSerif": true,
+        "hasEditorialCanvas": true,
+        "gradientLines": [
+          996,
+          1002
+        ],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 4,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              646,
+              736
+            ],
+            "testIds": [
+              "editorial-hero-strip",
+              "editorial-store-title-input",
+              "editorial-store-title",
+              "editorial-store-status",
+              "editorial-metric-visitas",
+              "editorial-metric-cliques",
+              "editorial-metric-pedidos"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              414,
+              504
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              862,
+              952
+            ],
+            "testIds": [
+              "editorial-simulate-order-btn",
+              "editorial-open-library-btn",
+              "editorial-clear-query-btn",
+              "editorial-empty-grid",
+              "editorial-product-grid"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1116,
+              1206
+            ],
+            "testIds": [
+              "editorial-cmd-input",
+              "editorial-cmd-list"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1253,
+              1322
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              284,
+              374
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              815,
+              905
+            ],
+            "testIds": [
+              "editorial-multipage-control-panel",
+              "editorial-add-page-btn",
+              "editorial-simulate-order-btn",
+              "editorial-open-library-btn",
+              "editorial-clear-query-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              950,
+              1040
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1159,
+              1249
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/FormulaTreeRenderer.tsx": {
+      "cell": "storefront",
+      "lines": 2163,
+      "testIds": [
+        "closing-daily-schedule-grid",
+        "quiz-next-step-btn",
+        "quiz-reveal-btn",
+        "v9-atomic-blueprint-root",
+        "v9-catalog-category-chips",
+        "v9-catalog-grid",
+        "v9-catalog-search-photos-btn",
+        "v9-complementary-bundles",
+        "v9-contextual-faq",
+        "v9-exp-primary-btn",
+        "v9-exp-secondary-btn",
+        "v9-exp-summary-lines",
+        "v9-exp-total",
+        "v9-header-bag-btn",
+        "v9-hero-bento-collage",
+        "v9-hero-primary-cta",
+        "v9-interactive-experience",
+        "v9-neutral-gray-thumb",
+        "v9-quiz-recommended-card"
+      ],
+      "children": [
+        "AtomicSectionRenderer",
+        "Check",
+        "ChevronDown",
+        "ComplementaryBundlesBlock",
+        "ContextualFaqBlock",
+        "IconComp",
+        "ImagePlus",
+        "InteractiveExperienceBlock",
+        "MessageCircle",
+        "Record",
+        "SafeCatalogImage",
+        "Search",
+        "SectionNode",
+        "ShoppingBag"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "FormulaTreeRenderer",
+        "mainReturnLine": 813,
+        "headerRange": [
+          988,
+          1057
+        ],
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [
+          1128
+        ],
+        "blurCount": 0,
+        "heavyShadowCount": 2,
+        "drawerCount": 1,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              988,
+              1078
+            ],
+            "testIds": [
+              "v9-header-bag-btn"
+            ]
+          },
+          {
+            "kind": "nav_tabs",
+            "range": [
+              1022,
+              1112
+            ],
+            "testIds": [
+              "v9-header-bag-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              821,
+              911
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              968,
+              1058
+            ],
+            "testIds": [
+              "v9-header-bag-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1260,
+              1350
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1422,
+              1512
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/LazyReferencePacks.tsx": {
+      "cell": "storefront",
+      "lines": 31,
+      "testIds": [],
+      "children": [
+        "K",
+        "LazyComp",
+        "Suspense"
+      ],
+      "hooks": [],
+      "visualProfile": {
+        "mainComponent": null,
+        "mainReturnLine": null,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/views/storefront/MyLibraryDockModal.tsx": {
+      "cell": "storefront",
+      "lines": 188,
+      "testIds": [
+        "my-library-modal"
+      ],
+      "children": [
+        "ActionButton",
+        "FileSpreadsheet",
+        "FolderOpen",
+        "ImageIcon",
+        "LibraryItem",
+        "ModalContainer",
+        "Sparkles",
+        "Trash2"
+      ],
+      "hooks": [
+        "useMemo",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "MyLibraryDockModal",
+        "mainReturnLine": 93,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              94,
+              184
+            ],
+            "testIds": [
+              "my-library-modal"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              111,
+              188
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/ProductEditorDrawer.tsx": {
+      "cell": "storefront",
+      "lines": 915,
+      "testIds": [
+        "drawer-focal-point-box",
+        "drawer-focal-point-reticle",
+        "drawer-low-res-warning",
+        "drawer-photo-file-input",
+        "drawer-upload-photo-btn",
+        "product-low-stock-input"
+      ],
+      "children": [
+        "ActionButton",
+        "AlertTriangle",
+        "Check",
+        "DiscardChangesModal",
+        "DrawerContainer",
+        "HTMLInputElement",
+        "ImagePlus",
+        "ProductFormState",
+        "Search",
+        "Sparkles",
+        "Upload",
+        "WebAsset"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "ProductEditorDrawer",
+        "mainReturnLine": 398,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 1,
+        "drawerCount": 9,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              400,
+              490
+            ],
+            "testIds": [
+              "drawer-focal-point-box"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              902,
+              915
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              577,
+              667
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              730,
+              820
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              843,
+              915
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/ProductImageDetailModal.tsx": {
+      "cell": "storefront",
+      "lines": 238,
+      "testIds": [
+        "image-detail-confirm-official",
+        "image-detail-zoom-in",
+        "product-image-detail-modal"
+      ],
+      "children": [
+        "ActionButton",
+        "CheckCircle2",
+        "ExternalLink",
+        "Globe",
+        "RotateCcw",
+        "X",
+        "ZoomIn",
+        "ZoomOut"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "ProductImageDetailModal",
+        "mainReturnLine": 93,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 3,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/views/storefront/ReferenceComponentsPack.tsx": {
+      "cell": "storefront",
+      "lines": 2323,
+      "testIds": [],
+      "children": [
+        "ArrowRight",
+        "CalendarCheck2",
+        "Check",
+        "FlipCountdownMatrix",
+        "HTMLDivElement",
+        "InteractiveTearCouponBib",
+        "MapPin",
+        "MessageCircle",
+        "Plus",
+        "React",
+        "ShieldCheck",
+        "Sparkles",
+        "Ticket"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "CalendarDeliverySlotsBand",
+        "mainReturnLine": 2275,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 1,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              2289,
+              2323
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/StorePagesExpansionModal.tsx": {
+      "cell": "storefront",
+      "lines": 386,
+      "testIds": [
+        "expansion-402-banner",
+        "expansion-continue-btn",
+        "expansion-generate-btn",
+        "modal-credit-balance-pill",
+        "store-pages-expansion-modal"
+      ],
+      "children": [
+        "AnimatePresence",
+        "ArrowLeft",
+        "ArrowRight",
+        "BriefQuestionsJson",
+        "Check",
+        "DynamicBriefQuestionsModal",
+        "LazyMotion",
+        "RecommendedPageOption",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useMemo",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "StorePagesExpansionModal",
+        "mainReturnLine": 169,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              374,
+              386
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              236,
+              326
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/StorefrontAiInspector.tsx": {
+      "cell": "storefront",
+      "lines": 2131,
+      "testIds": [
+        "ai-add-hotspot-btn",
+        "ai-group-mode-only-selected",
+        "ai-group-mode-prioritize",
+        "ai-hotspot-desc-input",
+        "ai-hotspot-headline-input",
+        "ai-hotspot-label-input",
+        "ai-inspector-apply-btn",
+        "ai-inspector-apply-group-btn",
+        "ai-inspector-apply-image-btn",
+        "ai-inspector-balance-pill",
+        "ai-inspector-breadcrumb",
+        "ai-inspector-delete-btn",
+        "ai-inspector-flip-side-btn",
+        "ai-inspector-image-file-input",
+        "ai-inspector-image-prompt-input",
+        "ai-inspector-image-url-input",
+        "ai-inspector-panel",
+        "ai-inspector-prompt-input",
+        "ai-inspector-prop-text-btn",
+        "ai-inspector-prop-text-input",
+        "ai-inspector-selected-card",
+        "ai-inspector-step-up-btn",
+        "ai-inspector-toggle-btn",
+        "ai-inspector-undo-btn",
+        "atomic-sec-${selected.id}"
+      ],
+      "children": [
+        "AnimatePresence",
+        "ArrowDown",
+        "ArrowUUpLeft",
+        "ArrowUp",
+        "Check",
+        "Crosshair",
+        "EyeSlash",
+        "FormulaV9Document",
+        "HTMLElement",
+        "HTMLInputElement",
+        "Icon",
+        "InspectorTab",
+        "LazyMotion",
+        "NodeStylesConfig",
+        "React",
+        "Record",
+        "Sparkle",
+        "TargetRect",
+        "Trash",
+        "UploadSimple",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "StorefrontAiInspector",
+        "mainReturnLine": 499,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [
+          1228
+        ],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              694,
+              784
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              802,
+              892
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              897,
+              987
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1071,
+              1161
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/StorefrontPostGenWhatsappModal.tsx": {
+      "cell": "whatsapp",
+      "lines": 31,
+      "testIds": [],
+      "children": [
+        "BusinessProfile",
+        "WhatsappFlowCenterModal"
+      ],
+      "hooks": [],
+      "visualProfile": {
+        "mainComponent": "StorefrontPostGenWhatsappModal",
+        "mainReturnLine": 22,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              23,
+              31
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/UniversalCatalogXlsxModal.tsx": {
+      "cell": "spreadsheet",
+      "lines": 658,
+      "testIds": [
+        "import-standardized-products-btn",
+        "load-complex-xlsx-sample-btn",
+        "tela-08-xls-universal-modal",
+        "xlsx-catalog-upload-input"
+      ],
+      "children": [
+        "ArrowRight",
+        "CheckCircle2",
+        "Download",
+        "FileSpreadsheet",
+        "HTMLInputElement",
+        "Sparkles",
+        "TransformCatalogResponse",
+        "Upload",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "UniversalCatalogXlsxModal",
+        "mainReturnLine": 324,
+        "headerRange": [
+          457,
+          526
+        ],
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              457,
+              547
+            ],
+            "testIds": [
+              "xlsx-catalog-upload-input",
+              "load-complex-xlsx-sample-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              612,
+              658
+            ],
+            "testIds": [
+              "import-standardized-products-btn"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/storefront/VirtualTupleHarness.tsx": {
+      "cell": "storefront",
+      "lines": 242,
+      "testIds": [
+        "virtual-harness-banner",
+        "virtual-harness-stage",
+        "virtual-tuple-harness-root"
+      ],
+      "children": [
+        "AtomicSectionRenderer",
+        "Record",
+        "VirtualHarnessPayload"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "VirtualTupleHarness",
+        "mainReturnLine": 186,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              218,
+              242
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/studio/ArchetypeComposerView.tsx": {
+      "cell": "core",
+      "lines": 1932,
+      "testIds": [
+        "editor-402-open-plans-btn",
+        "editor-ai-command-input",
+        "editor-ai-command-submit",
+        "editor-canvas-dropzone",
+        "editor-confirm-create-page-btn",
+        "editor-create-page-btn",
+        "editor-credit-balance-badge",
+        "editor-critic-dismiss-btn",
+        "editor-design-critic-bar",
+        "editor-diff-entry",
+        "editor-diff-modal-body",
+        "editor-diff-pill",
+        "editor-export-zip-btn",
+        "editor-http-402-banner",
+        "editor-manual-subtitle-input",
+        "editor-manual-title-input",
+        "editor-media-popover",
+        "editor-new-page-panel",
+        "editor-new-page-prompt-input",
+        "editor-new-page-title-input",
+        "editor-open-media-popover-btn",
+        "editor-page-selector",
+        "editor-patch-error-card",
+        "editor-redo-btn",
+        "editor-save-plan-btn",
+        "editor-undo-btn",
+        "editor-viewport-desktop",
+        "editor-viewport-mobile",
+        "editor-wcag-fix-btn",
+        "editor-wcag-warning-banner",
+        "media-popover-edit-qwen-btn",
+        "media-popover-file-input",
+        "media-popover-generate-hero-btn",
+        "media-popover-generate-schnell-btn",
+        "media-popover-prompt-input",
+        "media-popover-search-btn",
+        "media-popover-upload-btn",
+        "tela-34-archetype-composer"
+      ],
+      "children": [
+        "ActionButton",
+        "AlertCircle",
+        "AlertTriangle",
+        "ArchetypeComposerViewProps",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowUp",
+        "BatchImageSearchModal",
+        "CatalogProduct",
+        "Check",
+        "CreditCostPreview",
+        "CriticTipItem",
+        "DndContext",
+        "Download",
+        "DraggableLibraryCard",
+        "DroppableCanvasFrame",
+        "FilePlus2",
+        "FormulaTreeRenderer",
+        "FormulaV9Document",
+        "GitCompareArrows",
+        "GripVertical",
+        "HumanErrorCard",
+        "ImageIcon",
+        "Layers",
+        "Lightbulb",
+        "ModalContainer",
+        "Monitor",
+        "Palette",
+        "Plus",
+        "Redo2",
+        "Search",
+        "SectionNode",
+        "Smartphone",
+        "Sparkles",
+        "Trash2",
+        "Undo2",
+        "Upload",
+        "Wand2",
+        "X"
+      ],
+      "hooks": [
+        "useDraggable",
+        "useDroppable",
+        "useEffect",
+        "useFormulaUndoHistory",
+        "useMemo",
+        "useRef",
+        "useSensor",
+        "useSensors",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": null,
+        "mainReturnLine": 199,
+        "headerRange": [
+          1083,
+          1152
+        ],
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 2,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              1083,
+              1173
+            ],
+            "testIds": [
+              "editor-page-selector",
+              "editor-create-page-btn",
+              "editor-undo-btn",
+              "editor-redo-btn",
+              "editor-viewport-desktop",
+              "editor-viewport-mobile"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              389,
+              479
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              656,
+              746
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1068,
+              1158
+            ],
+            "testIds": [
+              "tela-34-archetype-composer",
+              "editor-page-selector",
+              "editor-create-page-btn",
+              "editor-undo-btn",
+              "editor-redo-btn",
+              "editor-viewport-desktop"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1186,
+              1276
+            ],
+            "testIds": [
+              "editor-credit-balance-badge",
+              "editor-export-zip-btn",
+              "editor-save-plan-btn",
+              "editor-wcag-warning-banner",
+              "editor-wcag-fix-btn",
+              "editor-http-402-banner"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              543,
+              633
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              911,
+              1001
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1105,
+              1195
+            ],
+            "testIds": [
+              "editor-create-page-btn",
+              "editor-undo-btn",
+              "editor-redo-btn",
+              "editor-viewport-desktop",
+              "editor-viewport-mobile",
+              "editor-diff-pill"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1363,
+              1453
+            ],
+            "testIds": [
+              "editor-ai-command-input",
+              "editor-ai-command-submit",
+              "editor-patch-error-card"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/studio/CreditCostPreview.tsx": {
+      "cell": "core",
+      "lines": 62,
+      "testIds": [
+        "credit-cost-preview",
+        "credit-cost-preview-free",
+        "credit-cost-recharge-link"
+      ],
+      "children": [
+        "AlertCircle",
+        "CreditCostPreviewProps",
+        "Sparkles"
+      ],
+      "hooks": [],
+      "visualProfile": {
+        "mainComponent": null,
+        "mainReturnLine": 21,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/views/whatsapp/DisconnectConfirmModal.tsx": {
+      "cell": "whatsapp",
+      "lines": 124,
+      "testIds": [],
+      "children": [
+        "ActionButton",
+        "HTMLButtonElement",
+        "ModalContainer",
+        "Unplug"
+      ],
+      "hooks": [
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "DisconnectConfirmModal",
+        "mainReturnLine": 75,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              76,
+              124
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/whatsapp/QuickRepliesSection.tsx": {
+      "cell": "whatsapp",
+      "lines": 772,
+      "testIds": [],
+      "children": [
+        "ActionButton",
+        "BusinessProfile",
+        "Check",
+        "Copy",
+        "EmptyStateCard",
+        "HTMLTextAreaElement",
+        "MessageSquareText",
+        "ModalContainer",
+        "NormalizedQuickReply",
+        "Pencil",
+        "Plus",
+        "QuickReplyTemplate",
+        "ReturnType",
+        "Search",
+        "SkeletonBlock",
+        "Trash2",
+        "WhatsappMessageFlowsPanel"
+      ],
+      "hooks": [
+        "useCallback",
+        "useEffect",
+        "useMemo",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "QuickRepliesSection",
+        "mainReturnLine": 264,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              655,
+              745
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              768,
+              772
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              276,
+              366
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/whatsapp/WhatsAppConnectionView.tsx": {
+      "cell": "whatsapp",
+      "lines": 1984,
+      "testIds": [
+        "recheck-wpp-ai-connection",
+        "save-wpp-ai-instructions",
+        "upload-wpp-ai-file-btn",
+        "wpp-ai-brain-collapse-btn",
+        "wpp-ai-connection-pill",
+        "wpp-ai-single-prompt",
+        "wpp-antiban-preqr-checks",
+        "wpp-auto-repair-btn",
+        "wpp-autonomy-accordion-panel",
+        "wpp-autonomy-accordion-toggle",
+        "wpp-channel-section",
+        "wpp-conciseness-bar",
+        "wpp-desktop-live-responder-status",
+        "wpp-docs-drawer-panel",
+        "wpp-drawer-docs-btn",
+        "wpp-drawer-human-queue-btn",
+        "wpp-drawer-quick-replies-btn",
+        "wpp-fullscreen-toggle-btn",
+        "wpp-human-queue-drawer-panel",
+        "wpp-mode-real-btn",
+        "wpp-mode-simulator-btn",
+        "wpp-quick-replies-drawer-panel",
+        "wpp-real-preview-frame",
+        "wpp-refresh-queue-btn",
+        "wpp-resume-ai-btn",
+        "wpp-safe-test-amber-banner",
+        "wpp-safe-test-mode-toggle",
+        "wpp-sim-audio-btn",
+        "wpp-sim-audio-fallback",
+        "wpp-sim-audio-invalid-btn",
+        "wpp-sim-audio-transcript",
+        "wpp-sim-media-card",
+        "wpp-sim-order-badge",
+        "wpp-sim-retest-btn",
+        "wpp-sim-scenario-address",
+        "wpp-sim-scenario-pix",
+        "wpp-sim-shield-badge",
+        "wpp-sim-sku-default",
+        "wpp-sofia-live-tester",
+        "wpp-sofia-test-input",
+        "wpp-sofia-test-output",
+        "wpp-sofia-test-send",
+        "wpp-sound-mute-toggle",
+        "wpp-turn-off-safe-mode-btn"
+      ],
+      "children": [
+        "ActionButton",
+        "Bot",
+        "CheckCircle2",
+        "ChevronDown",
+        "DisconnectConfirmModal",
+        "FileText",
+        "FolderClosed",
+        "HTMLDivElement",
+        "HTMLInputElement",
+        "LocalKnowledgeFile",
+        "Maximize2",
+        "Mic",
+        "Minimize2",
+        "Paperclip",
+        "QuickRepliesSection",
+        "RealWhatsAppWeb",
+        "RefreshCw",
+        "RotateCcw",
+        "Save",
+        "ShieldCheck",
+        "SkeletonBlock",
+        "Sparkles",
+        "Trash2",
+        "Undo2",
+        "Unplug",
+        "UserCheck",
+        "Users",
+        "Volume2",
+        "VolumeX",
+        "WhatsappDadosResponse",
+        "WhatsappRuntimeStatus",
+        "Wifi",
+        "WifiOff",
+        "Wrench",
+        "Zap"
+      ],
+      "hooks": [
+        "useCallback",
+        "useConnectionPhaseInfo",
+        "useEffect",
+        "useMemo",
+        "useRef",
+        "useState",
+        "useToast",
+        "useWebviewWhatsappResponder"
+      ],
+      "visualProfile": {
+        "mainComponent": "WhatsAppConnectionView",
+        "mainReturnLine": 212,
+        "headerRange": [
+          965,
+          1034
+        ],
+        "hasFontSerif": false,
+        "hasEditorialCanvas": true,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 1,
+        "drawerCount": 36,
+        "regions": [
+          {
+            "kind": "header",
+            "range": [
+              965,
+              1055
+            ],
+            "testIds": [
+              "wpp-ai-connection-pill",
+              "wpp-sound-mute-toggle"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              811,
+              901
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1043,
+              1133
+            ],
+            "testIds": [
+              "wpp-drawer-human-queue-btn",
+              "wpp-drawer-quick-replies-btn",
+              "wpp-drawer-docs-btn",
+              "wpp-human-queue-drawer-panel"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1146,
+              1236
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              1280,
+              1370
+            ],
+            "testIds": [
+              "wpp-quick-replies-drawer-panel",
+              "wpp-docs-drawer-panel",
+              "upload-wpp-ai-file-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              345,
+              435
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1161,
+              1251
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1363,
+              1453
+            ],
+            "testIds": [
+              "wpp-ai-brain-collapse-btn",
+              "wpp-safe-test-mode-toggle"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              1559,
+              1649
+            ],
+            "testIds": [
+              "wpp-channel-section",
+              "wpp-mode-simulator-btn",
+              "wpp-mode-real-btn",
+              "wpp-auto-repair-btn",
+              "wpp-fullscreen-toggle-btn"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/whatsapp/WhatsappFakeChatSimulator.tsx": {
+      "cell": "whatsapp",
+      "lines": 301,
+      "testIds": [
+        "fake-chat-approve-flow-btn",
+        "fake-chat-bubble-customer",
+        "fake-chat-bubble-sofia-0",
+        "fake-chat-bubble-sofia-1",
+        "fake-chat-instant-btn",
+        "fake-chat-restart-btn",
+        "fake-chat-typing-indicator",
+        "wpp-fake-chat-simulator"
+      ],
+      "children": [
+        "ArrowCounterClockwise",
+        "ArrowLeft",
+        "Check",
+        "CheckFat",
+        "DotsThreeVertical",
+        "PaperPlaneRight",
+        "Phone",
+        "Play",
+        "Smiley",
+        "VideoCamera"
+      ],
+      "hooks": [
+        "useEffect"
+      ],
+      "visualProfile": {
+        "mainComponent": "WhatsappFakeChatSimulator",
+        "mainReturnLine": 69,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": []
+      }
+    },
+    "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx": {
+      "cell": "whatsapp",
+      "lines": 588,
+      "testIds": [
+        "center-flow-done-btn",
+        "close-center-flow-modal-btn",
+        "save-new-center-rule-btn",
+        "tab-center-create",
+        "tab-center-map",
+        "tab-center-simulator",
+        "whatsapp-flow-center-modal"
+      ],
+      "children": [
+        "AnimatePresence",
+        "BusinessProfile",
+        "ChatCircleDots",
+        "CheckCircle",
+        "DeviceMobile",
+        "FlowArrow",
+        "PencilSimple",
+        "Play",
+        "Plus",
+        "Sparkle",
+        "WhatsappFakeChatSimulator",
+        "WhatsappMessageFlow",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "WhatsappFlowCenterModal",
+        "mainReturnLine": 71,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 1,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              181,
+              271
+            ],
+            "testIds": [
+              "tab-center-simulator",
+              "tab-center-map",
+              "tab-center-create",
+              "close-center-flow-modal-btn"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              567,
+              588
+            ],
+            "testIds": [
+              "center-flow-done-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              93,
+              183
+            ],
+            "testIds": [
+              "whatsapp-flow-center-modal"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              277,
+              367
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              419,
+              509
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx": {
+      "cell": "whatsapp",
+      "lines": 607,
+      "testIds": [
+        "open-center-flow-modal-btn",
+        "whatsapp-message-flows-panel",
+        "wpp-create-custom-flow-btn",
+        "wpp-flow-approve-btn",
+        "wpp-flow-delete-btn",
+        "wpp-flow-detail-card",
+        "wpp-generate-more-flows-btn",
+        "wpp-open-center-modal-btn",
+        "wpp-save-custom-flow-btn",
+        "wpp-simulate-fake-chat-btn"
+      ],
+      "children": [
+        "BusinessProfile",
+        "ChatCircleDots",
+        "Check",
+        "DeviceMobile",
+        "Eye",
+        "PencilSimple",
+        "Plus",
+        "Sparkle",
+        "Trash",
+        "WhatsappFakeChatSimulator",
+        "WhatsappFlowCenterModal",
+        "WhatsappMessageFlow",
+        "X"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState",
+        "useToast"
+      ],
+      "visualProfile": {
+        "mainComponent": "WhatsappMessageFlowsPanel",
+        "mainReturnLine": 74,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              256,
+              346
+            ],
+            "testIds": [
+              "wpp-create-custom-flow-btn",
+              "wpp-generate-more-flows-btn"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              476,
+              566
+            ],
+            "testIds": [
+              "wpp-flow-delete-btn"
+            ]
+          },
+          {
+            "kind": "drawer_or_modal",
+            "range": [
+              597,
+              607
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              115,
+              205
+            ],
+            "testIds": []
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              387,
+              477
+            ],
+            "testIds": [
+              "wpp-flow-detail-card",
+              "wpp-simulate-fake-chat-btn",
+              "wpp-open-center-modal-btn"
+            ]
+          },
+          {
+            "kind": "list_or_grid",
+            "range": [
+              486,
+              576
+            ],
+            "testIds": [
+              "wpp-flow-delete-btn",
+              "wpp-flow-approve-btn"
+            ]
+          }
+        ]
+      }
+    },
+    "src/components/views/whatsapp/WhatsappPersistentVisualizer.tsx": {
+      "cell": "whatsapp",
+      "lines": 288,
+      "testIds": [
+        "wpp-global-visualizer-panel",
+        "wpp-global-visualizer-pill"
+      ],
+      "children": [
+        "Activity",
+        "ChevronDown",
+        "ExternalLink",
+        "ImageIcon",
+        "MessageSquare",
+        "PersistedRuntimeSnapshot",
+        "Power",
+        "ShieldAlert",
+        "WebviewResponderStatus"
+      ],
+      "hooks": [
+        "useEffect",
+        "useState"
+      ],
+      "visualProfile": {
+        "mainComponent": "WhatsappPersistentVisualizer",
+        "mainReturnLine": 87,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": [
+          {
+            "kind": "list_or_grid",
+            "range": [
+              232,
+              288
+            ],
+            "testIds": []
+          }
+        ]
+      }
+    },
+    "src/main.tsx": {
+      "cell": "core",
+      "lines": 41,
+      "testIds": [],
+      "children": [
+        "App",
+        "React",
+        "RootErrorBoundary",
+        "Suspense",
+        "VirtualTupleHarness"
+      ],
+      "hooks": [],
+      "visualProfile": {
+        "mainComponent": null,
+        "mainReturnLine": null,
+        "headerRange": null,
+        "hasFontSerif": false,
+        "hasEditorialCanvas": false,
+        "gradientLines": [],
+        "blurCount": 0,
+        "heavyShadowCount": 0,
+        "drawerCount": 0,
+        "regions": []
+      }
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "clusterId": "C-289",
+  "wave": "W5",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-NAV-EACH-SCREEN",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/OrdersKanbanView.tsx"
+  ],
+  "range": null,
+  "preserveTestIds": [
+    "crm-avg-ticket",
+    "crm-order-count",
+    "crm-resumo-panel",
+    "crm-total-revenue",
+    "dashboard-catalog-count",
+    "dashboard-sales-total",
+    "dashboard-t5-view",
+    "open-manual-sale-btn",
+    "open-tela-27-xls-orders",
+    "orders-ai-modify-btn",
+    "orders-ai-modify-input",
+    "orders-auto-notify-toggle",
+    "orders-dre-panel",
+    "orders-import-audit-banner",
+    "orders-import-spreadsheet-btn",
+    "orders-kanban-board",
+    "orders-kanban-view",
+    "orders-optimistic-error-card",
+    "orders-subtab-crm",
+    "orders-subtab-kanban",
+    "orders-undo-import-btn",
+    "tela-39-d1-radar"
+  ],
+  "description": "OPEN_NAVIGATOR: validar rota \"dashboard\" (1280x800) com consoleErrors==0 e todos os botões/gavetas vivos",
+  "check": "OPEN_NAVIGATOR",
+  "after": []
+}

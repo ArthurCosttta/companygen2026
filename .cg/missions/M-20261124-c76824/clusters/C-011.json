@@ -1,0 +1,20 @@
+{
+  "clusterId": "C-011",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "server/workspace.mjs"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_writer em \"disk:supabase-whatsapp.json\" (server/workspace.mjs)",
+  "check": "agent-ops lint",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:31.895Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

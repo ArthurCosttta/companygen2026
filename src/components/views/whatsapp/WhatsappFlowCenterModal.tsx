@@ -62,16 +62,16 @@ export function WhatsappFlowCenterModal({
         if (!active) return;
         if (data?.ok && Array.isArray(data.flows) && data.flows.length > 0) {
           setFlows(data.flows);
-          if (!selectedId || !data.flows.some((f: WhatsappMessageFlow) => f.id === selectedId)) {
-            setSelectedId(data.flows[0].id);
-          }
+          setSelectedId((prev) =>
+            prev && data.flows.some((f: WhatsappMessageFlow) => f.id === prev) ? prev : data.flows[0].id,
+          );
         }
       })
       .catch(() => {});
     return () => {
       active = false;
     };
-  }, [isOpen, owner, selectedId]);
+  }, [isOpen, owner]);
 
   if (!isOpen) return null;
 
@@ -139,7 +139,16 @@ export function WhatsappFlowCenterModal({
     setNewTrigger('');
     setNewStep1('');
     setNewStep2('');
-    showToast({ type: 'success', message: 'Nova regra de resposta adicionada e simulada!' });
+    void authenticatedFetch(
+      '/api/whatsapp/ai/message-flows/action',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', flow: newRule }),
+      },
+      owner,
+    ).catch(() => {});
+    showToast({ type: 'success', message: 'Nova regra de resposta adicionada e salva!' });
   };
 
   const handleSaveStepEdit = (flowId: string, stepIdx: number) => {
@@ -238,7 +247,7 @@ export function WhatsappFlowCenterModal({
                 }`}
               >
                 <Plus className="size-3.5" weight="bold" />
-                <span>+ Nova Regra</span>
+                <span>Nova Regra</span>
               </button>
             </div>
 

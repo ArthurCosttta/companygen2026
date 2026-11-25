@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-024",
+  "wave": "W1",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-TIMERS",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "desktop/main.mjs"
+  ],
+  "range": [
+    1030,
+    1065
+  ],
+  "preserveTestIds": [],
+  "description": "Auditar setInterval na linha 1040 de main.mjs (pausar quando oculto / sem alocação ociosa)",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:38.717Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "clusterId": "C-052",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/StorefrontAiInspector.tsx"
+  ],
+  "range": [
+    1213,
+    1308
+  ],
+  "preserveTestIds": [
+    "ai-add-hotspot-btn",
+    "ai-group-mode-only-selected",
+    "ai-group-mode-prioritize",
+    "ai-hotspot-desc-input",
+    "ai-hotspot-headline-input",
+    "ai-hotspot-label-input",
+    "ai-inspector-apply-btn",
+    "ai-inspector-apply-group-btn",
+    "ai-inspector-apply-image-btn",
+    "ai-inspector-balance-pill",
+    "ai-inspector-breadcrumb",
+    "ai-inspector-delete-btn",
+    "ai-inspector-flip-side-btn",
+    "ai-inspector-image-file-input",
+    "ai-inspector-image-prompt-input",
+    "ai-inspector-image-url-input",
+    "ai-inspector-panel",
+    "ai-inspector-prompt-input",
+    "ai-inspector-prop-text-btn",
+    "ai-inspector-prop-text-input",
+    "ai-inspector-selected-card",
+    "ai-inspector-step-up-btn",
+    "ai-inspector-toggle-btn",
+    "ai-inspector-undo-btn",
+    "atomic-sec-${selected.id}"
+  ],
+  "description": "Achatar 0 sombra(s), 0 blur(s) e 1 gradiente(s) em StorefrontAiInspector.tsx",
+  "check": "verify-micro",
+  "after": []
+}

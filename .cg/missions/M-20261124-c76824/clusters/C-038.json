@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-038",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/DrawerContainer.tsx"
+  ],
+  "range": [
+    54,
+    149
+  ],
+  "preserveTestIds": [],
+  "description": "Achatar 1 sombra(s), 0 blur(s) e 0 gradiente(s) em DrawerContainer.tsx",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:44.416Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

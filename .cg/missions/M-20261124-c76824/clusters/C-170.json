@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-170",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/settings/SettingsView.tsx"
+  ],
+  "range": [
+    773,
+    863
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"header\" (773-863) de SettingsView.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-169"
+  ]
+}

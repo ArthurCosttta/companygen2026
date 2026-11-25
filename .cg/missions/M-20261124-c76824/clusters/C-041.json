@@ -1,0 +1,39 @@
+{
+  "clusterId": "C-041",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/access/AccessCodeView.tsx"
+  ],
+  "range": [
+    139,
+    234
+  ],
+  "preserveTestIds": [
+    "access-brand-logo",
+    "access-claim-email-btn",
+    "access-code-input",
+    "access-credits-translation-card",
+    "access-go-to-login-btn",
+    "access-guest-start-btn",
+    "access-guest-unclaimed-card",
+    "access-state-feedback",
+    "access-validate-btn",
+    "kiwify-lookup-email",
+    "kiwify-lookup-feedback",
+    "kiwify-lookup-order-id",
+    "kiwify-lookup-panel",
+    "kiwify-lookup-submit",
+    "kiwify-lookup-toggle"
+  ],
+  "description": "Achatar 3 sombra(s), 0 blur(s) e 0 gradiente(s) em AccessCodeView.tsx",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:45.659Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

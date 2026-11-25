@@ -1,0 +1,28 @@
+{
+  "clusterId": "C-282",
+  "wave": "W5",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-NAV-EACH-SCREEN",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/auth/AuthFlowView.tsx"
+  ],
+  "range": null,
+  "preserveTestIds": [
+    "auth-activation-code-input",
+    "auth-brand-logo",
+    "auth-enter-with-code-btn",
+    "auth-flow-5s-diagram",
+    "auth-invite-banner",
+    "auth-open-access-btn",
+    "auth-open-showcase-lume-btn",
+    "landing-download-options",
+    "landing-download-os-btn"
+  ],
+  "description": "OPEN_NAVIGATOR: validar rota \"auth\" (375x812) com consoleErrors==0 e todos os botões/gavetas vivos",
+  "check": "OPEN_NAVIGATOR",
+  "after": [
+    "C-281"
+  ]
+}

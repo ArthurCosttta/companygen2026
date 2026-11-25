@@ -1,0 +1,58 @@
+{
+  "version": "2.0.0-sharded",
+  "missionId": "M-20261124-c76824",
+  "createdAt": "2026-11-24T14:53:31.189Z",
+  "repoHeadAtStart": "32d176d",
+  "status": "in_progress",
+  "rawPrompt": "otimizar performance pc fraco + aplicar visual minimalista minha loja em todas as telas preservando botoes em gavetas + atualizar .cg jsons + validar no navegador",
+  "totalClusters": 297,
+  "waveOrder": [
+    "W1",
+    "W2",
+    "W3",
+    "W4",
+    "W5",
+    "W6"
+  ],
+  "activeWave": "W2",
+  "cursorClusterId": "C-043",
+  "counts": {
+    "pending": 252,
+    "done": 45,
+    "quarantined": 0
+  },
+  "fileMutexEnabled": true,
+  "waveBarriers": [
+    {
+      "wave": "W1",
+      "clusterCount": 34,
+      "passed": false
+    },
+    {
+      "wave": "W2",
+      "clusterCount": 23,
+      "passed": false
+    },
+    {
+      "wave": "W3",
+      "clusterCount": 37,
+      "passed": false
+    },
+    {
+      "wave": "W4",
+      "clusterCount": 186,
+      "passed": false
+    },
+    {
+      "wave": "W5",
+      "clusterCount": 16,
+      "passed": false
+    },
+    {
+      "wave": "W6",
+      "clusterCount": 1,
+      "passed": false
+    }
+  ],
+  "updatedAt": "2026-11-24T17:06:47.651Z"
+}

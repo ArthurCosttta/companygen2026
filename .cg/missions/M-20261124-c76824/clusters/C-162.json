@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-162",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/OrdersKanbanView.tsx"
+  ],
+  "range": [
+    683,
+    773
+  ],
+  "preserveTestIds": [
+    "dashboard-sales-total",
+    "dashboard-catalog-count",
+    "orders-import-spreadsheet-btn",
+    "open-tela-27-xls-orders",
+    "open-manual-sale-btn",
+    "orders-import-audit-banner"
+  ],
+  "description": "Padronizar região \"header\" (683-773) de OrdersKanbanView.tsx preservando 6 testId(s)",
+  "check": "verify-micro",
+  "after": []
+}

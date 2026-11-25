@@ -283,7 +283,7 @@ export function OrderSpreadsheetCatalogModal({
         role="dialog"
         aria-modal="true"
         aria-label="Catalogação Inteligente de Pedidos D1 e Balcão"
-        className="w-full max-w-6xl max-h-[92vh] flex flex-col rounded-2xl border border-[#27272A] bg-[#09090B] text-[#FFFFFF] shadow-2xl overflow-hidden"
+        className="w-full max-w-6xl max-h-[92vh] flex flex-col rounded-2xl border border-[#27272A] bg-[#09090B] text-[#FFFFFF] shadow-sm overflow-hidden"
         style={{
           transform: entered
             ? 'translate3d(0, 0, 0) scale3d(1, 1, 1)'

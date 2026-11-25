@@ -1,0 +1,35 @@
+{
+  "clusterId": "C-202",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/FormulaTreeRenderer.tsx"
+  ],
+  "range": [
+    988,
+    1057
+  ],
+  "preserveTestIds": [
+    "closing-daily-schedule-grid",
+    "quiz-next-step-btn",
+    "quiz-reveal-btn",
+    "v9-atomic-blueprint-root",
+    "v9-catalog-category-chips",
+    "v9-catalog-grid",
+    "v9-catalog-search-photos-btn",
+    "v9-complementary-bundles",
+    "v9-contextual-faq",
+    "v9-exp-primary-btn",
+    "v9-exp-secondary-btn",
+    "v9-exp-summary-lines",
+    "v9-exp-total",
+    "v9-header-bag-btn",
+    "v9-hero-bento-collage"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em FormulaTreeRenderer.tsx",
+  "check": "verify-micro",
+  "after": []
+}

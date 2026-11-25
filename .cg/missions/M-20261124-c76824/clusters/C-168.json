@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-168",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/settings/RedeemCreditCodeCard.tsx"
+  ],
+  "range": [
+    61,
+    126
+  ],
+  "preserveTestIds": [
+    "redeem-code-error",
+    "redeem-code-input",
+    "redeem-code-submit",
+    "redeem-code-success",
+    "redeem-credit-code-card",
+    "redeem-quota-badge"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em RedeemCreditCodeCard.tsx",
+  "check": "verify-micro",
+  "after": []
+}

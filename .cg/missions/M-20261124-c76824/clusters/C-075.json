@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-075",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/FloatingTopPill.tsx"
+  ],
+  "range": [
+    80,
+    170
+  ],
+  "preserveTestIds": [
+    "editorial-top-pill",
+    "top-pill-whatsapp-human-badge",
+    "top-pill-open-vitrine"
+  ],
+  "description": "Padronizar região \"nav_tabs\" (80-170) de FloatingTopPill.tsx preservando 3 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-074"
+  ]
+}

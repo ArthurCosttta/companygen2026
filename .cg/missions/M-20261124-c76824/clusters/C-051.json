@@ -1,0 +1,19 @@
+{
+  "clusterId": "C-051",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/ReferenceComponentsPack.tsx"
+  ],
+  "range": [
+    2259,
+    2322
+  ],
+  "preserveTestIds": [],
+  "description": "Achatar 1 sombra(s), 0 blur(s) e 0 gradiente(s) em ReferenceComponentsPack.tsx",
+  "check": "verify-micro",
+  "after": []
+}

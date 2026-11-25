@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-040",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/ModalContainer.tsx"
+  ],
+  "range": [
+    136,
+    231
+  ],
+  "preserveTestIds": [
+    "toast-region"
+  ],
+  "description": "Achatar 1 sombra(s), 0 blur(s) e 0 gradiente(s) em ModalContainer.tsx",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:45.252Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

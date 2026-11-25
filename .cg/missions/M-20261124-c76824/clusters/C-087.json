@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-087",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/Topbar.tsx"
+  ],
+  "range": [
+    161,
+    251
+  ],
+  "preserveTestIds": [
+    "app-topbar",
+    "topbar-breadcrumb",
+    "topbar-active-title",
+    "topbar-command-palette-btn"
+  ],
+  "description": "Padronizar região \"header\" (161-251) de Topbar.tsx preservando 4 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-086"
+  ]
+}

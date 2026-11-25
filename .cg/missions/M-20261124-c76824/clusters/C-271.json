@@ -1,0 +1,30 @@
+{
+  "clusterId": "C-271",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx"
+  ],
+  "range": [
+    74,
+    139
+  ],
+  "preserveTestIds": [
+    "open-center-flow-modal-btn",
+    "whatsapp-message-flows-panel",
+    "wpp-create-custom-flow-btn",
+    "wpp-flow-approve-btn",
+    "wpp-flow-delete-btn",
+    "wpp-flow-detail-card",
+    "wpp-generate-more-flows-btn",
+    "wpp-open-center-modal-btn",
+    "wpp-save-custom-flow-btn",
+    "wpp-simulate-fake-chat-btn"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em WhatsappMessageFlowsPanel.tsx",
+  "check": "verify-micro",
+  "after": []
+}

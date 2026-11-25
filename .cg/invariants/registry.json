@@ -1,0 +1,63 @@
+{
+  "version": "1.0.0",
+  "invariants": [
+    {
+      "id": "INV-WPP-TRIGGER-READS-FLOWS",
+      "intent": "BEHAVIOR",
+      "rule": "Fluxos aprovados em whatsapp_flows.json e templates ativos em templates.json devem ambos responder como gatilho no WhatsApp",
+      "anchors": [
+        "server/ai-sofia-local.mjs#loadCustomQuickReplies",
+        "server/ai-sofia-local.mjs#matchCustomQuickReply"
+      ],
+      "test": "tests/unit/onda6-whatsapp-pix.test.mjs"
+    },
+    {
+      "id": "INV-WPP-SELFCHAT-NEVER-SUPPRESSED",
+      "intent": "BEHAVIOR",
+      "rule": "Mensagens em self-chat ('Meu numero:') não podem ser bloqueadas por anti-ban, safeTestMode, autonomyMode ou seedMainMessages",
+      "anchors": [
+        "shared/whatsapp-webview-script.mjs#buildWebviewPollScript",
+        "src/hooks/useWebviewWhatsappResponder.ts#useWebviewWhatsappResponder"
+      ],
+      "test": "tests/unit/onda6-whatsapp-pix.test.mjs"
+    },
+    {
+      "id": "INV-STORE-PERSISTENCE",
+      "intent": "STATE_FLOW",
+      "rule": "Loja já gerada/publicada não regride para ESTADO_1 nem perde snapshot local válido para remoto obsoleto",
+      "anchors": [
+        "src/hooks/useClientMaturity.ts#deriveClientMaturity",
+        "server/workspace.mjs#createWorkspaceApi"
+      ],
+      "test": "tests/unit/onda3-onboarding-pack.test.mjs"
+    },
+    {
+      "id": "INV-CHUNK-LAZY-GUARD",
+      "intent": "VISUAL",
+      "rule": "Imports dinâmicos de módulos UI via lazyNamed validam componente existente antes de retornar { default }",
+      "anchors": [
+        "src/utils/chunk-recovery.ts#lazyNamed"
+      ],
+      "test": "tests/unit/onda1-foundation.test.mjs"
+    },
+    {
+      "id": "INV-PHARMA-CATALOG-WINS",
+      "intent": "BEHAVIOR",
+      "rule": "Classificação determinística por catálogo real prevalece sobre rótulo genérico ou sugestão LLM",
+      "anchors": [
+        "shared/formula-ir/spreadsheet-intelligence.mjs#classifyBusinessArchetype",
+        "src/components/views/onboarding/OnboardingIgnitionView.tsx#OnboardingIgnitionView"
+      ],
+      "test": "tests/xlsx-benchmark-v2.test.mjs"
+    },
+    {
+      "id": "INV-TELEMETRY-PII-MASKED",
+      "intent": "OBSERVABILITY",
+      "rule": "Telemetria de crash deve mascarar PII e correlacionar arquivos suspeitos antes de persistir",
+      "anchors": [
+        "server/crash-telemetry.mjs#inferSuspectedFilesAndCause"
+      ],
+      "test": "tests/unit/crash-telemetry.test.mjs"
+    }
+  ]
+}

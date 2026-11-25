@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-006",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "server/admin-console.mjs"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_reader em \"disk:studio.json\" (server/admin-console.mjs)",
+  "check": "agent-ops lint",
+  "after": [
+    "C-005"
+  ],
+  "updatedAt": "2026-11-24T17:06:28.213Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

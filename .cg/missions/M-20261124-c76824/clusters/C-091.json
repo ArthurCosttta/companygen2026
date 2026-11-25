@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-091",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/CreditAlertCenterModal.tsx"
+  ],
+  "range": [
+    28,
+    93
+  ],
+  "preserveTestIds": [
+    "credit-alert-center-modal"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em CreditAlertCenterModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

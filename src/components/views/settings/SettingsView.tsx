@@ -721,13 +721,14 @@ export function SettingsView({
   return (
     <div
       data-testid="settings-view"
-      className="mx-auto w-full max-w-4xl space-y-5 p-4 pb-24 sm:p-6 min-[769px]:pb-10"
+      className="min-h-full w-full bg-[#F8FAFC] px-5 py-6 pb-24 text-[#09090B] dark:bg-[#090D16] dark:text-slate-100 sm:px-8 min-[769px]:pb-10"
     >
-      {/* FILA 14 — Card de Conta + Sair da Conta no topo (1 clique visível sem rolagem em 1366x768 e 390x844) */}
+      <div className="mx-auto max-w-[1360px] space-y-5">
+      {/* FILA 14 — Barra Minimalista de Conta + Sair da Conta no topo */}
       <section
         aria-label="Conta conectada"
         data-testid="settings-account-top-bar"
-        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4 shadow-xs"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#E2E8F0] dark:border-[#1E293B] bg-white dark:bg-[#111726] p-4"
       >
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#EFF6FF] dark:bg-blue-500/20 text-sm font-extrabold text-[#2563EB] dark:text-blue-300">
@@ -2158,6 +2159,7 @@ export function SettingsView({
         userId={owner}
         storeName={profile.business?.name}
       />
+      </div>
     </div>
   );
 }

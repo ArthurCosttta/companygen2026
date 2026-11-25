@@ -1,0 +1,36 @@
+{
+  "clusterId": "C-042",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/checkout/CheckoutPlansView.tsx"
+  ],
+  "range": [
+    536,
+    631
+  ],
+  "preserveTestIds": [
+    "checkout-brand-logo",
+    "checkout-clear-ledger-filter",
+    "checkout-current-balance",
+    "checkout-ledger-panel",
+    "checkout-ledger-tooltip",
+    "checkout-projected-balance",
+    "checkout-tab-ledger",
+    "checkout-tab-plans",
+    "credits-telemetry-panel",
+    "kiwify-awaiting-confirmation",
+    "kiwify-checkout-primary-btn",
+    "kiwify-credits-confirmed"
+  ],
+  "description": "Achatar 7 sombra(s), 0 blur(s) e 2 gradiente(s) em CheckoutPlansView.tsx",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:46.051Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

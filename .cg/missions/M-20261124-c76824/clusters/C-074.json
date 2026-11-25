@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-074",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/FloatingTopPill.tsx"
+  ],
+  "range": [
+    75,
+    140
+  ],
+  "preserveTestIds": [
+    "editorial-top-pill",
+    "top-pill-credits-btn",
+    "top-pill-logout-btn",
+    "top-pill-open-vitrine",
+    "top-pill-tab-admin",
+    "top-pill-whatsapp-human-badge"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em FloatingTopPill.tsx",
+  "check": "verify-micro",
+  "after": []
+}

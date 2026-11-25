@@ -1,0 +1,35 @@
+{
+  "clusterId": "C-169",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/settings/SettingsView.tsx"
+  ],
+  "range": [
+    773,
+    842
+  ],
+  "preserveTestIds": [
+    "settings-account-top-bar",
+    "settings-copy-diagnostic-btn",
+    "settings-export-backup-zip-btn",
+    "settings-low-spec-section",
+    "settings-mobile-alerts-card",
+    "settings-open-checkout-btn",
+    "settings-open-reset-btn",
+    "settings-open-support-ticket-btn",
+    "settings-panel-backup",
+    "settings-panel-credits",
+    "settings-panel-desktop",
+    "settings-restore-backup-zip-btn",
+    "settings-restore-error-alert",
+    "settings-restore-file-input",
+    "settings-save-desktop-prefs-btn"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em SettingsView.tsx",
+  "check": "verify-micro",
+  "after": []
+}

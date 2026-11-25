@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-045",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/BatchImageSearchModal.tsx"
+  ],
+  "range": [
+    289,
+    384
+  ],
+  "preserveTestIds": [
+    "batch-search-apply-btn",
+    "batch-search-start-btn"
+  ],
+  "description": "Achatar 2 sombra(s), 0 blur(s) e 0 gradiente(s) em BatchImageSearchModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

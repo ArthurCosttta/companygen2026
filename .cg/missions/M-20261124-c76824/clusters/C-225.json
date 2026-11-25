@@ -1,0 +1,35 @@
+{
+  "clusterId": "C-225",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/StorefrontAiInspector.tsx"
+  ],
+  "range": [
+    499,
+    564
+  ],
+  "preserveTestIds": [
+    "ai-add-hotspot-btn",
+    "ai-group-mode-only-selected",
+    "ai-group-mode-prioritize",
+    "ai-hotspot-desc-input",
+    "ai-hotspot-headline-input",
+    "ai-hotspot-label-input",
+    "ai-inspector-apply-btn",
+    "ai-inspector-apply-group-btn",
+    "ai-inspector-apply-image-btn",
+    "ai-inspector-balance-pill",
+    "ai-inspector-breadcrumb",
+    "ai-inspector-delete-btn",
+    "ai-inspector-flip-side-btn",
+    "ai-inspector-image-file-input",
+    "ai-inspector-image-prompt-input"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em StorefrontAiInspector.tsx",
+  "check": "verify-micro",
+  "after": []
+}

@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-213",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/ProductEditorDrawer.tsx"
+  ],
+  "range": [
+    398,
+    463
+  ],
+  "preserveTestIds": [
+    "drawer-focal-point-box",
+    "drawer-focal-point-reticle",
+    "drawer-low-res-warning",
+    "drawer-photo-file-input",
+    "drawer-upload-photo-btn",
+    "product-low-stock-input"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em ProductEditorDrawer.tsx",
+  "check": "verify-micro",
+  "after": []
+}

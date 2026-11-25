@@ -1,0 +1,20 @@
+{
+  "clusterId": "C-008",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "server/ai-sofia-local.mjs"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_reader em \"disk:metrics.json\" (server/ai-sofia-local.mjs)",
+  "check": "agent-ops lint",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:29.611Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

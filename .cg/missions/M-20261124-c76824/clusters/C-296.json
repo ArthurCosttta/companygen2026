@@ -1,0 +1,31 @@
+{
+  "clusterId": "C-296",
+  "wave": "W5",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-NAV-EACH-SCREEN",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/checkout/CheckoutPlansView.tsx"
+  ],
+  "range": null,
+  "preserveTestIds": [
+    "checkout-brand-logo",
+    "checkout-clear-ledger-filter",
+    "checkout-current-balance",
+    "checkout-ledger-panel",
+    "checkout-ledger-tooltip",
+    "checkout-projected-balance",
+    "checkout-tab-ledger",
+    "checkout-tab-plans",
+    "credits-telemetry-panel",
+    "kiwify-awaiting-confirmation",
+    "kiwify-checkout-primary-btn",
+    "kiwify-credits-confirmed"
+  ],
+  "description": "OPEN_NAVIGATOR: validar rota \"checkout\" (375x812) com consoleErrors==0 e todos os botões/gavetas vivos",
+  "check": "OPEN_NAVIGATOR",
+  "after": [
+    "C-295"
+  ]
+}

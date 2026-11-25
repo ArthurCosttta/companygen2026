@@ -333,17 +333,17 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
 
   return (
     <div
-      className={`min-h-screen w-full font-sans p-4 sm:p-6 md:p-8 transition-colors ${
+      className={`min-h-screen w-full font-sans px-5 py-6 sm:px-8 transition-colors ${
         isDark
           ? 'bg-[#090D16] text-slate-100'
-          : 'bg-[var(--cg-background)] text-[var(--cg-text)]'
+          : 'bg-[#F8FAFC] text-[#09090B]'
       }`}
     >
-      <div className="mx-auto max-w-6xl">
-        {/* Barra Superior */}
-        <div
-          className={`flex flex-col gap-4 pb-6 border-b md:flex-row md:items-center md:justify-between ${
-            isDark ? 'border-slate-800' : 'border-[var(--cg-border)]'
+      <div className="mx-auto max-w-[1360px]">
+        {/* Barra Superior Editorial Minimalista */}
+        <header
+          className={`flex flex-col gap-4 pb-5 border-b md:flex-row md:items-end md:justify-between ${
+            isDark ? 'border-slate-800' : 'border-[#E2E8F0]'
           }`}
         >
           <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
@@ -358,13 +358,13 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                   window.location.href = url.toString();
                 }
               }}
-              className={`inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+              className={`inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
                 isDark
                   ? 'border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white'
-                  : 'border-[var(--cg-border-strong)] bg-[var(--cg-surface)] text-[var(--cg-text-secondary)] hover:bg-[var(--cg-hover)] hover:text-[var(--cg-text)]'
+                  : 'border-[#E2E8F0] bg-white text-[#09090B] hover:bg-[#F1F5F9]'
               }`}
             >
-              <ArrowLeft className="size-4 shrink-0" />
+              <ArrowLeft className="size-3.5 shrink-0" />
               Voltar ao Aplicativo
             </button>
             <div>
@@ -373,46 +373,46 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                   src={getBrandHorizontalLogo(isDark)}
                   alt="CompanyGen"
                   data-testid="checkout-brand-logo"
-                  className="h-7 w-auto object-contain bg-transparent"
+                  className="h-6 w-auto object-contain bg-transparent"
                 />
                 <span
-                  className={`text-xs font-mono font-bold tracking-widest uppercase ${
-                    isDark ? 'text-[#38BDF8]' : 'text-[var(--cg-primary)]'
+                  className={`text-[11px] font-semibold tracking-wider uppercase ${
+                    isDark ? 'text-slate-400' : 'text-[#64748B]'
                   }`}
                 >
-                  ◈ CRÉDITOS, PAGAMENTOS & CONSUMO
+                  Créditos, pagamentos & consumo
                 </span>
               </div>
               <h1
-                className={`text-2xl font-black sm:text-3xl ${
-                  isDark ? 'text-white' : 'text-[var(--cg-text)]'
+                className={`font-serif text-[34px] font-extrabold leading-[0.95] tracking-[-0.03em] sm:text-[44px] ${
+                  isDark ? 'text-white' : 'text-[#09090B]'
                 }`}
               >
-                Planos & Telemetria da Conta
+                Planos
               </h1>
             </div>
           </div>
 
           {/* Saldo Atual */}
           <div
-            className={`flex shrink-0 items-center gap-3 self-start rounded-2xl border px-4 py-2.5 md:self-auto ${
+            className={`flex shrink-0 items-center gap-3 self-start rounded-[14px] border px-4 py-2.5 md:self-auto ${
               isDark
-                ? 'border-blue-500/30 bg-blue-500/10'
-                : 'border-blue-200 bg-blue-50/90'
+                ? 'border-[#1E293B] bg-[#111726]'
+                : 'border-[#E2E8F0] bg-white'
             }`}
           >
-            <Zap className={`size-5 ${isDark ? 'text-[#38BDF8]' : 'text-[var(--cg-primary)]'}`} />
+            <Zap className={`size-4 ${isDark ? 'text-[#38BDF8]' : 'text-[#2563EB]'}`} />
             <div>
               <span
                 className={`text-[10px] font-semibold block uppercase ${
-                  isDark ? 'text-blue-300' : 'text-blue-700'
+                  isDark ? 'text-slate-400' : 'text-[#64748B]'
                 }`}
               >
                 Saldo Atual
               </span>
               <span
-                className={`cg-tabular text-lg font-black ${
-                  isDark ? 'text-white' : 'text-[var(--cg-text)]'
+                className={`cg-tabular text-lg font-bold ${
+                  isDark ? 'text-white' : 'text-[#09090B]'
                 }`}
                 data-testid="checkout-current-balance"
               >
@@ -420,7 +420,7 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
               </span>
             </div>
           </div>
-        </div>
+        </header>
 
         {/* Sub-abas: Recarregar vs. Extrato & Gráfico de Consumo */}
         <div className="mt-6 flex flex-wrap gap-2">
@@ -543,12 +543,12 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                             -{bar.total.toLocaleString('pt-BR')} cr ({bar.count}x)
                           </span>
                         </div>
-                        <div className={`h-3 w-full overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                        <div className={`h-2.5 w-full overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
                           <div
-                            className={`h-full rounded-full transition-all ${
+                            className={`h-full rounded-full transition-colors ${
                               isPressed
-                                ? 'bg-[#2563EB]'
-                                : 'bg-gradient-to-r from-[#2563EB] to-[#38BDF8]'
+                                ? 'bg-[#09090B] dark:bg-[#2563EB]'
+                                : 'bg-[#2563EB]'
                             }`}
                             style={{ width: `${pct}%` }}
                           />
@@ -716,22 +716,22 @@ export function CheckoutPlansView({ userId, initialSubTab = 'plans', onBackToApp
                     onClick={() => {
                       setSelectedPlanId(plan.id);
                     }}
-                    className={`relative flex flex-col justify-between rounded-3xl border p-5 cursor-pointer transition-all ${
-                      plan.popular ? 'order-first sm:order-none sm:-translate-y-1' : ''
+                    className={`relative flex flex-col justify-between rounded-[14px] border p-5 cursor-pointer transition-colors ${
+                      plan.popular ? 'order-first sm:order-none' : ''
                     } ${
                       isSelected
                         ? isDark
-                          ? 'border-[#3B82F6] bg-[#182034] shadow-xl ring-2 ring-[#3B82F6]/40'
-                          : 'border-[var(--cg-primary)] bg-[var(--cg-hover)] shadow-md ring-2 ring-[#0867E8]/20'
+                          ? 'border-[#3B82F6] bg-[#182034] ring-1 ring-[#3B82F6]/40'
+                          : 'border-[#09090B] bg-white ring-1 ring-[#09090B]'
                         : isDark
                           ? 'border-slate-800 bg-[#111726]/90 hover:border-slate-700 hover:bg-[#182034]'
-                          : 'border-[var(--cg-border)] bg-[var(--cg-surface)] hover:border-[var(--cg-border-strong)] hover:bg-[var(--cg-surface-elevated)] shadow-xs'
+                          : 'border-[#E2E8F0] bg-white hover:border-[#09090B]/30'
                     }`}
                   >
                     {/* Tag de Destaque */}
                     {plan.popular && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 px-3 py-0.5 text-[10px] font-black uppercase tracking-wider text-slate-950 shadow-md">
-                        ★ MAIS POPULAR
+                      <div className="absolute -top-2.5 left-4 rounded-full bg-[#09090B] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white dark:bg-white dark:text-[#09090B]">
+                        Recomendado
                       </div>
                     )}
 

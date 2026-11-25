@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-101",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/ModalContainer.tsx"
+  ],
+  "range": [
+    151,
+    216
+  ],
+  "preserveTestIds": [
+    "toast-region"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em ModalContainer.tsx",
+  "check": "verify-micro",
+  "after": []
+}

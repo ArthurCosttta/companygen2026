@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-013",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "server/workspace.mjs"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_reader em \"disk:ai_custom_templates.json\" (server/workspace.mjs)",
+  "check": "agent-ops lint",
+  "after": [
+    "C-012"
+  ],
+  "updatedAt": "2026-11-24T17:06:33.026Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

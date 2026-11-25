@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-098",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/GlobalAiAssistantWidget.tsx"
+  ],
+  "range": [
+    109,
+    174
+  ],
+  "preserveTestIds": [
+    "global-ai-assistant-btn",
+    "global-ai-assistant-panel",
+    "global-ai-attach-btn",
+    "global-ai-flip-side-btn",
+    "global-ai-input",
+    "global-ai-running-log"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em GlobalAiAssistantWidget.tsx",
+  "check": "verify-micro",
+  "after": []
+}

@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-100",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/HumanErrorCard.tsx"
+  ],
+  "range": [
+    51,
+    94
+  ],
+  "preserveTestIds": [
+    "human-error-action-btn",
+    "human-error-card"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em HumanErrorCard.tsx",
+  "check": "verify-micro",
+  "after": []
+}

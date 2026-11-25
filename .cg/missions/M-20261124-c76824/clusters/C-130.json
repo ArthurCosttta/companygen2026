@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-130",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/checkout/CheckoutPlansView.tsx"
+  ],
+  "range": [
+    323,
+    413
+  ],
+  "preserveTestIds": [
+    "checkout-brand-logo"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (323-413) de CheckoutPlansView.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-129"
+  ]
+}

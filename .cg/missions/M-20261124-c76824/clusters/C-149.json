@@ -1,0 +1,27 @@
+{
+  "clusterId": "C-149",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/ImportOrdersSpreadsheetModal.tsx"
+  ],
+  "range": [
+    190,
+    280
+  ],
+  "preserveTestIds": [
+    "orders-import-summary",
+    "orders-import-invalid-badge",
+    "orders-confirm-import-btn",
+    "orders-import-modal",
+    "orders-file-dropzone"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (190-280) de ImportOrdersSpreadsheetModal.tsx preservando 5 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-148"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "clusterId": "C-264",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsappFakeChatSimulator.tsx"
+  ],
+  "range": [
+    69,
+    134
+  ],
+  "preserveTestIds": [
+    "fake-chat-approve-flow-btn",
+    "fake-chat-bubble-customer",
+    "fake-chat-bubble-sofia-0",
+    "fake-chat-bubble-sofia-1",
+    "fake-chat-instant-btn",
+    "fake-chat-restart-btn",
+    "fake-chat-typing-indicator",
+    "wpp-fake-chat-simulator"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em WhatsappFakeChatSimulator.tsx",
+  "check": "verify-micro",
+  "after": []
+}

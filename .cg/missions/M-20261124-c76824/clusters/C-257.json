@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-257",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsAppConnectionView.tsx"
+  ],
+  "range": [
+    1043,
+    1133
+  ],
+  "preserveTestIds": [
+    "wpp-drawer-human-queue-btn",
+    "wpp-drawer-quick-replies-btn",
+    "wpp-drawer-docs-btn",
+    "wpp-human-queue-drawer-panel"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (1043-1133) de WhatsAppConnectionView.tsx preservando 4 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-256"
+  ]
+}

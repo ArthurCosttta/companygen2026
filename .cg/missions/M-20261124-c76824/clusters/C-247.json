@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-247",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/studio/CreditCostPreview.tsx"
+  ],
+  "range": [
+    21,
+    62
+  ],
+  "preserveTestIds": [
+    "credit-cost-preview",
+    "credit-cost-preview-free",
+    "credit-cost-recharge-link"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em CreditCostPreview.tsx",
+  "check": "verify-micro",
+  "after": []
+}

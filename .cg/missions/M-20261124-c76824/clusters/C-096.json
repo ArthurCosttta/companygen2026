@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-096",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/EmptyStateCard.tsx"
+  ],
+  "range": [
+    164,
+    184
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"list_or_grid\" (164-184) de EmptyStateCard.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-095"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "clusterId": "C-255",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsAppConnectionView.tsx"
+  ],
+  "range": [
+    965,
+    1055
+  ],
+  "preserveTestIds": [
+    "wpp-ai-connection-pill",
+    "wpp-sound-mute-toggle"
+  ],
+  "description": "Padronizar região \"header\" (965-1055) de WhatsAppConnectionView.tsx preservando 2 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-254"
+  ]
+}

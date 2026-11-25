@@ -1,0 +1,27 @@
+{
+  "clusterId": "C-077",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/HighSaturationNotificationBar.tsx"
+  ],
+  "range": [
+    87,
+    152
+  ],
+  "preserveTestIds": [
+    "notification-bar-resume-ai-btn",
+    "notification-enable-mobile-btn",
+    "phone-notification-primary",
+    "phone-notification-queue-list",
+    "phone-notification-queue-toggle",
+    "silence-alarm-btn",
+    "tela-38-notification-bar"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em HighSaturationNotificationBar.tsx",
+  "check": "verify-micro",
+  "after": []
+}

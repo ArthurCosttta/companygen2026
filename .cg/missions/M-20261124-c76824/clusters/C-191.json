@@ -1,0 +1,35 @@
+{
+  "clusterId": "C-191",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/CustomerStorefrontView.tsx"
+  ],
+  "range": [
+    212,
+    277
+  ],
+  "preserveTestIds": [
+    "cart-checkout-error-card",
+    "cart-coupon-apply-btn",
+    "cart-coupon-discount-row",
+    "cart-coupon-error",
+    "cart-coupon-input",
+    "cart-coupon-toggle",
+    "cart-free-shipping-badge",
+    "cart-grand-total",
+    "cart-pix-discount-row",
+    "checkout-wa-direct-link",
+    "floating-ai-inspector-btn",
+    "open-ai-inspector-btn",
+    "open-expansion-modal-btn",
+    "open-whatsapp-flows-btn",
+    "owner-preview-copy-link"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em CustomerStorefrontView.tsx",
+  "check": "verify-micro",
+  "after": []
+}

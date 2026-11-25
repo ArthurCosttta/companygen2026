@@ -1,0 +1,27 @@
+{
+  "clusterId": "C-138",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/onboarding/OnboardingIgnitionView.tsx"
+  ],
+  "range": [
+    980,
+    1070
+  ],
+  "preserveTestIds": [
+    "ignition-clear-draft-btn",
+    "ignition-file-input",
+    "ignition-logo-input",
+    "ignition-storefront-photo-input",
+    "ignition-store-input"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (980-1070) de OnboardingIgnitionView.tsx preservando 5 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-137"
+  ]
+}

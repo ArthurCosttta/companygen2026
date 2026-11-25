@@ -1,0 +1,22 @@
+{
+  "clusterId": "C-185",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/BatchImageSearchModal.tsx"
+  ],
+  "range": [
+    304,
+    369
+  ],
+  "preserveTestIds": [
+    "batch-search-apply-btn",
+    "batch-search-start-btn"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em BatchImageSearchModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

@@ -44,6 +44,12 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/lucide-react/')) {
               return 'vendor-icons';
             }
+            if (id.includes('node_modules/@phosphor-icons/')) {
+              return 'vendor-phosphor';
+            }
+            if (id.includes('node_modules/zod/')) {
+              return 'vendor-zod';
+            }
             if (id.includes('node_modules/motion/') || id.includes('node_modules/framer-motion/')) {
               return 'vendor-motion';
             }

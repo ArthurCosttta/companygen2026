@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-249",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/DisconnectConfirmModal.tsx"
+  ],
+  "range": [
+    76,
+    124
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (76-124) de DisconnectConfirmModal.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-248"
+  ]
+}

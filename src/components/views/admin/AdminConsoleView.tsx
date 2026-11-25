@@ -699,27 +699,29 @@ export function AdminConsoleView({
   const openTickets = (data?.tickets || []).filter((t) => t.status !== 'resolved');
 
   return (
-    <div data-testid="desktop-admin-console" className="min-w-0 space-y-5 pb-10">
-      {/* Cabeçalho + 4 KPIs principais */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4 dark:border-slate-800 dark:bg-[#111726]">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#0F172A] text-white dark:bg-[#2563EB]">
-              <ShieldCheck className="size-5" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="truncate text-lg font-bold text-[#0F172A] dark:text-slate-100">
-                Console Admin 360° — CompanyGen
+    <div data-testid="desktop-admin-console" className="min-h-full w-full bg-[#F8FAFC] px-5 py-6 pb-10 text-[#09090B] dark:bg-[#090D16] dark:text-slate-100 sm:px-8">
+      <div className="mx-auto max-w-[1360px] space-y-5">
+      {/* Cabeçalho Editorial Minimalista + 4 KPIs principais */}
+      <section className="space-y-4 border-b border-[#E2E8F0] pb-5 dark:border-[#1E293B]">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="font-serif text-[32px] font-extrabold leading-[0.95] tracking-[-0.03em] text-[#09090B] dark:text-slate-100 sm:text-[42px]">
+                Console Admin
               </h2>
-              <p className="truncate text-xs text-slate-600 dark:text-slate-300">
-                Suporte Somente Leitura, Reconciliador Kiwify, Frota Desktop .exe e Lotes QR A4.
-              </p>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white px-2.5 py-0.5 text-[11px] font-semibold text-[#09090B] dark:border-[#1E293B] dark:bg-[#111726] dark:text-slate-200">
+                <ShieldCheck className="size-3 text-[#2563EB]" aria-hidden="true" />
+                360° Operação
+              </span>
             </div>
+            <p className="mt-1.5 truncate text-xs text-[#64748B] dark:text-slate-400">
+              Suporte Somente Leitura, Reconciliador Kiwify, Frota Desktop .exe e Lotes QR A4.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
             {summary?.marginAlert ? (
-              <span className="inline-flex items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 dark:border-rose-800/40 dark:bg-rose-950/50 dark:text-rose-300">
                 <AlertTriangle className="size-3.5" /> Margem Negativa Detectada
               </span>
             ) : null}
@@ -737,40 +739,40 @@ export function AdminConsoleView({
           </div>
         </div>
 
-        {/* 4 KPIs Estritos */}
+        {/* 4 KPIs Estritos em cards planos */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090D16]">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          <div className="rounded-[14px] border border-[#E2E8F0] bg-white p-3.5 dark:border-slate-800 dark:bg-[#111726]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#64748B] dark:text-slate-400">
               <Users className="size-3.5 text-[#2563EB]" /> Lojas Cadastradas
             </div>
-            <div data-testid="admin-kpi-users" className="cg-tabular mt-1 text-xl font-extrabold text-[#0F172A] dark:text-slate-100">
+            <div data-testid="admin-kpi-users" className="cg-tabular mt-1 text-2xl font-bold text-[#09090B] dark:text-slate-100">
               {summary?.totalUsers ?? 0}
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090D16]">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          <div className="rounded-[14px] border border-[#E2E8F0] bg-white p-3.5 dark:border-slate-800 dark:bg-[#111726]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#64748B] dark:text-slate-400">
               <Zap className="size-3.5 text-amber-500" /> Créditos Ativos
             </div>
-            <div data-testid="admin-kpi-credits" className="cg-tabular mt-1 text-xl font-extrabold text-[#0F172A] dark:text-slate-100">
+            <div data-testid="admin-kpi-credits" className="cg-tabular mt-1 text-2xl font-bold text-[#09090B] dark:text-slate-100">
               {(summary?.totalCredits ?? 0).toLocaleString('pt-BR')} cr
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090D16]">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          <div className="rounded-[14px] border border-[#E2E8F0] bg-white p-3.5 dark:border-slate-800 dark:bg-[#111726]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#64748B] dark:text-slate-400">
               <TrendingUp className="size-3.5 text-emerald-500" /> Margem Líquida
             </div>
             <div
               data-testid="admin-kpi-margin"
-              className={`cg-tabular mt-1 text-xl font-extrabold ${(summary?.netMarginCents ?? 0) < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}
+              className={`cg-tabular mt-1 text-2xl font-bold ${(summary?.netMarginCents ?? 0) < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}
             >
               {formatBrl(summary?.netMarginCents ?? 0)}
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090D16]">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          <div className="rounded-[14px] border border-[#E2E8F0] bg-white p-3.5 dark:border-slate-800 dark:bg-[#111726]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#64748B] dark:text-slate-400">
               <LifeBuoy className="size-3.5 text-rose-500" /> Tickets / Alertas
             </div>
-            <div data-testid="admin-kpi-alerts" className="cg-tabular mt-1 text-xl font-extrabold text-[#0F172A] dark:text-slate-100">
+            <div data-testid="admin-kpi-alerts" className="cg-tabular mt-1 text-2xl font-bold text-[#09090B] dark:text-slate-100">
               {openTickets.length} / {summary?.incidentsCount ?? 0}
             </div>
           </div>
@@ -780,7 +782,7 @@ export function AdminConsoleView({
         {(summary?.normalUserOpenCrashes ?? 0) > 0 && activeTab !== 'logs' ? (
           <div
             data-testid="admin-normal-user-crash-banner"
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs text-rose-900 dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-200"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs text-rose-900 dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-200"
           >
             <div className="flex items-center gap-2 font-semibold">
               <AlertTriangle className="size-4 shrink-0 text-rose-600 dark:text-rose-400" />
@@ -798,8 +800,8 @@ export function AdminConsoleView({
           </div>
         ) : null}
 
-        {/* 5 Sub-abas Enxutas */}
-        <div role="tablist" aria-label="Seções do Console Admin" className="flex flex-wrap gap-2 pt-1">
+        {/* 5 Sub-abas em Pílula Minimalista */}
+        <div role="tablist" aria-label="Seções do Console Admin" className="inline-flex max-w-full flex-wrap gap-1 rounded-full border border-[#E2E8F0] bg-white p-1 dark:border-[#1E293B] dark:bg-[#111726]">
           {[
             { id: 'clients', label: 'Clientes & Suporte', testId: 'admin-subtab-clients' },
             { id: 'finance', label: 'Financeiro & Kiwify', testId: 'admin-subtab-finance' },
@@ -823,10 +825,10 @@ export function AdminConsoleView({
                 data-testid={tab.testId}
                 type="button"
                 onClick={() => setActiveTab(tab.id as AdminSectionTab)}
-                className={`min-h-[40px] rounded-xl px-4 text-xs font-bold transition-all ${
+                className={`min-h-[36px] rounded-full px-4 text-xs font-semibold transition-colors ${
                   active
-                    ? 'bg-[#2563EB] text-white shadow-xs'
-                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#090D16] dark:text-slate-200'
+                    ? 'bg-[#09090B] text-white dark:bg-white dark:text-[#09090B]'
+                    : 'text-[#334155] hover:bg-[#F1F5F9] dark:text-slate-200 dark:hover:bg-[#1E293B]'
                 }`}
               >
                 {tab.label}
@@ -1917,6 +1919,7 @@ export function AdminConsoleView({
         onRefreshOverview={loadOverview}
         onEnterSupportMode={onEnterSupportMode}
       />
+      </div>
     </div>
   );
 }

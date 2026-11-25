@@ -1,0 +1,28 @@
+{
+  "clusterId": "C-133",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/checkout/CreditDurationSimulator.tsx"
+  ],
+  "range": [
+    46,
+    111
+  ],
+  "preserveTestIds": [
+    "credit-duration-simulator",
+    "sim-storefronts-slider",
+    "sim-storefronts-value",
+    "sim-whatsapp-slider",
+    "sim-whatsapp-value",
+    "simulator-estimated-days",
+    "simulator-monthly-estimate",
+    "simulator-recommended-plan"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em CreditDurationSimulator.tsx",
+  "check": "verify-micro",
+  "after": []
+}

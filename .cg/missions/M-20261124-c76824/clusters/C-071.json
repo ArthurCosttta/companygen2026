@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-071",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/CommandPaletteModal.tsx"
+  ],
+  "range": [
+    294,
+    382
+  ],
+  "preserveTestIds": [
+    "command-palette-modal",
+    "command-palette-input",
+    "command-palette-empty"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (294-382) de CommandPaletteModal.tsx preservando 3 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-070"
+  ]
+}

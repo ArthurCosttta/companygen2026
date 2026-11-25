@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-121",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/admin/AdminCrashLogsPanel.tsx"
+  ],
+  "range": [
+    239,
+    304
+  ],
+  "preserveTestIds": [
+    "admin-copy-ai-context-btn",
+    "admin-crash-inspector",
+    "admin-crash-logs-panel",
+    "admin-logs-search",
+    "admin-logs-status-filter",
+    "admin-resolve-crash-btn"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em AdminCrashLogsPanel.tsx",
+  "check": "verify-micro",
+  "after": []
+}

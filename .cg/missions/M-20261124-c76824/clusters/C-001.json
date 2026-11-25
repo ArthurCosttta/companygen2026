@@ -1,0 +1,20 @@
+{
+  "clusterId": "C-001",
+  "wave": "W1",
+  "macroIntent": "STATE_FLOW",
+  "kind": "GEN-STATE-COHERENCE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "server/access-and-checkout.mjs"
+  ],
+  "range": null,
+  "preserveTestIds": [],
+  "description": "Resolver orphan_reader em \"disk:credits_ledger.json\" (server/access-and-checkout.mjs)",
+  "check": "agent-ops lint",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:23.981Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

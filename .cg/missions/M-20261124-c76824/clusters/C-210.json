@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-210",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/MyLibraryDockModal.tsx"
+  ],
+  "range": [
+    93,
+    158
+  ],
+  "preserveTestIds": [
+    "my-library-modal"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em MyLibraryDockModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

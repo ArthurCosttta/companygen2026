@@ -1,0 +1,4157 @@
+{
+  "generatedAt": "2026-11-24T17:15:30.087Z",
+  "edgeCount": 830,
+  "edges": [
+    {
+      "from": "desktop/main.mjs",
+      "type": "imports",
+      "to": "shared/webview-scripts-signer.mjs"
+    },
+    {
+      "from": "desktop/main.mjs",
+      "type": "imports",
+      "to": "shared/whatsapp-webview-script.mjs"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "imports",
+      "to": "server/middleware/bounded-map.mjs"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "imports",
+      "to": "server/middleware/client-ip.mjs"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/access/claim-email"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/access/guest-start"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/access/local-showcase-login"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/access/redeem"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/access/showcase-status"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/access/validate"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/checkout/confirm"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/checkout/order"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/checkout/plans"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/credits/balance"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/credits/costs"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/credits/redeem-code"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/credits/redemption-quota"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "serves",
+      "to": "route:/api/kiwify/lookup-code"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "writes",
+      "to": "disk:orders.json"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "writes",
+      "to": "disk:whatsapp_events.json"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "reads",
+      "to": "disk:credits_ledger.json"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "reads",
+      "to": "disk:orders.json"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "reads",
+      "to": "disk:profile.json"
+    },
+    {
+      "from": "server/access-and-checkout.mjs",
+      "type": "reads",
+      "to": "disk:whatsapp_events.json"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "imports",
+      "to": "server/access-and-checkout.mjs"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "imports",
+      "to": "server/crash-telemetry.mjs"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "imports",
+      "to": "server/email-mailer.mjs"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "imports",
+      "to": "server/email-templates.mjs"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "imports",
+      "to": "server/middleware/ai-budget.mjs"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "imports",
+      "to": "server/middleware/bounded-map.mjs"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "imports",
+      "to": "server/pii-scrubber.mjs"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "imports",
+      "to": "server/public-storefront-loader.mjs"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "imports",
+      "to": "server/support-and-qr.mjs"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/desktop-policy"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/feature-flags"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/invites"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/invites/revoke"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/kiwify/events"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/kiwify/replay"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/logs/crashes"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/logs/crashes/status"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/overview"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/qr-batches"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/qr-campaigns"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/status"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/tickets/resolve"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/users/ban"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/users/credits"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/users/limits"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/desktop/download"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/desktop/heartbeat"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/desktop/release-policy"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "serves",
+      "to": "route:/api/features"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "reads",
+      "to": "disk:_access_redemption_events.json"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "reads",
+      "to": "disk:_desktop_fleet.json"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "reads",
+      "to": "disk:_kiwify_events.json"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "reads",
+      "to": "disk:admin_registry.json"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "reads",
+      "to": "disk:credits_ledger.json"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "reads",
+      "to": "disk:orders.json"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "reads",
+      "to": "disk:profile.json"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "reads",
+      "to": "disk:studio.json"
+    },
+    {
+      "from": "server/admin-console.mjs",
+      "type": "reads",
+      "to": "disk:whatsapp_session.json"
+    },
+    {
+      "from": "server/admin-digest.mjs",
+      "type": "imports",
+      "to": "server/access-and-checkout.mjs"
+    },
+    {
+      "from": "server/admin-digest.mjs",
+      "type": "imports",
+      "to": "server/pii-scrubber.mjs"
+    },
+    {
+      "from": "server/ai-global-agent.mjs",
+      "type": "imports",
+      "to": "server/access-and-checkout.mjs"
+    },
+    {
+      "from": "server/ai-global-agent.mjs",
+      "type": "imports",
+      "to": "server/storefront-molde-fs.mjs"
+    },
+    {
+      "from": "server/ai-global-agent.mjs",
+      "type": "imports",
+      "to": "server/sync-engine.mjs"
+    },
+    {
+      "from": "server/ai-global-agent.mjs",
+      "type": "serves",
+      "to": "route:/api/ai/global-command"
+    },
+    {
+      "from": "server/ai-global-agent.mjs",
+      "type": "writes",
+      "to": "disk:orders.json"
+    },
+    {
+      "from": "server/ai-global-agent.mjs",
+      "type": "reads",
+      "to": "disk:orders.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "imports",
+      "to": "server/access-and-checkout.mjs"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "imports",
+      "to": "server/media-transcribe.mjs"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/spreadsheet-intelligence.mjs"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/brain"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/classify-and-draft"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/config"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/human-drafts"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/message-flows"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/message-flows/action"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/message-flows/generate-more"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/notifications/action"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/refund-failed-send"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/runtime"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/simulate-or-reply"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/templates"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/ai/transcribe-audio"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/events"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/events/ack"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/events/test-alarm"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/handoff-ack"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/notifications/ack"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/purchase-confirm"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/traffic/click"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "writes",
+      "to": "disk:configuracoes.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "writes",
+      "to": "disk:orders.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "writes",
+      "to": "disk:sofia_brain.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "writes",
+      "to": "disk:templates.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "writes",
+      "to": "disk:whatsapp_events.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "writes",
+      "to": "disk:whatsapp_flows.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "reads",
+      "to": "disk:config_loja.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "reads",
+      "to": "disk:configuracoes.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "reads",
+      "to": "disk:metrics.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "reads",
+      "to": "disk:orders.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "reads",
+      "to": "disk:profile.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "reads",
+      "to": "disk:skus.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "reads",
+      "to": "disk:sofia_brain.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "reads",
+      "to": "disk:templates.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "reads",
+      "to": "disk:whatsapp_events.json"
+    },
+    {
+      "from": "server/ai-sofia-local.mjs",
+      "type": "reads",
+      "to": "disk:whatsapp_flows.json"
+    },
+    {
+      "from": "server/ai-spreadsheet-engine.mjs",
+      "type": "imports",
+      "to": "server/storefront-molde-fs.mjs"
+    },
+    {
+      "from": "server/ai-spreadsheet-engine.mjs",
+      "type": "imports",
+      "to": "server/sync-engine.mjs"
+    },
+    {
+      "from": "server/ai-spreadsheet-engine.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/composer-schema.mjs"
+    },
+    {
+      "from": "server/ai-spreadsheet-engine.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/spreadsheet-intelligence.mjs"
+    },
+    {
+      "from": "server/ai-spreadsheet-engine.mjs",
+      "type": "serves",
+      "to": "route:/api/ai/spreadsheet/catalog-orders"
+    },
+    {
+      "from": "server/ai-spreadsheet-engine.mjs",
+      "type": "serves",
+      "to": "route:/api/ai/spreadsheet/transform-catalog"
+    },
+    {
+      "from": "server/ai-spreadsheet-engine.mjs",
+      "type": "reads",
+      "to": "disk:orders.json"
+    },
+    {
+      "from": "server/atomic-architect-pipeline.mjs",
+      "type": "imports",
+      "to": "server/section-property-prompts.mjs"
+    },
+    {
+      "from": "server/atomic-architect-pipeline.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/image-moldes.mjs"
+    },
+    {
+      "from": "server/atomic-architect-pipeline.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/visual-math-engine.mjs"
+    },
+    {
+      "from": "server/atomic-hydrator.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/atomic-grammar.mjs"
+    },
+    {
+      "from": "server/atomic-hydrator.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/visual-math-engine.mjs"
+    },
+    {
+      "from": "server/atomic-visual-critic.mjs",
+      "type": "imports",
+      "to": "server/tuple-specification-module.mjs"
+    },
+    {
+      "from": "server/atomic-visual-critic.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/visual-math-engine.mjs"
+    },
+    {
+      "from": "server/crash-telemetry.mjs",
+      "type": "imports",
+      "to": "server/access-and-checkout.mjs"
+    },
+    {
+      "from": "server/crash-telemetry.mjs",
+      "type": "imports",
+      "to": "server/email-mailer.mjs"
+    },
+    {
+      "from": "server/crash-telemetry.mjs",
+      "type": "imports",
+      "to": "server/middleware/bounded-map.mjs"
+    },
+    {
+      "from": "server/crash-telemetry.mjs",
+      "type": "imports",
+      "to": "server/pii-scrubber.mjs"
+    },
+    {
+      "from": "server/design-critic.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/composer-schema.mjs"
+    },
+    {
+      "from": "server/glm-architect-prompt.mjs",
+      "type": "imports",
+      "to": "server/section-property-prompts.mjs"
+    },
+    {
+      "from": "server/glm-architect-prompt.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/composer-schema.mjs"
+    },
+    {
+      "from": "server/glm-architect-prompt.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/neutral-fallback-v9.mjs"
+    },
+    {
+      "from": "server/index.mjs",
+      "type": "imports",
+      "to": "server/workspace.mjs"
+    },
+    {
+      "from": "server/middleware/ai-budget.mjs",
+      "type": "imports",
+      "to": "server/middleware/bounded-map.mjs"
+    },
+    {
+      "from": "server/molde-html-emitter.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/composer-schema.mjs"
+    },
+    {
+      "from": "server/molde-html-emitter.mjs",
+      "type": "writes",
+      "to": "ls:cg_molde_cart_v9"
+    },
+    {
+      "from": "server/molde-html-emitter.mjs",
+      "type": "reads",
+      "to": "ls:cg_molde_cart_v9"
+    },
+    {
+      "from": "server/public-storefront-loader.mjs",
+      "type": "imports",
+      "to": "server/access-and-checkout.mjs"
+    },
+    {
+      "from": "server/public-storefront-loader.mjs",
+      "type": "imports",
+      "to": "server/storefront-molde-fs.mjs"
+    },
+    {
+      "from": "server/public-storefront-loader.mjs",
+      "type": "imports",
+      "to": "server/supabase-storage-sync.mjs"
+    },
+    {
+      "from": "server/public-storefront-loader.mjs",
+      "type": "reads",
+      "to": "disk:profile.json"
+    },
+    {
+      "from": "server/section-property-prompts.mjs",
+      "type": "imports",
+      "to": "server/tuple-specification-module.mjs"
+    },
+    {
+      "from": "server/section-property-prompts.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/atomic-grammar.mjs"
+    },
+    {
+      "from": "server/section-property-prompts.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/brief-questions.mjs"
+    },
+    {
+      "from": "server/store-semantic-dossier.mjs",
+      "type": "imports",
+      "to": "server/storefront-experience-matrix.mjs"
+    },
+    {
+      "from": "server/store-semantic-dossier.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/spreadsheet-intelligence.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/access-and-checkout.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/admin-console.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/atomic-architect-pipeline.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/atomic-hydrator.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/atomic-visual-critic.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/design-critic.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/glm-architect-prompt.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/molde-html-emitter.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/runpod-media.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/section-property-prompts.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/store-semantic-dossier.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/storefront-experience-matrix.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "server/supabase-storage-sync.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/atomic-grammar.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/brief-questions.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/composer-schema.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/image-moldes.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/spreadsheet-intelligence.mjs"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/onboarding/ai-autofill"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/analyze-brief"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/create-page"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/edit-block"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/ensure-pack"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/generate-full"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/generate-image"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/media/upload"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/onboarding-assist"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/patch-section"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/recommended-pages"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/save-ir"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/state"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/upload-asset"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "reads",
+      "to": "disk:formulas-ir.json"
+    },
+    {
+      "from": "server/storefront-molde-fs.mjs",
+      "type": "reads",
+      "to": "disk:image-jobs.json"
+    },
+    {
+      "from": "server/supabase-storage-sync.mjs",
+      "type": "imports",
+      "to": "server/access-and-checkout.mjs"
+    },
+    {
+      "from": "server/support-and-qr.mjs",
+      "type": "imports",
+      "to": "server/access-and-checkout.mjs"
+    },
+    {
+      "from": "server/support-and-qr.mjs",
+      "type": "imports",
+      "to": "server/pii-scrubber.mjs"
+    },
+    {
+      "from": "server/support-and-qr.mjs",
+      "type": "serves",
+      "to": "route:/api/onboarding/feedback"
+    },
+    {
+      "from": "server/support-and-qr.mjs",
+      "type": "serves",
+      "to": "route:/api/store/qr-code"
+    },
+    {
+      "from": "server/support-and-qr.mjs",
+      "type": "serves",
+      "to": "route:/api/support/tickets"
+    },
+    {
+      "from": "server/tuple-specification-module.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/atomic-grammar.mjs"
+    },
+    {
+      "from": "server/tuple-specification-module.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/visual-math-engine.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/access-and-checkout.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/admin-console.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/ai-global-agent.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/ai-sofia-local.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/ai-spreadsheet-engine.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/crash-telemetry.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/media-sanitize.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/middleware/ai-budget.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/middleware/bounded-map.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/middleware/client-ip.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/pii-scrubber.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/public-storefront-loader.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/storefront-molde-fs.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/supabase-storage-sync.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/support-and-qr.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "server/sync-engine.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "shared/webview-scripts-signer.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "imports",
+      "to": "shared/whatsapp-webview-script.mjs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/access/claim-email"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/access/guest-start"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/access/local-showcase-login"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/access/redeem"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/access/showcase-status"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/access/validate"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/admin/status"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/catalogo/foto"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/chat/modo-atendimento"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/chat/new"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/chat/send"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/checkout/confirm"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/checkout/order"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/checkout/plans"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/config/save"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/config_loja"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/conversas/pagina"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/credits/balance"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/credits/costs"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/credits/redeem-code"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/credits/redemption-quota"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/dados"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/dashboard"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/desktop/download"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/desktop/heartbeat"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/desktop/release-policy"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/desktop/webview-scripts"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/documentos/delete"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/documentos/save"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/estado/exportar"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/features"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/fluxo/simular"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/health"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/hunt"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/images/status"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/importar-imagem"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/instagram/analyze"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/kiwify/lookup-code"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/onboarding/reset"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/onboarding/salvar"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/orders"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/orders/ai-modify"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/orders/import-batch"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/profile"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/ready"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/sessao/connect"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/sessao/pausar"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/sessao/reset"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/skus/adicionar"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/skus/remover"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/skus/sync"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/analyze-brief"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/create-page"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/edit-block"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/generate"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/generate-full"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/generate-image"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/generate-product-images"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/onboarding-assist"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/patch-section"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/recommended-pages"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/save-ir"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/state"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store-molde/upload-asset"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store/public"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store/qr-code"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/store/visit"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/support/tickets"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/telemetry/crash"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/templates/save"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/upload-imagem"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/whatsapp/perfil"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/workspace"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/workspace/backup-export"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "serves",
+      "to": "route:/api/workspace/backup-restore"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "writes",
+      "to": "disk:ai_custom_templates.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "writes",
+      "to": "disk:config_loja.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "writes",
+      "to": "disk:configuracoes.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "writes",
+      "to": "disk:orders.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "writes",
+      "to": "disk:profile.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "writes",
+      "to": "disk:skus.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "writes",
+      "to": "disk:supabase-whatsapp.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "writes",
+      "to": "disk:templates.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:_admin_registry.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:ai_custom_templates.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:configuracoes.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:conversas.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:orders.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:profile.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:store_metrics.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:studio.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:supabase-whatsapp.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:templates.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:whatsapp_events.json"
+    },
+    {
+      "from": "server/workspace.mjs",
+      "type": "reads",
+      "to": "disk:whatsapp_flows.json"
+    },
+    {
+      "from": "shared/formula-ir/atomic-grammar.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/visual-math-engine.mjs"
+    },
+    {
+      "from": "shared/formula-ir/brief-questions.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/spreadsheet-intelligence.mjs"
+    },
+    {
+      "from": "shared/formula-ir/neutral-fallback-v9.mjs",
+      "type": "imports",
+      "to": "shared/formula-ir/composer-schema.mjs"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/auth/AuthFlowView.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/auth/GuestClaimEmailModal.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/shell/index.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/shell/FloatingTopPill.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/shell/HighSaturationNotificationBar.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ErrorBoundary.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/ui/GlobalAiAssistantWidget.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/access/AccessCodeView.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/admin/AdminConsoleView.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/checkout/CheckoutPlansView.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/onboarding/index.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/onboarding/OnboardingIgnitionView.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/onboarding/OnboardingSynthesisStage.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/orders/index.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/settings/index.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/CustomerStorefrontView.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/EditorialStoreControlView.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-utils.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/studio/index.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/whatsapp/index.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/components/views/whatsapp/WhatsAppConnectionView.tsx"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/hooks/useClientMaturity.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/hooks/useConnectionPhase.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/hooks/useHighSaturationNotifications.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/hooks/useNetworkAndDraftGuard.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/hooks/useWebviewWhatsappResponder.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/schemas/formula-v9.schema.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/services/local-storage.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/services/whatsapp-profile-sync.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/utils/chunk-recovery.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/utils/crash-telemetry.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "imports",
+      "to": "src/utils/performance-mode.ts"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "fetches",
+      "to": "route:/api/access/claim-email"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "fetches",
+      "to": "route:/api/access/redeem"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/status"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "fetches",
+      "to": "route:/api/credits/balance"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/api/dados"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "emits",
+      "to": "event:companygen:open-checkout"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "emits",
+      "to": "event:companygen:theme-change"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "listens",
+      "to": "event:companygen:credit-balance-updated"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "listens",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "listens",
+      "to": "event:companygen:insufficient-credits"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "listens",
+      "to": "event:companygen:local-showcase-auth"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "listens",
+      "to": "event:companygen:low-spec-change"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "listens",
+      "to": "event:companygen:open-access"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "listens",
+      "to": "event:companygen:open-checkout"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "listens",
+      "to": "event:companygen:support-readonly-changed"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "writes",
+      "to": "ls:cg_theme"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "writes",
+      "to": "ss:cg_ignition_opts_${payload.clientJobId}"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "writes",
+      "to": "ss:cg_post_onboarding_tips_${user.id}"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "reads",
+      "to": "ls:cg_theme"
+    },
+    {
+      "from": "src/app/App.tsx",
+      "type": "reads",
+      "to": "ss:cg_validated_invite"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "imports",
+      "to": "src/components/auth/GuestClaimEmailModal.tsx"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-utils.ts"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "imports",
+      "to": "src/utils/inviteCode.ts"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "imports",
+      "to": "src/utils/themeLogos.ts"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "fetches",
+      "to": "route:/api/access/guest-start"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "fetches",
+      "to": "route:/api/access/local-showcase-login"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "fetches",
+      "to": "route:/api/access/validate"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "emits",
+      "to": "event:companygen:open-access"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "writes",
+      "to": "ss:cg_validated_invite"
+    },
+    {
+      "from": "src/components/auth/AuthFlowView.tsx",
+      "type": "reads",
+      "to": "ss:cg_validated_invite"
+    },
+    {
+      "from": "src/components/auth/GuestClaimEmailModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/auth/GuestClaimEmailModal.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/auth/GuestClaimEmailModal.tsx",
+      "type": "fetches",
+      "to": "route:/api/access/claim-email"
+    },
+    {
+      "from": "src/components/shell/CommandPaletteModal.tsx",
+      "type": "imports",
+      "to": "src/components/shell/Sidebar.tsx"
+    },
+    {
+      "from": "src/components/shell/CommandPaletteModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/shell/CommandPaletteModal.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/shell/CommandPaletteModal.tsx",
+      "type": "emits",
+      "to": "event:companygen:focus-product"
+    },
+    {
+      "from": "src/components/shell/FloatingTopPill.tsx",
+      "type": "imports",
+      "to": "src/components/shell/Sidebar.tsx"
+    },
+    {
+      "from": "src/components/shell/FloatingTopPill.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/shell/HighSaturationNotificationBar.tsx",
+      "type": "imports",
+      "to": "src/hooks/useHighSaturationNotifications.ts"
+    },
+    {
+      "from": "src/components/shell/HighSaturationNotificationBar.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/shell/HighSaturationNotificationBar.tsx",
+      "type": "imports",
+      "to": "src/schemas/ai-whatsapp-intent.schema.ts"
+    },
+    {
+      "from": "src/components/shell/Sidebar.tsx",
+      "type": "imports",
+      "to": "src/hooks/useConnectionPhase.ts"
+    },
+    {
+      "from": "src/components/shell/Sidebar.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/shell/Sidebar.tsx",
+      "type": "imports",
+      "to": "src/utils/themeLogos.ts"
+    },
+    {
+      "from": "src/components/shell/Topbar.tsx",
+      "type": "imports",
+      "to": "src/components/shell/Sidebar.tsx"
+    },
+    {
+      "from": "src/components/shell/Topbar.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/shell/Topbar.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/shell/Topbar.tsx",
+      "type": "listens",
+      "to": "event:companygen:credit-spent"
+    },
+    {
+      "from": "src/components/ui/ActionButton.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/ui/CreditAlertCenterModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ActionButton.tsx"
+    },
+    {
+      "from": "src/components/ui/CreditAlertCenterModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ModalContainer.tsx"
+    },
+    {
+      "from": "src/components/ui/CreditAlertCenterModal.tsx",
+      "type": "listens",
+      "to": "event:companygen:insufficient-credits"
+    },
+    {
+      "from": "src/components/ui/DrawerContainer.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/ui/EmptyStateCard.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ActionButton.tsx"
+    },
+    {
+      "from": "src/components/ui/EmptyStateCard.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/ui/ErrorBoundary.tsx",
+      "type": "imports",
+      "to": "src/utils/chunk-recovery.ts"
+    },
+    {
+      "from": "src/components/ui/ErrorBoundary.tsx",
+      "type": "imports",
+      "to": "src/utils/crash-telemetry.ts"
+    },
+    {
+      "from": "src/components/ui/GlobalAiAssistantWidget.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/ui/GlobalAiAssistantWidget.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/ui/GlobalAiAssistantWidget.tsx",
+      "type": "fetches",
+      "to": "route:/api/ai/global-command"
+    },
+    {
+      "from": "src/components/ui/GlobalAiAssistantWidget.tsx",
+      "type": "emits",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/components/ui/GlobalAiAssistantWidget.tsx",
+      "type": "emits",
+      "to": "event:companygen:onboarding-fill"
+    },
+    {
+      "from": "src/components/ui/HumanErrorCard.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ActionButton.tsx"
+    },
+    {
+      "from": "src/components/ui/HumanErrorCard.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/ui/HumanErrorCard.tsx",
+      "type": "imports",
+      "to": "src/utils/humanErrors.ts"
+    },
+    {
+      "from": "src/components/ui/ModalContainer.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/ui/SupportTicketModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ActionButton.tsx"
+    },
+    {
+      "from": "src/components/ui/SupportTicketModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ModalContainer.tsx"
+    },
+    {
+      "from": "src/components/ui/SupportTicketModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ToastProvider.tsx"
+    },
+    {
+      "from": "src/components/ui/SupportTicketModal.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/ui/SupportTicketModal.tsx",
+      "type": "fetches",
+      "to": "route:/api/support/tickets"
+    },
+    {
+      "from": "src/components/ui/ToastProvider.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/views/WhatsAppView.tsx",
+      "type": "imports",
+      "to": "src/hooks/useWebviewWhatsappResponder.ts"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "imports",
+      "to": "src/components/auth/GuestClaimEmailModal.tsx"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ActionButton.tsx"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ToastProvider.tsx"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "imports",
+      "to": "src/utils/inviteCode.ts"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "imports",
+      "to": "src/utils/themeLogos.ts"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "fetches",
+      "to": "route:/api/access/guest-start"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "fetches",
+      "to": "route:/api/access/local-showcase-login"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "fetches",
+      "to": "route:/api/access/validate"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "fetches",
+      "to": "route:/api/kiwify/lookup-code"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "writes",
+      "to": "ss:cg_entry_qr"
+    },
+    {
+      "from": "src/components/views/access/AccessCodeView.tsx",
+      "type": "writes",
+      "to": "ss:cg_validated_invite"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "imports",
+      "to": "src/components/views/admin/AdminCrashLogsPanel.tsx"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "imports",
+      "to": "src/components/views/admin/AdminUser360Drawer.tsx"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-utils.ts"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/desktop-policy"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/feature-flags"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/invites"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/invites/revoke"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/kiwify/replay"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/overview"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/qr-batches"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/qr-campaigns"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/tickets/resolve"
+    },
+    {
+      "from": "src/components/views/admin/AdminConsoleView.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/users/${encodeURIComponent(targetUser.id)}/support-snapshot"
+    },
+    {
+      "from": "src/components/views/admin/AdminCrashLogsPanel.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/admin/AdminCrashLogsPanel.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/admin/AdminCrashLogsPanel.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/logs/crashes/status"
+    },
+    {
+      "from": "src/components/views/admin/AdminUser360Drawer.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/admin/AdminUser360Drawer.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-utils.ts"
+    },
+    {
+      "from": "src/components/views/admin/AdminUser360Drawer.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/admin/AdminUser360Drawer.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/feature-flags"
+    },
+    {
+      "from": "src/components/views/admin/AdminUser360Drawer.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/kiwify/replay"
+    },
+    {
+      "from": "src/components/views/admin/AdminUser360Drawer.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/users/${encodeURIComponent(targetUser.id)}/support-snapshot"
+    },
+    {
+      "from": "src/components/views/admin/AdminUser360Drawer.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/users/ban"
+    },
+    {
+      "from": "src/components/views/admin/AdminUser360Drawer.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/users/credits"
+    },
+    {
+      "from": "src/components/views/admin/AdminUser360Drawer.tsx",
+      "type": "fetches",
+      "to": "route:/api/admin/users/limits"
+    },
+    {
+      "from": "src/components/views/checkout/CheckoutPlansView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ActionButton.tsx"
+    },
+    {
+      "from": "src/components/views/checkout/CheckoutPlansView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ToastProvider.tsx"
+    },
+    {
+      "from": "src/components/views/checkout/CheckoutPlansView.tsx",
+      "type": "imports",
+      "to": "src/components/views/checkout/CreditDurationSimulator.tsx"
+    },
+    {
+      "from": "src/components/views/checkout/CheckoutPlansView.tsx",
+      "type": "imports",
+      "to": "src/components/views/settings/RedeemCreditCodeCard.tsx"
+    },
+    {
+      "from": "src/components/views/checkout/CheckoutPlansView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/checkout/CheckoutPlansView.tsx",
+      "type": "imports",
+      "to": "src/utils/themeLogos.ts"
+    },
+    {
+      "from": "src/components/views/checkout/CheckoutPlansView.tsx",
+      "type": "fetches",
+      "to": "route:/api/checkout/plans"
+    },
+    {
+      "from": "src/components/views/checkout/CheckoutPlansView.tsx",
+      "type": "fetches",
+      "to": "route:/api/credits/balance"
+    },
+    {
+      "from": "src/components/views/checkout/CheckoutPlansView.tsx",
+      "type": "emits",
+      "to": "event:companygen:credit-balance-updated"
+    },
+    {
+      "from": "src/components/views/checkout/CheckoutPlansView.tsx",
+      "type": "emits",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/components/views/checkout/CreditDurationSimulator.tsx",
+      "type": "imports",
+      "to": "src/components/views/checkout/CheckoutPlansView.tsx"
+    },
+    {
+      "from": "src/components/views/checkout/CreditDurationSimulator.tsx",
+      "type": "fetches",
+      "to": "route:/api/credits/costs"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "shared/formula-ir/spreadsheet-intelligence.mjs"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/components/views/onboarding/OnboardingSynthesisStage.tsx"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/components/views/onboarding/PreBuildPagesCartStep.tsx"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/components/views/onboarding/onboarding-helpers.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/components/views/onboarding/onboarding-niche-presets.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/index.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/DynamicBriefQuestionsModal.tsx"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/hooks/useDraftAutoSave.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/utils/crash-telemetry.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "imports",
+      "to": "src/utils/logoColorExtractor.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/ai/spreadsheet/transform-catalog"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/analyze-brief"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/onboarding-assist"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingIgnitionView.tsx",
+      "type": "listens",
+      "to": "event:companygen:onboarding-fill"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingModals.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingModals.tsx",
+      "type": "imports",
+      "to": "src/components/views/onboarding/onboarding-helpers.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "imports",
+      "to": "src/schemas/formula-v9.schema.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/ensure-pack"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/generate-full"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/job/${encodeURIComponent(activeJobId)}"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "writes",
+      "to": "ss:cg_ignition_opts_${nextJob}"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "reads",
+      "to": "ss:cg_ignition_opts_${activeJobId}"
+    },
+    {
+      "from": "src/components/views/onboarding/OnboardingSynthesisStage.tsx",
+      "type": "reads",
+      "to": "ss:cg_ignition_opts_${jobId}"
+    },
+    {
+      "from": "src/components/views/onboarding/PreBuildPagesCartStep.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/onboarding-helpers.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/onboarding/onboarding-helpers.ts",
+      "type": "emits",
+      "to": "event:companygen:ficha-draft-updated"
+    },
+    {
+      "from": "src/components/views/onboarding/onboarding-niche-presets.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/orders/ImportOrdersSpreadsheetModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/orders/ImportOrdersSpreadsheetModal.tsx",
+      "type": "imports",
+      "to": "src/components/views/orders/orders-spreadsheet-import.ts"
+    },
+    {
+      "from": "src/components/views/orders/ImportOrdersSpreadsheetModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/orders/ImportOrdersSpreadsheetModal.tsx",
+      "type": "imports",
+      "to": "src/utils/xlsx-io.ts"
+    },
+    {
+      "from": "src/components/views/orders/ManualSaleModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/orders/ManualSaleModal.tsx",
+      "type": "imports",
+      "to": "src/components/views/orders/order-utils.ts"
+    },
+    {
+      "from": "src/components/views/orders/ManualSaleModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/orders/ManualSaleModal.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrderDetailsModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrderDetailsModal.tsx",
+      "type": "imports",
+      "to": "src/components/views/orders/order-utils.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrderDetailsModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrderDetailsModal.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrderSpreadsheetCatalogModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrderSpreadsheetCatalogModal.tsx",
+      "type": "imports",
+      "to": "src/services/local-storage.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrderSpreadsheetCatalogModal.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrderSpreadsheetCatalogModal.tsx",
+      "type": "imports",
+      "to": "src/utils/xlsx-io.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrderSpreadsheetCatalogModal.tsx",
+      "type": "fetches",
+      "to": "route:/api/ai/spreadsheet/catalog-orders"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/components/views/orders/ImportOrdersSpreadsheetModal.tsx"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/components/views/orders/ManualSaleModal.tsx"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/components/views/orders/OrderDetailsModal.tsx"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/components/views/orders/OrderSpreadsheetCatalogModal.tsx"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/components/views/orders/order-utils.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/components/views/orders/orders-spreadsheet-import.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-utils.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/schemas/ai-whatsapp-intent.schema.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "imports",
+      "to": "src/utils/chunk-recovery.ts"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "fetches",
+      "to": "route:/api/orders/ai-modify"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "fetches",
+      "to": "route:/api/orders/import-batch"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/events"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "writes",
+      "to": "ls:companygen:auto_notify_order_stages"
+    },
+    {
+      "from": "src/components/views/orders/OrdersKanbanView.tsx",
+      "type": "reads",
+      "to": "ls:companygen:auto_notify_order_stages"
+    },
+    {
+      "from": "src/components/views/orders/order-utils.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/orders/order-utils.ts",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/orders/orders-spreadsheet-import.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/orders/orders-spreadsheet-import.ts",
+      "type": "imports",
+      "to": "src/utils/xlsx-io.ts"
+    },
+    {
+      "from": "src/components/views/settings/RedeemCreditCodeCard.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ActionButton.tsx"
+    },
+    {
+      "from": "src/components/views/settings/RedeemCreditCodeCard.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ToastProvider.tsx"
+    },
+    {
+      "from": "src/components/views/settings/RedeemCreditCodeCard.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/settings/RedeemCreditCodeCard.tsx",
+      "type": "fetches",
+      "to": "route:/api/credits/redeem-code"
+    },
+    {
+      "from": "src/components/views/settings/RedeemCreditCodeCard.tsx",
+      "type": "fetches",
+      "to": "route:/api/credits/redemption-quota"
+    },
+    {
+      "from": "src/components/views/settings/RedeemCreditCodeCard.tsx",
+      "type": "emits",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/components/views/onboarding/index.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/components/views/settings/RedeemCreditCodeCard.tsx"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-utils.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/hooks/useConnectionPhase.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/hooks/useHighSaturationNotifications.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/utils/audio-alerts.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "imports",
+      "to": "src/utils/performance-mode.ts"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "fetches",
+      "to": "route:/api/credits/balance"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/events/test-alarm"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "fetches",
+      "to": "route:/api/workspace/backup-restore"
+    },
+    {
+      "from": "src/components/views/settings/SettingsView.tsx",
+      "type": "emits",
+      "to": "event:companygen:open-checkout"
+    },
+    {
+      "from": "src/components/views/storefront/AtomicGrammarCompiler.ts",
+      "type": "imports",
+      "to": "shared/formula-ir/atomic-grammar.mjs"
+    },
+    {
+      "from": "src/components/views/storefront/AtomicGrammarCompiler.ts",
+      "type": "imports",
+      "to": "shared/formula-ir/visual-math-engine.mjs"
+    },
+    {
+      "from": "src/components/views/storefront/AtomicSectionRenderers.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/AtomicGrammarCompiler.ts"
+    },
+    {
+      "from": "src/components/views/storefront/AtomicSectionRenderers.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/LazyReferencePacks.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/AtomicSectionRenderers.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/views/storefront/AtomicSectionRenderers.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/BatchImageSearchModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ActionButton.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/BatchImageSearchModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ToastProvider.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/BatchImageSearchModal.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/ProductImageDetailModal.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/BatchImageSearchModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/BatchImageSearchModal.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/storefront/BatchImageSearchModal.tsx",
+      "type": "fetches",
+      "to": "route:/api/hunt"
+    },
+    {
+      "from": "src/components/views/storefront/CatalogGuardModals.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "shared/formula-ir/neutral-fallback-v9.mjs"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/FormulaTreeRenderer.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/StorePagesExpansionModal.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/StorefrontAiInspector.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/StorefrontPostGenWhatsappModal.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-utils.ts"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/hooks/useConnectionPhase.ts"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/schemas/formula-v9.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "imports",
+      "to": "src/utils/dynamic-vitrine-fonts.ts"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "fetches",
+      "to": "route:/api/credits/balance"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "fetches",
+      "to": "route:/api/orders"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "emits",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/components/views/storefront/CustomerStorefrontView.tsx",
+      "type": "listens",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/components/views/storefront/DynamicBriefQuestionsModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "shared/formula-ir/neutral-fallback-v9.mjs"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/components/shell/FloatingTopPill.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/components/shell/Sidebar.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/MyLibraryDockModal.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/ProductEditorDrawer.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/StorePagesExpansionModal.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/UniversalCatalogXlsxModal.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/editorial-store-helpers.ts"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-zip-builder.ts"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "imports",
+      "to": "src/utils/chunk-recovery.ts"
+    },
+    {
+      "from": "src/components/views/storefront/EditorialStoreControlView.tsx",
+      "type": "fetches",
+      "to": "route:/api/orders"
+    },
+    {
+      "from": "src/components/views/storefront/FormulaTreeRenderer.tsx",
+      "type": "imports",
+      "to": "shared/formula-ir/composer-schema.mjs"
+    },
+    {
+      "from": "src/components/views/storefront/FormulaTreeRenderer.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/AtomicGrammarCompiler.ts"
+    },
+    {
+      "from": "src/components/views/storefront/FormulaTreeRenderer.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/AtomicSectionRenderers.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/FormulaTreeRenderer.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-utils.ts"
+    },
+    {
+      "from": "src/components/views/storefront/FormulaTreeRenderer.tsx",
+      "type": "imports",
+      "to": "src/lib/utils.ts"
+    },
+    {
+      "from": "src/components/views/storefront/FormulaTreeRenderer.tsx",
+      "type": "imports",
+      "to": "src/schemas/formula-v9.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/FormulaTreeRenderer.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/FormulaTreeRenderer.tsx",
+      "type": "imports",
+      "to": "src/utils/fuzzySearch.ts"
+    },
+    {
+      "from": "src/components/views/storefront/LazyReferencePacks.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/ReferenceComponentsPack.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/LazyReferencePacks.tsx",
+      "type": "imports",
+      "to": "src/utils/chunk-recovery.ts"
+    },
+    {
+      "from": "src/components/views/storefront/MyLibraryDockModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/storefront/MyLibraryDockModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/ProductEditorDrawer.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/storefront/ProductEditorDrawer.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/CatalogGuardModals.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/ProductEditorDrawer.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-utils.ts"
+    },
+    {
+      "from": "src/components/views/storefront/ProductEditorDrawer.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/ProductEditorDrawer.tsx",
+      "type": "imports",
+      "to": "src/services/image-search.ts"
+    },
+    {
+      "from": "src/components/views/storefront/ProductEditorDrawer.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/storefront/ProductEditorDrawer.tsx",
+      "type": "imports",
+      "to": "src/utils/imageOptimize.ts"
+    },
+    {
+      "from": "src/components/views/storefront/ProductImageDetailModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ActionButton.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/ReferenceComponentsPack.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/AtomicGrammarCompiler.ts"
+    },
+    {
+      "from": "src/components/views/storefront/ReferenceComponentsPack.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/StorePagesExpansionModal.tsx",
+      "type": "imports",
+      "to": "shared/formula-ir/spreadsheet-intelligence.mjs"
+    },
+    {
+      "from": "src/components/views/storefront/StorePagesExpansionModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/storefront/StorePagesExpansionModal.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/DynamicBriefQuestionsModal.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/StorePagesExpansionModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/StorePagesExpansionModal.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/storefront/StorePagesExpansionModal.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/analyze-brief"
+    },
+    {
+      "from": "src/components/views/storefront/StorePagesExpansionModal.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/create-page"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontAiInspector.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontAiInspector.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/AtomicSectionRenderers.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontAiInspector.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/CampaignBlocksCatalog.ts"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontAiInspector.tsx",
+      "type": "imports",
+      "to": "src/schemas/formula-v9.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontAiInspector.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontAiInspector.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontAiInspector.tsx",
+      "type": "fetches",
+      "to": "route:/api/credits/balance"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontAiInspector.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/patch-section"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontAiInspector.tsx",
+      "type": "emits",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontAiInspector.tsx",
+      "type": "listens",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontPostGenWhatsappModal.tsx",
+      "type": "imports",
+      "to": "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/StorefrontPostGenWhatsappModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/UniversalCatalogXlsxModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/formula-v9.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/UniversalCatalogXlsxModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/UniversalCatalogXlsxModal.tsx",
+      "type": "imports",
+      "to": "src/services/local-storage.ts"
+    },
+    {
+      "from": "src/components/views/storefront/UniversalCatalogXlsxModal.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/storefront/UniversalCatalogXlsxModal.tsx",
+      "type": "imports",
+      "to": "src/utils/xlsx-io.ts"
+    },
+    {
+      "from": "src/components/views/storefront/UniversalCatalogXlsxModal.tsx",
+      "type": "fetches",
+      "to": "route:/api/ai/spreadsheet/transform-catalog"
+    },
+    {
+      "from": "src/components/views/storefront/VirtualTupleHarness.tsx",
+      "type": "imports",
+      "to": "shared/formula-ir/atomic-grammar.mjs"
+    },
+    {
+      "from": "src/components/views/storefront/VirtualTupleHarness.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/AtomicGrammarCompiler.ts"
+    },
+    {
+      "from": "src/components/views/storefront/VirtualTupleHarness.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/AtomicSectionRenderers.tsx"
+    },
+    {
+      "from": "src/components/views/storefront/VirtualTupleHarness.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/editorial-store-helpers.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/storefront-utils.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/storefront-utils.ts",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/storefront/storefront-utils.ts",
+      "type": "fetches",
+      "to": "route:/api/store-molde/media/upload"
+    },
+    {
+      "from": "src/components/views/storefront/storefront-zip-builder.ts",
+      "type": "imports",
+      "to": "shared/formula-ir/composer-schema.mjs"
+    },
+    {
+      "from": "src/components/views/storefront/storefront-zip-builder.ts",
+      "type": "imports",
+      "to": "shared/formula-ir/neutral-fallback-v9.mjs"
+    },
+    {
+      "from": "src/components/views/storefront/storefront-zip-builder.ts",
+      "type": "imports",
+      "to": "src/hooks/useConnectionPhase.ts"
+    },
+    {
+      "from": "src/components/views/storefront/storefront-zip-builder.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/storefront/storefront-zip-builder.ts",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/storefront/storefront-zip-builder.ts",
+      "type": "fetches",
+      "to": "route:/api/store-molde/state"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "server/design-critic.mjs"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "shared/formula-ir/neutral-fallback-v9.mjs"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/BatchImageSearchModal.tsx"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/FormulaTreeRenderer.tsx"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-utils.ts"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/storefront-zip-builder.ts"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/components/views/studio/CreditCostPreview.tsx"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/hooks/useFormulaUndoHistory.ts"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/schemas/formula-v9.schema.ts"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "imports",
+      "to": "src/utils/formulaDiff.ts"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/create-page"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/edit-block"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/generate-image"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/patch-section"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/save-ir"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/state"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "fetches",
+      "to": "route:/api/store-molde/upload-asset"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "emits",
+      "to": "event:companygen:insufficient-credits"
+    },
+    {
+      "from": "src/components/views/studio/ArchetypeComposerView.tsx",
+      "type": "emits",
+      "to": "event:companygen:open-checkout"
+    },
+    {
+      "from": "src/components/views/whatsapp/DisconnectConfirmModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/DisconnectConfirmModal.tsx",
+      "type": "imports",
+      "to": "src/hooks/useWebviewWhatsappResponder.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/DisconnectConfirmModal.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/DisconnectConfirmModal.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/api/sessao/reset"
+    },
+    {
+      "from": "src/components/views/whatsapp/QuickRepliesSection.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/QuickRepliesSection.tsx",
+      "type": "imports",
+      "to": "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx"
+    },
+    {
+      "from": "src/components/views/whatsapp/QuickRepliesSection.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/QuickRepliesSection.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/QuickRepliesSection.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/templates"
+    },
+    {
+      "from": "src/components/views/whatsapp/QuickRepliesSection.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/templates/${encodeURIComponent(item.id)}"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "imports",
+      "to": "src/components/views/WhatsAppView.tsx"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "imports",
+      "to": "src/components/views/whatsapp/DisconnectConfirmModal.tsx"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "imports",
+      "to": "src/components/views/whatsapp/QuickRepliesSection.tsx"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "imports",
+      "to": "src/hooks/useConnectionPhase.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "imports",
+      "to": "src/hooks/useHighSaturationNotifications.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "imports",
+      "to": "src/hooks/useWebviewWhatsappResponder.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/credits/balance"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/brain"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/human-drafts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/notifications/action"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/simulate-or-reply"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/transcribe-audio"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/api/dados"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/api/documentos/save"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/events/ack"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "listens",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "writes",
+      "to": "ls:companygen:sound_muted"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+      "type": "reads",
+      "to": "ls:companygen:sound_muted"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappFakeChatSimulator.tsx",
+      "type": "imports",
+      "to": "shared/formula-ir/spreadsheet-intelligence.mjs"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx",
+      "type": "imports",
+      "to": "shared/formula-ir/spreadsheet-intelligence.mjs"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx",
+      "type": "imports",
+      "to": "src/components/views/whatsapp/WhatsappFakeChatSimulator.tsx"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/message-flows"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/message-flows/action"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx",
+      "type": "imports",
+      "to": "shared/formula-ir/spreadsheet-intelligence.mjs"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx",
+      "type": "imports",
+      "to": "src/components/ui/index.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx",
+      "type": "imports",
+      "to": "src/components/views/whatsapp/WhatsappFakeChatSimulator.tsx"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx",
+      "type": "imports",
+      "to": "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/message-flows"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/message-flows/action"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/message-flows/generate-more"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappPersistentVisualizer.tsx",
+      "type": "imports",
+      "to": "src/hooks/useWebviewWhatsappResponder.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappPersistentVisualizer.tsx",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappPersistentVisualizer.tsx",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/runtime"
+    },
+    {
+      "from": "src/components/views/whatsapp/WhatsappPersistentVisualizer.tsx",
+      "type": "listens",
+      "to": "event:companygen:wa-runtime-update"
+    },
+    {
+      "from": "src/hooks/useClientMaturity.ts",
+      "type": "imports",
+      "to": "src/hooks/useConnectionPhase.ts"
+    },
+    {
+      "from": "src/hooks/useClientMaturity.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/hooks/useConnectionPhase.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/hooks/useFormulaUndoHistory.ts",
+      "type": "imports",
+      "to": "src/schemas/formula-v9.schema.ts"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "imports",
+      "to": "src/schemas/ai-whatsapp-intent.schema.ts"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "imports",
+      "to": "src/utils/audio-alerts.ts"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/simulate-or-reply"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/events"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/events/ack"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/events/test-alarm"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/traffic/click"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "emits",
+      "to": "event:companygen:wa-resume-ai"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "writes",
+      "to": "ls:${MUTE_STORAGE_PREFIX}${ownerRef.current}"
+    },
+    {
+      "from": "src/hooks/useHighSaturationNotifications.ts",
+      "type": "reads",
+      "to": "ls:${MUTE_STORAGE_PREFIX}${owner}"
+    },
+    {
+      "from": "src/hooks/useNetworkAndDraftGuard.ts",
+      "type": "listens",
+      "to": "event:companygen:network-status"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "imports",
+      "to": "shared/sofia/debounce-accumulator.mjs"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "imports",
+      "to": "src/utils/audio-alerts.ts"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/refund-failed-send"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/runtime"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/simulate-or-reply"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/ai/transcribe-audio"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/events/ack"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "emits",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "emits",
+      "to": "event:companygen:insufficient-credits"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "emits",
+      "to": "event:companygen:wa-runtime-update"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "listens",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "listens",
+      "to": "event:companygen:wa-resume-ai"
+    },
+    {
+      "from": "src/hooks/useWebviewWhatsappResponder.ts",
+      "type": "reads",
+      "to": "ls:companygen:sound_muted"
+    },
+    {
+      "from": "src/main.tsx",
+      "type": "imports",
+      "to": "src/app/App.tsx"
+    },
+    {
+      "from": "src/main.tsx",
+      "type": "imports",
+      "to": "src/components/ui/ErrorBoundary.tsx"
+    },
+    {
+      "from": "src/main.tsx",
+      "type": "imports",
+      "to": "src/components/views/storefront/VirtualTupleHarness.tsx"
+    },
+    {
+      "from": "src/main.tsx",
+      "type": "imports",
+      "to": "src/utils/chunk-recovery.ts"
+    },
+    {
+      "from": "src/main.tsx",
+      "type": "imports",
+      "to": "src/utils/crash-telemetry.ts"
+    },
+    {
+      "from": "src/schemas/formula-v9.schema.ts",
+      "type": "imports",
+      "to": "shared/formula-ir/composer-schema.mjs"
+    },
+    {
+      "from": "src/services/ai/whatsapp-purchase-detector.ts",
+      "type": "imports",
+      "to": "src/schemas/ai-whatsapp-intent.schema.ts"
+    },
+    {
+      "from": "src/services/ai/whatsapp-purchase-detector.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/services/image-search.ts",
+      "type": "imports",
+      "to": "src/services/local-storage.ts"
+    },
+    {
+      "from": "src/services/image-search.ts",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/services/image-search.ts",
+      "type": "fetches",
+      "to": "route:/api/hunt"
+    },
+    {
+      "from": "src/services/local-storage.ts",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/services/local-storage.ts",
+      "type": "fetches",
+      "to": "route:/api/workspace"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "imports",
+      "to": "src/schemas/formula-v9.schema.ts"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "imports",
+      "to": "src/services/local-storage.ts"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "imports",
+      "to": "src/utils/xlsx-io.ts"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "fetches",
+      "to": "route:/api/ai/spreadsheet/transform-catalog"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "fetches",
+      "to": "route:/api/dashboard${query}"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "fetches",
+      "to": "route:/api/instagram/analyze"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "fetches",
+      "to": "route:/api/orders"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "fetches",
+      "to": "route:/api/profile"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "fetches",
+      "to": "route:/api/store/visit"
+    },
+    {
+      "from": "src/services/profile-service.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/api/fluxo/simular"
+    },
+    {
+      "from": "src/services/supabase-client.ts",
+      "type": "imports",
+      "to": "src/utils/crash-telemetry.ts"
+    },
+    {
+      "from": "src/services/supabase-client.ts",
+      "type": "emits",
+      "to": "event:companygen:credit-balance-updated"
+    },
+    {
+      "from": "src/services/supabase-client.ts",
+      "type": "emits",
+      "to": "event:companygen:credit-spent"
+    },
+    {
+      "from": "src/services/supabase-client.ts",
+      "type": "emits",
+      "to": "event:companygen:credits-updated"
+    },
+    {
+      "from": "src/services/supabase-client.ts",
+      "type": "emits",
+      "to": "event:companygen:insufficient-credits"
+    },
+    {
+      "from": "src/services/supabase-client.ts",
+      "type": "emits",
+      "to": "event:companygen:local-showcase-auth"
+    },
+    {
+      "from": "src/services/supabase-client.ts",
+      "type": "emits",
+      "to": "event:companygen:support-readonly-changed"
+    },
+    {
+      "from": "src/services/whatsapp-profile-sync.ts",
+      "type": "imports",
+      "to": "src/schemas/profile.schema.ts"
+    },
+    {
+      "from": "src/services/whatsapp-profile-sync.ts",
+      "type": "imports",
+      "to": "src/services/profile-service.ts"
+    },
+    {
+      "from": "src/services/whatsapp-profile-sync.ts",
+      "type": "imports",
+      "to": "src/services/supabase-client.ts"
+    },
+    {
+      "from": "src/services/whatsapp-profile-sync.ts",
+      "type": "fetches",
+      "to": "route:/api/whatsapp/api/whatsapp/perfil"
+    },
+    {
+      "from": "src/utils/chunk-recovery.ts",
+      "type": "listens",
+      "to": "event:vite:preloadError"
+    },
+    {
+      "from": "src/utils/crash-telemetry.ts",
+      "type": "fetches",
+      "to": "route:/api/telemetry/crash"
+    },
+    {
+      "from": "src/utils/formulaDiff.ts",
+      "type": "imports",
+      "to": "src/schemas/formula-v9.schema.ts"
+    },
+    {
+      "from": "src/utils/performance-mode.ts",
+      "type": "emits",
+      "to": "event:companygen:low-spec-change"
+    },
+    {
+      "from": "src/utils/themeLogos.ts",
+      "type": "listens",
+      "to": "event:companygen:theme-change"
+    },
+    {
+      "from": "src/utils/themeLogos.ts",
+      "type": "reads",
+      "to": "ls:cg_theme"
+    },
+    {
+      "from": "tests/unit/agent-ops.test.mjs",
+      "type": "reads",
+      "to": "disk:C-001.json"
+    },
+    {
+      "from": "tests/unit/agent-ops.test.mjs",
+      "type": "reads",
+      "to": "disk:manifest.json"
+    },
+    {
+      "from": "tests/unit/crash-telemetry.test.mjs",
+      "type": "imports",
+      "to": "server/crash-telemetry.mjs"
+    },
+    {
+      "from": "tests/unit/crash-telemetry.test.mjs",
+      "type": "imports",
+      "to": "server/workspace.mjs"
+    },
+    {
+      "from": "tests/unit/mobile-alerts-and-downloads.test.mjs",
+      "type": "imports",
+      "to": "server/workspace.mjs"
+    },
+    {
+      "from": "tests/unit/onda1-foundation.test.mjs",
+      "type": "imports",
+      "to": "server/middleware/bounded-map.mjs"
+    },
+    {
+      "from": "tests/unit/onda1-foundation.test.mjs",
+      "type": "imports",
+      "to": "server/middleware/client-ip.mjs"
+    },
+    {
+      "from": "tests/unit/onda2-media.test.mjs",
+      "type": "imports",
+      "to": "server/media-sanitize.mjs"
+    },
+    {
+      "from": "tests/unit/onda6-whatsapp-pix.test.mjs",
+      "type": "imports",
+      "to": "server/ai-sofia-local.mjs"
+    },
+    {
+      "from": "tests/unit/onda6-whatsapp-pix.test.mjs",
+      "type": "imports",
+      "to": "server/workspace.mjs"
+    }
+  ],
+  "coChangeCoupling": {}
+}

@@ -1,0 +1,55 @@
+{
+  "version": "1.0.0",
+  "macroIntents": {
+    "VISUAL": {
+      "label": "Visual, UI & Responsividade",
+      "keywords": ["visual", "ui", "tela", "layout", "modal", "botão", "tema", "claro", "escuro", "mobile", "responsivo", "css", "print", "landing", "vitrine", "painel"],
+      "htnSkeleton": ["CONTEXT_TRIAGE", "CODE_EDIT", "VERIFY_GATE", "OPEN_NAVIGATOR", "ATUALIZE_JSON"],
+      "autoCouple": { "ifOverBudgetFile": "STRUCTURE", "ifPersistedStateTouched": "STATE_FLOW" },
+      "requiresNavigator": true
+    },
+    "BEHAVIOR": {
+      "label": "Comportamento, Regra de Negócio & Bugs",
+      "keywords": ["bug", "erro", "crash", "quebrou", "não responde", "gatilho", "dispara", "supressão", "meu numero", "classificou", "nicho", "farmácia", "default", "undefined"],
+      "htnSkeleton": ["CONTEXT_TRIAGE", "IMPACT_CHECK", "CODE_EDIT", "VERIFY_GATE", "OPEN_NAVIGATOR", "ATUALIZE_JSON"],
+      "autoCouple": { "ifOverBudgetFile": "STRUCTURE" },
+      "requiresNavigator": true
+    },
+    "STATE_FLOW": {
+      "label": "Persistência, Banco, Rotas & Sincronização",
+      "keywords": ["estado", "persistência", "onboarding", "voltou", "excluiu", "salvou", "api", "rota", "supabase", "profile", "sessão", "token", "cache", "json", "zip", "download"],
+      "htnSkeleton": ["CONTEXT_TRIAGE", "IMPACT_CHECK", "CODE_EDIT", "VERIFY_GATE", "ATUALIZE_JSON"],
+      "autoCouple": { "ifMultiWriterDetected": "BEHAVIOR" },
+      "requiresNavigator": false
+    },
+    "STRUCTURE": {
+      "label": "Arquitetura, Limpeza & Fatiamento em Células",
+      "keywords": ["limpar", "poluído", "refatorar", "organizar", "dividir", "célula", "extrair", "remover", "código morto", "duplicado", "debloat"],
+      "htnSkeleton": ["CONTEXT_TRIAGE", "IMPACT_CHECK", "CODE_EDIT", "VERIFY_GATE", "ATUALIZE_JSON"],
+      "autoCouple": {},
+      "requiresNavigator": false
+    },
+    "PERFORMANCE": {
+      "label": "Performance, Memória & PC Fraco",
+      "keywords": ["lento", "travando", "pesado", "otimizar", "memória", "ram", "pc fraco", "timer", "polling", "bundle", "chunk"],
+      "htnSkeleton": ["CONTEXT_TRIAGE", "IMPACT_CHECK", "CODE_EDIT", "VERIFY_GATE", "OPEN_NAVIGATOR", "ATUALIZE_JSON"],
+      "autoCouple": { "ifRemovesCode": "STRUCTURE" },
+      "requiresNavigator": true
+    },
+    "OBSERVABILITY": {
+      "label": "Telemetria, Logs Contextuais & Detectores",
+      "keywords": ["log", "telemetria", "crash", "monitor", "alerta", "notificação", "admin", "diagnóstico", "rastreio"],
+      "htnSkeleton": ["CONTEXT_TRIAGE", "CODE_EDIT", "VERIFY_GATE", "ATUALIZE_JSON"],
+      "autoCouple": { "ifAddsAdminPanel": "VISUAL" },
+      "requiresNavigator": false
+    },
+    "DELIVERY": {
+      "label": "Lotes, Testes E2E, Deploy & Git Branch",
+      "keywords": ["deploy", "subir", "github", "branch", "commit", "smoke", "teste", "100", "lista", "lote", "produção"],
+      "htnSkeleton": ["INTENT_DECOMPOSE", "VERIFY_GATE", "DEPLOY_SMOKE", "ATUALIZE_JSON"],
+      "autoCouple": {},
+      "requiresNavigator": false
+    }
+  },
+  "executionPriorityOrder": ["STRUCTURE", "STATE_FLOW", "BEHAVIOR", "PERFORMANCE", "OBSERVABILITY", "VISUAL", "DELIVERY"]
+}

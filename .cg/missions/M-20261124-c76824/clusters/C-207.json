@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-207",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/FormulaTreeRenderer.tsx"
+  ],
+  "range": [
+    1260,
+    1350
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"list_or_grid\" (1260-1350) de FormulaTreeRenderer.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-206"
+  ]
+}

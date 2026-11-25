@@ -1,0 +1,24 @@
+{
+  "clusterId": "C-122",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/admin/AdminCrashLogsPanel.tsx"
+  ],
+  "range": [
+    353,
+    443
+  ],
+  "preserveTestIds": [
+    "admin-crash-inspector",
+    "admin-copy-ai-context-btn"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (353-443) de AdminCrashLogsPanel.tsx preservando 2 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-121"
+  ]
+}

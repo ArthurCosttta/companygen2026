@@ -1,0 +1,31 @@
+{
+  "clusterId": "C-056",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx"
+  ],
+  "range": [
+    56,
+    151
+  ],
+  "preserveTestIds": [
+    "center-flow-done-btn",
+    "close-center-flow-modal-btn",
+    "save-new-center-rule-btn",
+    "tab-center-create",
+    "tab-center-map",
+    "tab-center-simulator",
+    "whatsapp-flow-center-modal"
+  ],
+  "description": "Achatar 1 sombra(s), 0 blur(s) e 0 gradiente(s) em WhatsappFlowCenterModal.tsx",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:46.718Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

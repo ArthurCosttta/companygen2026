@@ -1,0 +1,28 @@
+{
+  "clusterId": "C-242",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/studio/ArchetypeComposerView.tsx"
+  ],
+  "range": [
+    1186,
+    1276
+  ],
+  "preserveTestIds": [
+    "editor-credit-balance-badge",
+    "editor-export-zip-btn",
+    "editor-save-plan-btn",
+    "editor-wcag-warning-banner",
+    "editor-wcag-fix-btn",
+    "editor-http-402-banner"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (1186-1276) de ArchetypeComposerView.tsx preservando 6 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-241"
+  ]
+}

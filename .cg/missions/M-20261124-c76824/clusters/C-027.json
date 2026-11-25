@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-027",
+  "wave": "W1",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-TIMERS",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/onboarding/OnboardingIgnitionView.tsx"
+  ],
+  "range": [
+    353,
+    388
+  ],
+  "preserveTestIds": [],
+  "description": "Auditar setInterval na linha 363 de OnboardingIgnitionView.tsx (pausar quando oculto / sem alocação ociosa)",
+  "check": "verify-micro",
+  "after": [
+    "C-026"
+  ],
+  "updatedAt": "2026-11-24T17:06:39.689Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

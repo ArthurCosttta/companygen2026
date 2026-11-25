@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-268",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx"
+  ],
+  "range": [
+    93,
+    183
+  ],
+  "preserveTestIds": [
+    "whatsapp-flow-center-modal"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (93-183) de WhatsappFlowCenterModal.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-267"
+  ]
+}

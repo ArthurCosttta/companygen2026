@@ -1,0 +1,28 @@
+{
+  "clusterId": "C-142",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/onboarding/OnboardingSynthesisStage.tsx"
+  ],
+  "range": [
+    145,
+    210
+  ],
+  "preserveTestIds": [
+    "synthesis-back-btn",
+    "synthesis-error-banner",
+    "synthesis-micro-feed",
+    "synthesis-progress-bar",
+    "synthesis-progress-pct",
+    "synthesis-recharge-btn",
+    "synthesis-retry-btn",
+    "synthesis-stage"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em OnboardingSynthesisStage.tsx",
+  "check": "verify-micro",
+  "after": []
+}

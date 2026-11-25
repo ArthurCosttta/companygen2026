@@ -1,0 +1,25 @@
+{
+  "clusterId": "C-066",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/auth/AuthFlowView.tsx"
+  ],
+  "range": [
+    506,
+    596
+  ],
+  "preserveTestIds": [
+    "landing-download-os-btn",
+    "auth-invite-banner",
+    "auth-open-showcase-lume-btn"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (506-596) de AuthFlowView.tsx preservando 3 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-065"
+  ]
+}

@@ -1,0 +1,337 @@
+{
+  "generatedAt": "2026-11-24T17:15:30.087Z",
+  "stateCount": 39,
+  "states": {
+    "disk:orders.json": {
+      "writers": [
+        "server/access-and-checkout.mjs",
+        "server/ai-global-agent.mjs",
+        "server/ai-sofia-local.mjs",
+        "server/workspace.mjs"
+      ],
+      "readers": [
+        "server/access-and-checkout.mjs",
+        "server/admin-console.mjs",
+        "server/ai-global-agent.mjs",
+        "server/ai-sofia-local.mjs",
+        "server/ai-spreadsheet-engine.mjs",
+        "server/workspace.mjs"
+      ],
+      "status": "multi_writer"
+    },
+    "disk:whatsapp_events.json": {
+      "writers": [
+        "server/access-and-checkout.mjs",
+        "server/ai-sofia-local.mjs"
+      ],
+      "readers": [
+        "server/access-and-checkout.mjs",
+        "server/ai-sofia-local.mjs",
+        "server/workspace.mjs"
+      ],
+      "status": "multi_writer"
+    },
+    "disk:credits_ledger.json": {
+      "writers": [],
+      "readers": [
+        "server/access-and-checkout.mjs",
+        "server/admin-console.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:profile.json": {
+      "writers": [
+        "server/workspace.mjs"
+      ],
+      "readers": [
+        "server/access-and-checkout.mjs",
+        "server/admin-console.mjs",
+        "server/ai-sofia-local.mjs",
+        "server/public-storefront-loader.mjs",
+        "server/workspace.mjs"
+      ],
+      "status": "coherent"
+    },
+    "disk:_access_redemption_events.json": {
+      "writers": [],
+      "readers": [
+        "server/admin-console.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:_desktop_fleet.json": {
+      "writers": [],
+      "readers": [
+        "server/admin-console.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:_kiwify_events.json": {
+      "writers": [],
+      "readers": [
+        "server/admin-console.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:admin_registry.json": {
+      "writers": [],
+      "readers": [
+        "server/admin-console.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:studio.json": {
+      "writers": [],
+      "readers": [
+        "server/admin-console.mjs",
+        "server/workspace.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:whatsapp_session.json": {
+      "writers": [],
+      "readers": [
+        "server/admin-console.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:configuracoes.json": {
+      "writers": [
+        "server/ai-sofia-local.mjs",
+        "server/workspace.mjs"
+      ],
+      "readers": [
+        "server/ai-sofia-local.mjs",
+        "server/workspace.mjs"
+      ],
+      "status": "multi_writer"
+    },
+    "disk:sofia_brain.json": {
+      "writers": [
+        "server/ai-sofia-local.mjs"
+      ],
+      "readers": [
+        "server/ai-sofia-local.mjs"
+      ],
+      "status": "coherent"
+    },
+    "disk:templates.json": {
+      "writers": [
+        "server/ai-sofia-local.mjs",
+        "server/workspace.mjs"
+      ],
+      "readers": [
+        "server/ai-sofia-local.mjs",
+        "server/workspace.mjs"
+      ],
+      "status": "multi_writer"
+    },
+    "disk:whatsapp_flows.json": {
+      "writers": [
+        "server/ai-sofia-local.mjs"
+      ],
+      "readers": [
+        "server/ai-sofia-local.mjs",
+        "server/workspace.mjs"
+      ],
+      "status": "coherent"
+    },
+    "disk:config_loja.json": {
+      "writers": [
+        "server/workspace.mjs"
+      ],
+      "readers": [
+        "server/ai-sofia-local.mjs"
+      ],
+      "status": "coherent"
+    },
+    "disk:metrics.json": {
+      "writers": [],
+      "readers": [
+        "server/ai-sofia-local.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:skus.json": {
+      "writers": [
+        "server/workspace.mjs"
+      ],
+      "readers": [
+        "server/ai-sofia-local.mjs"
+      ],
+      "status": "coherent"
+    },
+    "ls:cg_molde_cart_v9": {
+      "writers": [
+        "server/molde-html-emitter.mjs"
+      ],
+      "readers": [
+        "server/molde-html-emitter.mjs"
+      ],
+      "status": "coherent"
+    },
+    "disk:formulas-ir.json": {
+      "writers": [],
+      "readers": [
+        "server/storefront-molde-fs.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:image-jobs.json": {
+      "writers": [],
+      "readers": [
+        "server/storefront-molde-fs.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:ai_custom_templates.json": {
+      "writers": [
+        "server/workspace.mjs"
+      ],
+      "readers": [
+        "server/workspace.mjs"
+      ],
+      "status": "coherent"
+    },
+    "disk:supabase-whatsapp.json": {
+      "writers": [
+        "server/workspace.mjs"
+      ],
+      "readers": [
+        "server/workspace.mjs"
+      ],
+      "status": "coherent"
+    },
+    "disk:_admin_registry.json": {
+      "writers": [],
+      "readers": [
+        "server/workspace.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:conversas.json": {
+      "writers": [],
+      "readers": [
+        "server/workspace.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:store_metrics.json": {
+      "writers": [],
+      "readers": [
+        "server/workspace.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "ls:cg_theme": {
+      "writers": [
+        "src/app/App.tsx"
+      ],
+      "readers": [
+        "src/app/App.tsx",
+        "src/utils/themeLogos.ts"
+      ],
+      "status": "coherent"
+    },
+    "ss:cg_ignition_opts_${payload.clientJobId}": {
+      "writers": [
+        "src/app/App.tsx"
+      ],
+      "readers": [],
+      "status": "orphan_writer"
+    },
+    "ss:cg_post_onboarding_tips_${user.id}": {
+      "writers": [
+        "src/app/App.tsx"
+      ],
+      "readers": [],
+      "status": "orphan_writer"
+    },
+    "ss:cg_validated_invite": {
+      "writers": [
+        "src/components/auth/AuthFlowView.tsx",
+        "src/components/views/access/AccessCodeView.tsx"
+      ],
+      "readers": [
+        "src/app/App.tsx",
+        "src/components/auth/AuthFlowView.tsx"
+      ],
+      "status": "multi_writer"
+    },
+    "ss:cg_entry_qr": {
+      "writers": [
+        "src/components/views/access/AccessCodeView.tsx"
+      ],
+      "readers": [],
+      "status": "orphan_writer"
+    },
+    "ss:cg_ignition_opts_${nextJob}": {
+      "writers": [
+        "src/components/views/onboarding/OnboardingSynthesisStage.tsx"
+      ],
+      "readers": [],
+      "status": "orphan_writer"
+    },
+    "ss:cg_ignition_opts_${activeJobId}": {
+      "writers": [],
+      "readers": [
+        "src/components/views/onboarding/OnboardingSynthesisStage.tsx"
+      ],
+      "status": "orphan_reader"
+    },
+    "ss:cg_ignition_opts_${jobId}": {
+      "writers": [],
+      "readers": [
+        "src/components/views/onboarding/OnboardingSynthesisStage.tsx"
+      ],
+      "status": "orphan_reader"
+    },
+    "ls:companygen:auto_notify_order_stages": {
+      "writers": [
+        "src/components/views/orders/OrdersKanbanView.tsx"
+      ],
+      "readers": [
+        "src/components/views/orders/OrdersKanbanView.tsx"
+      ],
+      "status": "coherent"
+    },
+    "ls:companygen:sound_muted": {
+      "writers": [
+        "src/components/views/whatsapp/WhatsAppConnectionView.tsx"
+      ],
+      "readers": [
+        "src/components/views/whatsapp/WhatsAppConnectionView.tsx",
+        "src/hooks/useWebviewWhatsappResponder.ts"
+      ],
+      "status": "coherent"
+    },
+    "ls:${MUTE_STORAGE_PREFIX}${ownerRef.current}": {
+      "writers": [
+        "src/hooks/useHighSaturationNotifications.ts"
+      ],
+      "readers": [],
+      "status": "orphan_writer"
+    },
+    "ls:${MUTE_STORAGE_PREFIX}${owner}": {
+      "writers": [],
+      "readers": [
+        "src/hooks/useHighSaturationNotifications.ts"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:C-001.json": {
+      "writers": [],
+      "readers": [
+        "tests/unit/agent-ops.test.mjs"
+      ],
+      "status": "orphan_reader"
+    },
+    "disk:manifest.json": {
+      "writers": [],
+      "readers": [
+        "tests/unit/agent-ops.test.mjs"
+      ],
+      "status": "orphan_reader"
+    }
+  }
+}

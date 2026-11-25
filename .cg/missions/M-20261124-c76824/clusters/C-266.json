@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-266",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/whatsapp/WhatsappFlowCenterModal.tsx"
+  ],
+  "range": [
+    172,
+    262
+  ],
+  "preserveTestIds": [
+    "tab-center-simulator",
+    "tab-center-map",
+    "tab-center-create",
+    "close-center-flow-modal-btn"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (172-262) de WhatsappFlowCenterModal.tsx preservando 4 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-265"
+  ]
+}

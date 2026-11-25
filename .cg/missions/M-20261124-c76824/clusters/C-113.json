@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-113",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/admin/AdminConsoleView.tsx"
+  ],
+  "range": [
+    802,
+    892
+  ],
+  "preserveTestIds": [
+    "admin-onboarding-thermometer"
+  ],
+  "description": "Padronizar região \"nav_tabs\" (802-892) de AdminConsoleView.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-112"
+  ]
+}

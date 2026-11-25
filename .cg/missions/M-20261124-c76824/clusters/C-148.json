@@ -1,0 +1,28 @@
+{
+  "clusterId": "C-148",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/orders/ImportOrdersSpreadsheetModal.tsx"
+  ],
+  "range": [
+    189,
+    254
+  ],
+  "preserveTestIds": [
+    "orders-confirm-import-btn",
+    "orders-download-sample-btn",
+    "orders-file-dropzone",
+    "orders-file-input",
+    "orders-import-invalid-badge",
+    "orders-import-modal",
+    "orders-import-summary",
+    "orders-paste-textarea"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em ImportOrdersSpreadsheetModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

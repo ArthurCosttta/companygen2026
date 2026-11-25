@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-188",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-SECTION-MINIMAL",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/BatchImageSearchModal.tsx"
+  ],
+  "range": [
+    457,
+    539
+  ],
+  "preserveTestIds": [
+    "batch-search-apply-btn"
+  ],
+  "description": "Padronizar região \"list_or_grid\" (457-539) de BatchImageSearchModal.tsx preservando 1 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-187"
+  ]
+}

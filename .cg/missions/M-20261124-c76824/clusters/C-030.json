@@ -1,0 +1,23 @@
+{
+  "clusterId": "C-030",
+  "wave": "W1",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-TIMERS",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/ReferenceComponentsPack.tsx"
+  ],
+  "range": [
+    31,
+    66
+  ],
+  "preserveTestIds": [],
+  "description": "Auditar setInterval na linha 41 de ReferenceComponentsPack.tsx (pausar quando oculto / sem alocação ociosa)",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:41.283Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

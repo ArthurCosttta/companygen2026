@@ -1,0 +1,35 @@
+{
+  "clusterId": "C-109",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/access/AccessCodeView.tsx"
+  ],
+  "range": [
+    154,
+    219
+  ],
+  "preserveTestIds": [
+    "access-brand-logo",
+    "access-claim-email-btn",
+    "access-code-input",
+    "access-credits-translation-card",
+    "access-go-to-login-btn",
+    "access-guest-start-btn",
+    "access-guest-unclaimed-card",
+    "access-state-feedback",
+    "access-validate-btn",
+    "kiwify-lookup-email",
+    "kiwify-lookup-feedback",
+    "kiwify-lookup-order-id",
+    "kiwify-lookup-panel",
+    "kiwify-lookup-submit",
+    "kiwify-lookup-toggle"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em AccessCodeView.tsx",
+  "check": "verify-micro",
+  "after": []
+}

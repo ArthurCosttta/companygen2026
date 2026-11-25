@@ -1,0 +1,26 @@
+{
+  "clusterId": "C-125",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/admin/AdminUser360Drawer.tsx"
+  ],
+  "range": [
+    404,
+    494
+  ],
+  "preserveTestIds": [
+    "admin-user-360-drawer",
+    "admin-drawer-view-store-btn",
+    "admin-drawer-copy-store-url-btn",
+    "admin-360-support-readonly-btn"
+  ],
+  "description": "Padronizar região \"drawer_or_modal\" (404-494) de AdminUser360Drawer.tsx preservando 4 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-124"
+  ]
+}

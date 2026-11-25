@@ -1,0 +1,19 @@
+{
+  "clusterId": "C-230",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/StorefrontPostGenWhatsappModal.tsx"
+  ],
+  "range": [
+    22,
+    31
+  ],
+  "preserveTestIds": [],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em StorefrontPostGenWhatsappModal.tsx",
+  "check": "verify-micro",
+  "after": []
+}

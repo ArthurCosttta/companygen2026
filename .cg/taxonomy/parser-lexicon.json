@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "phrases": {
+    "wpp": { "intents": ["BEHAVIOR", "STATE_FLOW"], "cell": "whatsapp", "files": ["server/ai-sofia-local.mjs", "shared/whatsapp-webview-script.mjs"], "weight": 0.95, "hits": 5 },
+    "whatsapp": { "intents": ["BEHAVIOR", "STATE_FLOW"], "cell": "whatsapp", "files": ["server/ai-sofia-local.mjs", "shared/whatsapp-webview-script.mjs", "src/hooks/useWebviewWhatsappResponder.ts"], "weight": 0.95, "hits": 5 },
+    "gatilho": { "intents": ["BEHAVIOR", "STATE_FLOW"], "cell": "whatsapp", "files": ["server/ai-sofia-local.mjs", "src/components/views/whatsapp/WhatsappMessageFlowsPanel.tsx"], "weight": 0.96, "hits": 4 },
+    "meu numero": { "intents": ["BEHAVIOR"], "cell": "whatsapp", "files": ["shared/whatsapp-webview-script.mjs", "server/ai-sofia-local.mjs"], "weight": 0.97, "hits": 3 },
+    "onboarding": { "intents": ["STATE_FLOW", "BEHAVIOR"], "cell": "onboarding", "files": ["src/hooks/useClientMaturity.ts", "src/app/App.tsx", "server/workspace.mjs"], "weight": 0.95, "hits": 4 },
+    "voltou pro onboarding": { "intents": ["STATE_FLOW", "BEHAVIOR"], "cell": "onboarding", "files": ["src/hooks/useClientMaturity.ts", "server/workspace.mjs"], "weight": 0.98, "hits": 3 },
+    "painel principal": { "intents": ["BEHAVIOR", "VISUAL"], "cell": "core", "files": ["src/app/App.tsx", "src/utils/chunk-recovery.ts"], "weight": 0.94, "hits": 2 },
+    "reading 'default'": { "intents": ["BEHAVIOR", "STRUCTURE"], "cell": "core", "files": ["src/utils/chunk-recovery.ts"], "weight": 0.99, "hits": 2 },
+    "planilha": { "intents": ["BEHAVIOR"], "cell": "spreadsheet", "files": ["server/ai-spreadsheet-engine.mjs", "shared/formula-ir/spreadsheet-intelligence.mjs", "src/components/views/onboarding/OnboardingIgnitionView.tsx"], "weight": 0.95, "hits": 4 },
+    "farmacia": { "intents": ["BEHAVIOR"], "cell": "spreadsheet", "files": ["shared/formula-ir/spreadsheet-intelligence.mjs", "src/components/views/onboarding/OnboardingIgnitionView.tsx"], "weight": 0.96, "hits": 3 },
+    "vitrine": { "intents": ["VISUAL", "STOREFRONT"], "cell": "storefront", "files": ["src/components/views/storefront/CustomerStorefrontView.tsx", "src/components/views/storefront/EditorialStoreControlView.tsx"], "weight": 0.93, "hits": 3 },
+    "telemetria": { "intents": ["OBSERVABILITY"], "cell": "telemetry", "files": ["server/crash-telemetry.mjs", "src/utils/crash-telemetry.ts", "src/components/views/admin/AdminCrashLogsPanel.tsx"], "weight": 0.95, "hits": 3 },
+    "logs": { "intents": ["OBSERVABILITY"], "cell": "telemetry", "files": ["server/crash-telemetry.mjs", "src/components/views/admin/AdminCrashLogsPanel.tsx"], "weight": 0.92, "hits": 3 },
+    "notificando": { "intents": ["BEHAVIOR", "OBSERVABILITY"], "cell": "orders", "files": ["src/hooks/useHighSaturationNotifications.ts", "server/workspace.mjs"], "weight": 0.93, "hits": 2 },
+    "landing": { "intents": ["VISUAL"], "cell": "access", "files": ["src/components/auth/AuthFlowView.tsx", "server/admin-console.mjs"], "weight": 0.92, "hits": 2 },
+    "desktop": { "intents": ["STATE_FLOW"], "cell": "desktop", "files": ["desktop/main.mjs", "desktop/preload.cjs"], "weight": 0.92, "hits": 2 }
+  },
+  "expansions": []
+}

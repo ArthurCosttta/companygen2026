@@ -1,0 +1,21 @@
+{
+  "clusterId": "C-094",
+  "wave": "W3",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-DRAWER-FOLD",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/ui/DrawerContainer.tsx"
+  ],
+  "range": [
+    151,
+    214
+  ],
+  "preserveTestIds": [],
+  "description": "Padronizar região \"drawer_or_modal\" (151-214) de DrawerContainer.tsx preservando 0 testId(s)",
+  "check": "verify-micro",
+  "after": [
+    "C-093"
+  ]
+}

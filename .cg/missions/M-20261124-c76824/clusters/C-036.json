@@ -1,0 +1,38 @@
+{
+  "clusterId": "C-036",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "done",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/shell/Topbar.tsx"
+  ],
+  "range": [
+    71,
+    166
+  ],
+  "preserveTestIds": [
+    "app-topbar",
+    "topbar-active-title",
+    "topbar-breadcrumb",
+    "topbar-claim-email-btn",
+    "topbar-command-palette-btn",
+    "topbar-help-menu-btn",
+    "topbar-help-open-shortcuts",
+    "topbar-help-open-support",
+    "topbar-help-open-tour",
+    "topbar-help-popover",
+    "topbar-last-credit-spent",
+    "topbar-open-checkout-btn",
+    "topbar-preview-vitrine",
+    "topbar-theme-toggle-btn"
+  ],
+  "description": "Achatar 1 sombra(s), 0 blur(s) e 0 gradiente(s) em Topbar.tsx",
+  "check": "verify-micro",
+  "after": [],
+  "updatedAt": "2026-11-24T17:06:43.699Z",
+  "output": {
+    "waveBarrierPassed": true
+  }
+}

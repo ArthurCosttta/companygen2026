@@ -1,0 +1,32 @@
+{
+  "clusterId": "C-129",
+  "wave": "W4",
+  "macroIntent": "VISUAL",
+  "kind": "GEN-UI-HEADER",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/checkout/CheckoutPlansView.tsx"
+  ],
+  "range": [
+    103,
+    168
+  ],
+  "preserveTestIds": [
+    "checkout-brand-logo",
+    "checkout-clear-ledger-filter",
+    "checkout-current-balance",
+    "checkout-ledger-panel",
+    "checkout-ledger-tooltip",
+    "checkout-projected-balance",
+    "checkout-tab-ledger",
+    "checkout-tab-plans",
+    "credits-telemetry-panel",
+    "kiwify-awaiting-confirmation",
+    "kiwify-checkout-primary-btn",
+    "kiwify-credits-confirmed"
+  ],
+  "description": "Aplicar canvas bg-[#F8FAFC] + cabeçalho editorial font-serif de Minha Loja em CheckoutPlansView.tsx",
+  "check": "verify-micro",
+  "after": []
+}

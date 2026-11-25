@@ -1,0 +1,47 @@
+{
+  "clusterId": "C-046",
+  "wave": "W2",
+  "macroIntent": "PERFORMANCE",
+  "kind": "GEN-PERF-SURFACE",
+  "status": "pending",
+  "retries": 0,
+  "allowedEditSet": [
+    "src/components/views/storefront/CustomerStorefrontView.tsx"
+  ],
+  "range": [
+    197,
+    292
+  ],
+  "preserveTestIds": [
+    "cart-checkout-error-card",
+    "cart-coupon-apply-btn",
+    "cart-coupon-discount-row",
+    "cart-coupon-error",
+    "cart-coupon-input",
+    "cart-coupon-toggle",
+    "cart-free-shipping-badge",
+    "cart-grand-total",
+    "cart-pix-discount-row",
+    "checkout-wa-direct-link",
+    "floating-ai-inspector-btn",
+    "open-ai-inspector-btn",
+    "open-expansion-modal-btn",
+    "open-whatsapp-flows-btn",
+    "owner-preview-copy-link",
+    "owner-preview-open-orders-btn",
+    "owner-preview-simulate-order-btn",
+    "owner-preview-simulated-badge",
+    "page-switch-home",
+    "preview-viewport-desktop",
+    "preview-viewport-mobile",
+    "store-pages-switcher-strip",
+    "storefront-floating-bag-bar",
+    "storefront-owner-preview-bar",
+    "storefront-wa-direct-banner",
+    "storefront-wa-direct-link",
+    "tela-40-v5-storefront"
+  ],
+  "description": "Achatar 2 sombra(s), 0 blur(s) e 0 gradiente(s) em CustomerStorefrontView.tsx",
+  "check": "verify-micro",
+  "after": []
+}
